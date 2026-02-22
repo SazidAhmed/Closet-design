@@ -11,6 +11,7 @@ import { useAppStore } from "../../../stores/useAppStore";
 import { useSelectionStore } from "../../../stores/useSelectionStore";
 import { useRoomStore } from "../../../stores/useRoomStore";
 import { useQuoteStore } from "../stores/useQuoteStore";
+import { useHistoryStore } from "../../../stores/useHistoryStore";
 import { Slider } from "@/components/ui/slider";
 import {
   FINISH_MATERIALS,
@@ -27,6 +28,7 @@ import type { Accessory } from "../domain/types/tower";
 const closet = useClosetStore();
 const appStore = useAppStore();
 const selection = useSelectionStore();
+const historyStore = useHistoryStore();
 const roomStore = useRoomStore();
 const quote = useQuoteStore();
 
@@ -175,7 +177,13 @@ function setShoeShelfCount(n: number) {
 
 <template>
   <div class="design-page">
-    <TopToolbar>
+    <TopToolbar
+      @undo="historyStore.undo()"
+      @redo="historyStore.redo()"
+      @save="historyStore.saveToLocalStorage()"
+      @open="historyStore.loadFromLocalStorage()"
+      @new="closet.resetToDefaults()"
+    >
       <template #title>Design Closet</template>
     </TopToolbar>
 

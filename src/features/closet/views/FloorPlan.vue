@@ -13,10 +13,12 @@ import {
   DOOR_MATERIALS,
 } from "../domain/materials/catalog";
 import { ROOM_CONSTRAINTS } from "../domain/constraints";
+import { useHistoryStore } from "../../../stores/useHistoryStore";
 
 const roomStore = useRoomStore();
 const closet = useClosetStore();
 const appStore = useAppStore();
+const historyStore = useHistoryStore();
 
 /** Width of the room (wall 0) */
 const roomW = computed(() => roomStore.walls[0]?.length ?? 244);
@@ -196,7 +198,13 @@ function cmToImperial(cm: number): string {
 
 <template>
   <div class="floorplan-page">
-    <TopToolbar>
+    <TopToolbar
+      @undo="historyStore.undo()"
+      @redo="historyStore.redo()"
+      @save="historyStore.saveToLocalStorage()"
+      @open="historyStore.loadFromLocalStorage()"
+      @new="roomStore.setRoom(roomStore.$state)"
+    >
       <template #title>Floor Plan</template>
     </TopToolbar>
 

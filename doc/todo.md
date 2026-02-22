@@ -24,9 +24,10 @@
 
 ## Priority 4 — Persistence & History
 
-- [ ] Save/load designs to localStorage
-- [ ] Undo/redo history stack (Ctrl+Z / Ctrl+Shift+Z)
-- [ ] Auto-save on state change with debounce
+- [x] Save/load design to/from localStorage
+- [x] Undo / Redo support (Ctrl+Z / Ctrl+Shift+Z)
+- [x] Auto-save on every state change (1.5 s debounce)
+- [ ] Named design slots (save multiple designs)ce
 
 ## Priority 5 — Units & Measurements
 
