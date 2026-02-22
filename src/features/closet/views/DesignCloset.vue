@@ -62,13 +62,42 @@ watch(
   { deep: true, immediate: true },
 );
 
-// ── Camera ────────────────────────────────────────────────────────────────
-const cameraPos = computed(() => {
+// ── Camera per view mode ──────────────────────────────────────────────────
+const cameraPos = computed<[number, number, number]>(() => {
   const w = Number(closet.cabinet.width) || 60;
   const h = Number(closet.cabinet.height) || 200;
   const d = Number(closet.cabinet.depth) || 60;
   const maxDim = Math.max(w, h, d);
-  return [maxDim * 0.9, maxDim * 0.6, maxDim * 1.1] as [number, number, number];
+
+  switch (appStore.viewMode) {
+    case "wall":
+      // Front-on elevation: look straight at the cabinet face
+      return [0, h * 0.2, maxDim * 1.6];
+    case "overhead":
+      // Top-down: look straight down
+      return [0, maxDim * 2, 0];
+    default:
+      // 3D perspective orbit
+      return [maxDim * 0.9, maxDim * 0.6, maxDim * 1.1];
+  }
+});
+
+const cameraUp = computed<[number, number, number]>(() => {
+  // For overhead view, "up" should be along -Z so the view isn't flipped
+  return appStore.viewMode === "overhead" ? [0, 0, -1] : [0, 1, 0];
+});
+
+const enableOrbit = computed(() => appStore.viewMode === "3d");
+
+const viewportHint = computed(() => {
+  switch (appStore.viewMode) {
+    case "wall":
+      return "Front elevation view";
+    case "overhead":
+      return "Top-down overhead view";
+    default:
+      return "Drag to orbit · Scroll to zoom";
+  }
 });
 
 // ── Auto-create preset apply ──────────────────────────────────────────────
@@ -200,7 +229,7 @@ function setShoeShelfCount(n: number) {
         <div v-if="activeTab === 'towers'" class="tab-content">
           <div class="tower-list">
             <button
-              v-for="tower in closet.towers"
+              v-for="(tower, tIdx) in closet.towers"
               :key="tower.id"
               class="tower-card"
               :class="{ selected: selection.selectedTowerId === tower.id }"
@@ -208,13 +237,31 @@ function setShoeShelfCount(n: number) {
             >
               <div class="tower-card-header">
                 <span class="tower-label">{{ tower.label }}</span>
-                <button
-                  class="tower-delete-btn"
-                  @click.stop="closet.removeTower(tower.id)"
-                  title="Remove tower"
-                >
-                  <Trash2 :size="14" />
-                </button>
+                <div class="tower-card-actions">
+                  <button
+                    class="tower-move-btn"
+                    :disabled="tIdx === 0"
+                    @click.stop="closet.moveTower(tower.id, -1)"
+                    title="Move left"
+                  >
+                    ◀
+                  </button>
+                  <button
+                    class="tower-move-btn"
+                    :disabled="tIdx === closet.towers.length - 1"
+                    @click.stop="closet.moveTower(tower.id, 1)"
+                    title="Move right"
+                  >
+                    ▶
+                  </button>
+                  <button
+                    class="tower-delete-btn"
+                    @click.stop="closet.removeTower(tower.id)"
+                    title="Remove tower"
+                  >
+                    <Trash2 :size="14" />
+                  </button>
+                </div>
               </div>
               <div class="tower-dims">
                 {{ Math.round(tower.width) }} × {{ Math.round(tower.depth) }} cm
@@ -370,11 +417,16 @@ function setShoeShelfCount(n: number) {
         >
           <TresPerspectiveCamera
             :position="cameraPos"
+            :up="cameraUp"
             :fov="45"
             :near="0.1"
             :far="5000"
           />
-          <OrbitControls :enable-damping="true" :damping-factor="0.08" />
+          <OrbitControls
+            :enabled="enableOrbit"
+            :enable-damping="true"
+            :damping-factor="0.08"
+          />
           <TresAmbientLight :intensity="0.8" />
           <TresDirectionalLight :position="[200, 300, 200]" :intensity="1.2" />
 
@@ -382,7 +434,7 @@ function setShoeShelfCount(n: number) {
           <Cabinet3D />
         </TresCanvas>
 
-        <div class="viewport-hint">Drag to orbit · Scroll to zoom</div>
+        <div class="viewport-hint">{{ viewportHint }}</div>
       </main>
 
       <!-- ── Right Sidebar ───────────────────────────────────────────── -->
@@ -708,6 +760,33 @@ function setShoeShelfCount(n: number) {
 .tower-label {
   font-size: 13px;
   font-weight: 600;
+}
+
+.tower-card-actions {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.tower-move-btn {
+  padding: 2px 5px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 10px;
+  transition: all 0.15s;
+}
+
+.tower-move-btn:not(:disabled):hover {
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.1);
+}
+
+.tower-move-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
 }
 
 .tower-delete-btn {

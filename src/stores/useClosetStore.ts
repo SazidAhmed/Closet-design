@@ -64,6 +64,16 @@ export const useClosetStore = defineStore('closet', {
       if (idx !== -1) this.towers.splice(idx, 1)
     },
 
+    /** Move a tower left (-1) or right (+1) in the array. */
+    moveTower(towerId: string, direction: -1 | 1) {
+      const idx = this.towers.findIndex((t) => t.id === towerId)
+      const target = idx + direction
+      if (idx < 0 || target < 0 || target >= this.towers.length) return
+      // Splice-based swap to avoid TS strict indexing issues
+      const [removed] = this.towers.splice(idx, 1)
+      if (removed) this.towers.splice(target, 0, removed)
+    },
+
     updateTower(towerId: string, partial: Partial<Omit<Tower, 'id' | 'accessories'>>) {
       const tower = this.towers.find((t) => t.id === towerId)
       if (tower) Object.assign(tower, partial)

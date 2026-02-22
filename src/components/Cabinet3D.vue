@@ -61,6 +61,35 @@ function partMetalness(part: ClosetPart): number {
   if (part.type === "rod") return 0.8;
   return 0;
 }
+
+// ── Measurement dimension lines ──────────────────────────────────────────
+const cabW = computed(() => Number(closet.cabinet.width) || 60);
+const cabH = computed(() => Number(closet.cabinet.height) || 200);
+const cabD = computed(() => Number(closet.cabinet.depth) || 60);
+
+// ── Decorative props: hangers on rods ────────────────────────────────────
+const hangerProps = computed(() => {
+  const hangers: {
+    pos: [number, number, number];
+    rot: [number, number, number];
+  }[] = [];
+  for (const rod of rodParts.value) {
+    const rodLen = rod.dims.x;
+    const count = Math.min(Math.floor(rodLen / 12), 6); // ~12cm apart, max 6
+    for (let i = 0; i < count; i++) {
+      const offset = -rodLen / 2 + (i + 1) * (rodLen / (count + 1));
+      hangers.push({
+        pos: [
+          rod.transform.pos[0] + offset,
+          rod.transform.pos[1] - 12,
+          rod.transform.pos[2],
+        ],
+        rot: [0, Math.random() * 0.4 - 0.2, 0],
+      });
+    }
+  }
+  return hangers;
+});
 </script>
 
 <template>
@@ -124,6 +153,76 @@ function partMetalness(part: ClosetPart): number {
         :color="partColor(part)"
         :roughness="partRoughness(part)"
         :metalness="partMetalness(part)"
+      />
+    </TresMesh>
+
+    <!-- ── Measurement dimension lines ─────────────────────────── -->
+    <!-- Width line (bottom, front) -->
+    <TresGroup>
+      <TresMesh :position="[0, -cabH / 2 - 12, cabD / 2 + 5]">
+        <TresBoxGeometry :args="[cabW, 0.8, 0.8]" />
+        <TresMeshBasicMaterial color="#fbbf24" />
+      </TresMesh>
+      <!-- Left cap -->
+      <TresMesh :position="[-cabW / 2, -cabH / 2 - 12, cabD / 2 + 5]">
+        <TresBoxGeometry :args="[0.8, 8, 0.8]" />
+        <TresMeshBasicMaterial color="#fbbf24" />
+      </TresMesh>
+      <!-- Right cap -->
+      <TresMesh :position="[cabW / 2, -cabH / 2 - 12, cabD / 2 + 5]">
+        <TresBoxGeometry :args="[0.8, 8, 0.8]" />
+        <TresMeshBasicMaterial color="#fbbf24" />
+      </TresMesh>
+    </TresGroup>
+
+    <!-- Height line (left, front) -->
+    <TresGroup>
+      <TresMesh :position="[-cabW / 2 - 12, 0, cabD / 2 + 5]">
+        <TresBoxGeometry :args="[0.8, cabH, 0.8]" />
+        <TresMeshBasicMaterial color="#60a5fa" />
+      </TresMesh>
+      <!-- Top cap -->
+      <TresMesh :position="[-cabW / 2 - 12, cabH / 2, cabD / 2 + 5]">
+        <TresBoxGeometry :args="[8, 0.8, 0.8]" />
+        <TresMeshBasicMaterial color="#60a5fa" />
+      </TresMesh>
+      <!-- Bottom cap -->
+      <TresMesh :position="[-cabW / 2 - 12, -cabH / 2, cabD / 2 + 5]">
+        <TresBoxGeometry :args="[8, 0.8, 0.8]" />
+        <TresMeshBasicMaterial color="#60a5fa" />
+      </TresMesh>
+    </TresGroup>
+
+    <!-- Depth line (bottom, right side) -->
+    <TresGroup>
+      <TresMesh :position="[cabW / 2 + 12, -cabH / 2 - 12, 0]">
+        <TresBoxGeometry :args="[0.8, 0.8, cabD]" />
+        <TresMeshBasicMaterial color="#34d399" />
+      </TresMesh>
+      <!-- Front cap -->
+      <TresMesh :position="[cabW / 2 + 12, -cabH / 2 - 12, cabD / 2]">
+        <TresBoxGeometry :args="[0.8, 8, 0.8]" />
+        <TresMeshBasicMaterial color="#34d399" />
+      </TresMesh>
+      <!-- Back cap -->
+      <TresMesh :position="[cabW / 2 + 12, -cabH / 2 - 12, -cabD / 2]">
+        <TresBoxGeometry :args="[0.8, 8, 0.8]" />
+        <TresMeshBasicMaterial color="#34d399" />
+      </TresMesh>
+    </TresGroup>
+
+    <!-- ── Decorative hangers on rods ──────────────────────────── -->
+    <TresMesh
+      v-for="(hanger, hIdx) in hangerProps"
+      :key="'hanger-' + hIdx"
+      :position="hanger.pos"
+      :rotation="hanger.rot"
+    >
+      <TresBoxGeometry :args="[1, 22, 8]" />
+      <TresMeshStandardMaterial
+        color="#8b7e6e"
+        :roughness="0.7"
+        :metalness="0"
       />
     </TresMesh>
   </TresGroup>

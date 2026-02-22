@@ -5,6 +5,11 @@
 import { defineStore } from 'pinia'
 import type { Room, PlacedItem, RoomColors } from '../features/closet/domain/types/room'
 import { createDefaultRoom, createItemId } from '../features/closet/domain/types/room'
+import { ROOM_CONSTRAINTS } from '../features/closet/domain/constraints'
+
+function clampWall(v: number): number {
+  return Math.max(ROOM_CONSTRAINTS.wallLength.min, Math.min(ROOM_CONSTRAINTS.wallLength.max, Math.round(v)))
+}
 
 export const useRoomStore = defineStore('room', {
   state: (): Room => createDefaultRoom(),
@@ -59,6 +64,19 @@ export const useRoomStore = defineStore('room', {
     /** Clear all placed items. */
     clearItems() {
       this.items.splice(0, this.items.length)
+    },
+
+    /**
+     * Resize a rectangular room — keeps opposite walls paired.
+     * walls[0] & walls[2] = width, walls[1] & walls[3] = depth.
+     */
+    resizeRoom(width: number, depth: number) {
+      const w = clampWall(width)
+      const d = clampWall(depth)
+      if (this.walls[0]) this.walls[0].length = w
+      if (this.walls[2]) this.walls[2].length = w
+      if (this.walls[1]) this.walls[1].length = d
+      if (this.walls[3]) this.walls[3].length = d
     },
   },
 })
