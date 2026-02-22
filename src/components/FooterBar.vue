@@ -2,8 +2,10 @@
 import { useRouter } from "vue-router";
 import ViewModeToggle from "./ViewModeToggle.vue";
 import { ChevronLeft, ChevronRight, Share2 } from "lucide-vue-next";
+import { useUnit } from "../composables/useUnit";
 
 const router = useRouter();
+const { unitLabel, toggleUnits } = useUnit();
 
 defineProps<{
   backLabel: string;
@@ -39,6 +41,13 @@ function formatPrice(price: number): string {
 
     <div class="footer-center">
       <ViewModeToggle v-if="showViewToggle !== false" />
+      <button
+        class="unit-toggle-btn"
+        @click="toggleUnits"
+        :title="`Switch units (currently ${unitLabel})`"
+      >
+        {{ unitLabel }}
+      </button>
     </div>
 
     <div class="footer-right">
@@ -82,6 +91,27 @@ function formatPrice(price: number): string {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 10px;
+}
+
+.unit-toggle-btn {
+  padding: 4px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.05em;
+}
+
+.unit-toggle-btn:hover {
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .footer-nav-btn {

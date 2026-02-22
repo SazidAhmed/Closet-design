@@ -12,6 +12,7 @@ import { useSelectionStore } from "../../../stores/useSelectionStore";
 import { useRoomStore } from "../../../stores/useRoomStore";
 import { useQuoteStore } from "../stores/useQuoteStore";
 import { useHistoryStore } from "../../../stores/useHistoryStore";
+import { useUnit } from "../../../composables/useUnit";
 import { Slider } from "@/components/ui/slider";
 import {
   FINISH_MATERIALS,
@@ -29,6 +30,7 @@ const closet = useClosetStore();
 const appStore = useAppStore();
 const selection = useSelectionStore();
 const historyStore = useHistoryStore();
+const { fmt } = useUnit();
 const roomStore = useRoomStore();
 const quote = useQuoteStore();
 
@@ -272,7 +274,7 @@ function setShoeShelfCount(n: number) {
                 </div>
               </div>
               <div class="tower-dims">
-                {{ Math.round(tower.width) }} × {{ Math.round(tower.depth) }} cm
+                {{ fmt(tower.width) }} × {{ fmt(tower.depth) }}
               </div>
             </button>
           </div>
@@ -301,7 +303,7 @@ function setShoeShelfCount(n: number) {
                   :key="opt"
                   :value="opt"
                 >
-                  {{ opt }} cm
+                  {{ fmt(opt) }}
                 </option>
               </select>
             </div>
@@ -318,7 +320,7 @@ function setShoeShelfCount(n: number) {
                 "
               >
                 <option v-for="opt in [213.4, 243.8]" :key="opt" :value="opt">
-                  {{ opt }} cm
+                  {{ fmt(opt) }}
                 </option>
               </select>
             </div>

@@ -31,9 +31,9 @@
 
 ## Priority 5 — Units & Measurements
 
-- [ ] Units toggle (cm ↔ inches) throughout entire UI
-- [ ] All dimension labels, sliders, and inputs respect selected unit
-- [ ] Input fields with unit suffixes (e.g. `72"` or `183 cm`)
+- [x] Units toggle (cm ↔ inches) throughout entire UI
+- [x] All dimension labels, sliders, and inputs respect selected unit
+- [x] Input fields with unit suffixes (e.g. `72″` or `183 cm`)
 
 ## Priority 6 — Export & Sharing
 
