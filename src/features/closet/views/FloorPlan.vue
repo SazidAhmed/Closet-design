@@ -194,6 +194,265 @@ function cmToImperial(cm: number): string {
   const inches = Math.round(totalIn % 12);
   return `${ft}' ${inches}"`;
 }
+
+// ───── Architecture item catalog ───────────────────────────────────────────
+import type { PlacedItemType, PlacedItemCategory } from "../domain/types/room";
+
+type ItemDef = {
+  type: PlacedItemType;
+  category: PlacedItemCategory;
+  width: number;
+  height: number;
+  icon: string;
+};
+
+const DOOR_ITEMS: ItemDef[] = [
+  {
+    type: "wall_opening",
+    category: "door",
+    width: 91,
+    height: 213,
+    icon: "🚪",
+  },
+  {
+    type: "double_door",
+    category: "door",
+    width: 152,
+    height: 213,
+    icon: "🚪",
+  },
+  { type: "single_door", category: "door", width: 91, height: 213, icon: "🚪" },
+  {
+    type: "sliding_door",
+    category: "door",
+    width: 152,
+    height: 213,
+    icon: "🚪",
+  },
+  {
+    type: "bifold_door",
+    category: "door",
+    width: 122,
+    height: 213,
+    icon: "🚪",
+  },
+];
+
+const ARCH_ITEMS: ItemDef[] = [
+  {
+    type: "rect_column",
+    category: "architecture",
+    width: 30,
+    height: 244,
+    icon: "🏛️",
+  },
+  {
+    type: "round_column",
+    category: "architecture",
+    width: 30,
+    height: 244,
+    icon: "🏛️",
+  },
+  {
+    type: "interior_wall",
+    category: "architecture",
+    width: 10,
+    height: 244,
+    icon: "🏛️",
+  },
+];
+
+const DECO_ITEMS: ItemDef[] = [
+  {
+    type: "window",
+    category: "wall_decorator",
+    width: 91,
+    height: 122,
+    icon: "🪟",
+  },
+  {
+    type: "vent",
+    category: "wall_decorator",
+    width: 30,
+    height: 30,
+    icon: "🪟",
+  },
+  {
+    type: "outlet",
+    category: "wall_decorator",
+    width: 8,
+    height: 12,
+    icon: "🪟",
+  },
+  {
+    type: "light_switch",
+    category: "wall_decorator",
+    width: 8,
+    height: 12,
+    icon: "🪟",
+  },
+  {
+    type: "wall_photo",
+    category: "wall_decorator",
+    width: 60,
+    height: 45,
+    icon: "🪟",
+  },
+  {
+    type: "floor_photo",
+    category: "wall_decorator",
+    width: 60,
+    height: 45,
+    icon: "🪟",
+  },
+];
+
+function itemLabel(type: PlacedItemType): string {
+  return type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Place an architecture item on wall 0 (bottom) at center */
+function addArchItem(def: ItemDef) {
+  const wallId = roomStore.walls[0]?.id ?? null;
+  roomStore.addItem({
+    type: def.type,
+    category: def.category,
+    wallId,
+    positionAlongWall: 0.5,
+    width: def.width,
+    height: def.height,
+  });
+}
+
+// ───── Selected item & item drag ───────────────────────────────────────────
+const selectedItemId = ref<string | null>(null);
+
+const itemDrag = reactive<{
+  active: boolean;
+  itemId: string;
+  wallId: string;
+  wallIdx: number;
+}>({
+  active: false,
+  itemId: "",
+  wallId: "",
+  wallIdx: 0,
+});
+
+function selectItem(itemId: string, e: PointerEvent) {
+  e.stopPropagation();
+  selectedItemId.value = itemId;
+}
+
+function startItemDrag(itemId: string, wallId: string, e: PointerEvent) {
+  e.stopPropagation();
+  e.preventDefault();
+  selectedItemId.value = itemId;
+  const wallIdx = roomStore.walls.findIndex((w) => w.id === wallId);
+  if (wallIdx < 0) return;
+  (e.target as Element)?.setPointerCapture?.(e.pointerId);
+  itemDrag.active = true;
+  itemDrag.itemId = itemId;
+  itemDrag.wallId = wallId;
+  itemDrag.wallIdx = wallIdx;
+}
+
+function onItemPointerMove(e: PointerEvent) {
+  if (!itemDrag.active || !svgRef.value) return;
+  const pt = screenToSvg(svgRef.value, e.clientX, e.clientY);
+  const wIdx = itemDrag.wallIdx;
+
+  let pos = 0.5;
+  if (wIdx === 0) {
+    // Bottom wall — horizontal, x from -roomW/2 to +roomW/2
+    pos = (pt.x + roomW.value / 2) / roomW.value;
+  } else if (wIdx === 2) {
+    // Top wall — horizontal (reversed direction)
+    pos = (roomW.value / 2 - pt.x) / roomW.value;
+  } else if (wIdx === 1) {
+    // Right wall — vertical, y from -roomD/2 to +roomD/2
+    pos = (pt.y + roomD.value / 2) / roomD.value;
+  } else if (wIdx === 3) {
+    // Left wall — vertical (reversed direction)
+    pos = (roomD.value / 2 - pt.y) / roomD.value;
+  }
+
+  // Clamp between 0.05 and 0.95 to keep items on the wall
+  pos = Math.max(0.05, Math.min(0.95, pos));
+  roomStore.moveItem(itemDrag.itemId, pos);
+}
+
+function onItemPointerUp() {
+  itemDrag.active = false;
+}
+
+function deleteSelectedItem() {
+  if (selectedItemId.value) {
+    roomStore.removeItem(selectedItemId.value);
+    selectedItemId.value = null;
+  }
+}
+
+// Register item drag listeners
+onMounted(() => {
+  document.addEventListener("pointermove", onItemPointerMove);
+  document.addEventListener("pointerup", onItemPointerUp);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("pointermove", onItemPointerMove);
+  document.removeEventListener("pointerup", onItemPointerUp);
+});
+
+// ───── SVG helpers for placed items ────────────────────────────────────────
+/**
+ * Compute the SVG (x, y) position for a placed item based on its wall and position.
+ * Returns the CENTER of the item rectangle.
+ */
+function itemSvgPos(item: {
+  wallId: string | null;
+  positionAlongWall: number;
+}): { x: number; y: number } {
+  const wIdx = roomStore.walls.findIndex((w) => w.id === item.wallId);
+  const wHalf = roomW.value / 2;
+  const dHalf = roomD.value / 2;
+
+  if (wIdx === 0) {
+    // Bottom wall (y = -dHalf)
+    return { x: -wHalf + item.positionAlongWall * roomW.value, y: -dHalf };
+  } else if (wIdx === 1) {
+    // Right wall (x = +wHalf)
+    return { x: wHalf, y: -dHalf + item.positionAlongWall * roomD.value };
+  } else if (wIdx === 2) {
+    // Top wall (y = +dHalf)
+    return { x: wHalf - item.positionAlongWall * roomW.value, y: dHalf };
+  } else if (wIdx === 3) {
+    // Left wall (x = -wHalf)
+    return { x: -wHalf, y: dHalf - item.positionAlongWall * roomD.value };
+  }
+  // Free-standing — center of room
+  return { x: 0, y: 0 };
+}
+
+/** Pick a color for the item category */
+function itemColor(category: PlacedItemCategory): string {
+  switch (category) {
+    case "door":
+      return "#f97316";
+    case "architecture":
+      return "#8b5cf6";
+    case "wall_decorator":
+      return "#06b6d4";
+    default:
+      return "#64748b";
+  }
+}
+
+/** Is the item on a vertical wall? (needs 90° rotation in SVG) */
+function isVerticalWall(wallId: string | null): boolean {
+  const wIdx = roomStore.walls.findIndex((w) => w.id === wallId);
+  return wIdx === 1 || wIdx === 3;
+}
 </script>
 
 <template>
@@ -222,17 +481,12 @@ function cmToImperial(cm: number): string {
           <div class="item-grid">
             <button
               class="item-card"
-              v-for="door in [
-                'Wall Opening',
-                'Double Door',
-                'Single Door',
-                'Sliding Door',
-                'Bi-Fold Door',
-              ]"
-              :key="door"
+              v-for="def in DOOR_ITEMS"
+              :key="def.type"
+              @click="addArchItem(def)"
             >
-              <div class="item-icon">🚪</div>
-              <span class="item-label">{{ door }}</span>
+              <div class="item-icon">{{ def.icon }}</div>
+              <span class="item-label">{{ itemLabel(def.type) }}</span>
             </button>
           </div>
 
@@ -240,15 +494,12 @@ function cmToImperial(cm: number): string {
           <div class="item-grid">
             <button
               class="item-card"
-              v-for="arch in [
-                'Rectangular Column',
-                'Round Column',
-                'Interior Wall',
-              ]"
-              :key="arch"
+              v-for="def in ARCH_ITEMS"
+              :key="def.type"
+              @click="addArchItem(def)"
             >
-              <div class="item-icon">🏛️</div>
-              <span class="item-label">{{ arch }}</span>
+              <div class="item-icon">{{ def.icon }}</div>
+              <span class="item-label">{{ itemLabel(def.type) }}</span>
             </button>
           </div>
 
@@ -256,18 +507,12 @@ function cmToImperial(cm: number): string {
           <div class="item-grid">
             <button
               class="item-card"
-              v-for="dec in [
-                'Window',
-                'Vent',
-                'Outlet',
-                'Light Switch',
-                'Wall Photo',
-                'Floor Photo',
-              ]"
-              :key="dec"
+              v-for="def in DECO_ITEMS"
+              :key="def.type"
+              @click="addArchItem(def)"
             >
-              <div class="item-icon">🪟</div>
-              <span class="item-label">{{ dec }}</span>
+              <div class="item-icon">{{ def.icon }}</div>
+              <span class="item-label">{{ itemLabel(def.type) }}</span>
             </button>
           </div>
         </div>
@@ -282,6 +527,7 @@ function cmToImperial(cm: number): string {
             :viewBox="svgViewBox"
             class="floorplan-svg"
             xmlns="http://www.w3.org/2000/svg"
+            @click="selectedItemId = null"
           >
             <!-- Room background -->
             <rect
@@ -494,6 +740,67 @@ function cmToImperial(cm: number): string {
                 />
               </marker>
             </defs>
+
+            <!-- Placed architecture items -->
+            <g
+              v-for="item in roomStore.items"
+              :key="item.id"
+              :transform="`translate(${itemSvgPos(item).x}, ${itemSvgPos(item).y})${isVerticalWall(item.wallId) ? ' rotate(90)' : ''}`"
+              class="placed-item"
+              :class="{ selected: selectedItemId === item.id }"
+              @pointerdown="startItemDrag(item.id, item.wallId ?? '', $event)"
+              @click.stop="selectItem(item.id, $event)"
+            >
+              <!-- Item body -->
+              <rect
+                :x="-item.width / 2"
+                :y="-4"
+                :width="item.width"
+                :height="8"
+                :fill="itemColor(item.category)"
+                :stroke="selectedItemId === item.id ? '#fbbf24' : 'none'"
+                :stroke-width="selectedItemId === item.id ? 2 : 0"
+                rx="2"
+                :opacity="selectedItemId === item.id ? 1 : 0.8"
+                style="cursor: grab"
+              />
+              <!-- Item label -->
+              <text
+                x="0"
+                :y="selectedItemId === item.id ? -10 : 16"
+                text-anchor="middle"
+                :fill="itemColor(item.category)"
+                font-size="8"
+                font-weight="600"
+              >
+                {{ itemLabel(item.type) }}
+              </text>
+              <!-- Delete button (only when selected) -->
+              <g
+                v-if="selectedItemId === item.id"
+                @click.stop="deleteSelectedItem"
+                style="cursor: pointer"
+              >
+                <circle
+                  :cx="item.width / 2 + 8"
+                  cy="-4"
+                  r="6"
+                  fill="#ef4444"
+                  stroke="#0f172a"
+                  stroke-width="1"
+                />
+                <text
+                  :x="item.width / 2 + 8"
+                  y="-1"
+                  text-anchor="middle"
+                  fill="white"
+                  font-size="8"
+                  font-weight="bold"
+                >
+                  ×
+                </text>
+              </g>
+            </g>
           </svg>
         </div>
 

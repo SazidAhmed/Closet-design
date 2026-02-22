@@ -3,10 +3,10 @@
 ## Priority 1 — Floor Plan Interactivity
 
 - [x] Drag-to-resize walls via corner & mid-wall handles
-- [ ] Drag-and-drop architecture items (doors, columns, windows) from sidebar onto walls
-- [ ] Place, reposition, and delete items on walls
+- [x] Drag-and-drop architecture items (doors, columns, windows) from sidebar onto walls
+- [x] Place, reposition, and delete items on walls
 - [x] Change Room Height dialog
-- [ ] Show placed items in the SVG canvas with correct positioning
+- [x] Show placed items in the SVG canvas with correct positioning
 
 ## Priority 2 — View Modes
 
