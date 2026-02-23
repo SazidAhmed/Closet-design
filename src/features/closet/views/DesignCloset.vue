@@ -23,6 +23,7 @@ import {
   WALL_COLORS,
   TRIM_COLORS,
 } from "../domain/materials/catalog";
+import { getTextureSwatch } from "../../../composables/useTextureCache";
 import { AUTO_CREATE_PRESETS } from "../domain/closetTypes";
 import { Plus, Trash2 } from "lucide-vue-next";
 import type { Accessory } from "../domain/types/tower";
@@ -34,6 +35,18 @@ const historyStore = useHistoryStore();
 const { fmt } = useUnit();
 const roomStore = useRoomStore();
 const quote = useQuoteStore();
+
+function swatchStyle(colorHex: string, textureUrl?: string) {
+  const tex = getTextureSwatch(textureUrl);
+  if (tex) {
+    return {
+      backgroundImage: tex,
+      backgroundSize: "cover",
+      backgroundColor: colorHex, // fallback/tint
+    };
+  }
+  return { backgroundColor: colorHex };
+}
 
 onMounted(() => {
   appStore.setStep("design");
@@ -456,7 +469,7 @@ function setShoeShelfCount(n: number) {
                 :key="mat.id"
                 class="swatch-btn"
                 :class="{ active: closet.materials.finishId === mat.id }"
-                :style="{ background: mat.colorHex }"
+                :style="swatchStyle(mat.colorHex, mat.textureUrl)"
                 :title="mat.label"
                 @click="closet.setMaterials({ finishId: mat.id })"
               />
@@ -535,7 +548,7 @@ function setShoeShelfCount(n: number) {
                 :key="mat.id"
                 class="swatch-btn"
                 :class="{ active: roomStore.colors.floorFinishId === mat.id }"
-                :style="{ background: mat.colorHex }"
+                :style="swatchStyle(mat.colorHex, mat.textureUrl)"
                 :title="mat.label"
                 @click="
                   roomStore.setColors({

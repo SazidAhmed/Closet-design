@@ -4,6 +4,12 @@ import { useClosetStore } from "../stores/useClosetStore";
 import { buildParts } from "../features/closet/domain/buildCabinetParts";
 import type { ClosetPart } from "../features/closet/domain/parts";
 import { getMaterial } from "../features/closet/domain/materials/catalog";
+import {
+  getTexture,
+  scaleTexture,
+  textureVersion,
+} from "../composables/useTextureCache";
+import type * as THREE from "three";
 
 const closet = useClosetStore();
 
@@ -62,6 +68,22 @@ function partMetalness(part: ClosetPart): number {
   return 0;
 }
 
+/** Get texture for a part (returns null if no texture or not yet loaded) */
+function partTexture(part: ClosetPart): THREE.Texture | null {
+  // Touch reactive version to re-render when URL-based textures load
+  void textureVersion.value;
+
+  const mat = getMaterial(part.materialId);
+  if (!mat?.textureUrl) return null;
+
+  const tex = getTexture(mat.textureUrl);
+  if (tex) {
+    // Scale texture repeat based on part dimensions
+    scaleTexture(tex, part.dims.x, part.dims.y, 80);
+  }
+  return tex;
+}
+
 // ── Measurement dimension lines ──────────────────────────────────────────
 const cabW = computed(() => Number(closet.cabinet.width) || 60);
 const cabH = computed(() => Number(closet.cabinet.height) || 200);
@@ -106,6 +128,7 @@ const hangerProps = computed(() => {
         :color="partColor(part)"
         :roughness="partRoughness(part)"
         :metalness="partMetalness(part)"
+        :map="partTexture(part)"
       />
     </TresMesh>
 
@@ -121,6 +144,7 @@ const hangerProps = computed(() => {
         :color="partColor(part)"
         :roughness="partRoughness(part)"
         :metalness="partMetalness(part)"
+        :map="partTexture(part)"
       />
     </TresMesh>
 
@@ -153,6 +177,7 @@ const hangerProps = computed(() => {
         :color="partColor(part)"
         :roughness="partRoughness(part)"
         :metalness="partMetalness(part)"
+        :map="partTexture(part)"
       />
     </TresMesh>
 

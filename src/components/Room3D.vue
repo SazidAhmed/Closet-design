@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRoomStore } from "../stores/useRoomStore";
+import { getMaterial } from "../features/closet/domain/materials/catalog";
+import {
+  getTexture,
+  scaleTexture,
+  textureVersion,
+} from "../composables/useTextureCache";
 
 const roomStore = useRoomStore();
 
@@ -15,6 +21,22 @@ const hd = computed(() => roomD.value / 2);
 const hh = computed(() => roomH.value / 2);
 
 const wallThickness = 3;
+
+// ── Floor texture ────────────────────────────────────────────────────────
+const floorTexture = computed(() => {
+  void textureVersion.value;
+  const floorMatId = roomStore.colors.floorFinishId;
+  if (!floorMatId) return null;
+
+  const mat = getMaterial(floorMatId);
+  if (!mat?.textureUrl) return null;
+
+  const tex = getTexture(mat.textureUrl);
+  if (tex) {
+    scaleTexture(tex, roomW.value, roomD.value, 100);
+  }
+  return tex;
+});
 </script>
 
 <template>
@@ -26,6 +48,7 @@ const wallThickness = 3;
         :color="roomStore.colors.floorColor"
         :roughness="0.9"
         :metalness="0"
+        :map="floorTexture"
       />
     </TresMesh>
 

@@ -20,7 +20,7 @@
 - [x] Measurement overlays in 3D (dimension labels on parts)
 - [x] Tower drag-and-reorder in Design Closet
 - [x] Props (decorative items: hangers on rods)
-- [ ] Texture support — load real wood/fabric textures from `textureUrl` in catalog
+- [x] Texture support — load real wood/fabric textures from `textureUrl` in catalog
 
 ## Priority 4 — Persistence & History
 
