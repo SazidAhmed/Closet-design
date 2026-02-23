@@ -13,7 +13,7 @@
 - [x] Differentiate Overhead / Wall / 3D views (toggle UI exists, all show the same view)
 - [x] Wall view — orthographic front elevation of the closet
 - [x] Overhead view — top-down 2D representation
-- [ ] Camera presets with animated transitions between views
+- [x] Camera presets with animated transitions between views
 
 ## Priority 3 — 3D Viewport Enhancements
 

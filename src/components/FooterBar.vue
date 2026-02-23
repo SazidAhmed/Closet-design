@@ -15,6 +15,7 @@ defineProps<{
   price?: number;
   showViewToggle?: boolean;
   showShare?: boolean;
+  transitioning?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -40,7 +41,10 @@ function formatPrice(price: number): string {
     </div>
 
     <div class="footer-center">
-      <ViewModeToggle v-if="showViewToggle !== false" />
+      <ViewModeToggle
+        v-if="showViewToggle !== false"
+        :transitioning="transitioning"
+      />
       <button
         class="unit-toggle-btn"
         @click="toggleUnits"

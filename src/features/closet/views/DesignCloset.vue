@@ -4,6 +4,7 @@ import { TresCanvas } from "@tresjs/core";
 import { OrbitControls } from "@tresjs/cientos";
 import Cabinet3D from "../../../components/Cabinet3D.vue";
 import Room3D from "../../../components/Room3D.vue";
+import CameraRig from "../../../components/CameraRig.vue";
 import TopToolbar from "../../../components/TopToolbar.vue";
 import FooterBar from "../../../components/FooterBar.vue";
 import { useClosetStore } from "../../../stores/useClosetStore";
@@ -66,34 +67,23 @@ watch(
   { deep: true, immediate: true },
 );
 
-// ── Camera per view mode ──────────────────────────────────────────────────
-const cameraPos = computed<[number, number, number]>(() => {
+// ── Camera initial position (CameraRig handles animated transitions) ─────
+const initialCameraPos: [number, number, number] = (() => {
   const w = Number(closet.cabinet.width) || 60;
   const h = Number(closet.cabinet.height) || 200;
   const d = Number(closet.cabinet.depth) || 60;
   const maxDim = Math.max(w, h, d);
+  return [maxDim * 0.9, maxDim * 0.6, maxDim * 1.1];
+})();
 
-  switch (appStore.viewMode) {
-    case "wall":
-      // Front-on elevation: look straight at the cabinet face
-      return [0, h * 0.2, maxDim * 1.6];
-    case "overhead":
-      // Top-down: look straight down
-      return [0, maxDim * 2, 0];
-    default:
-      // 3D perspective orbit
-      return [maxDim * 0.9, maxDim * 0.6, maxDim * 1.1];
-  }
-});
+// Template ref for OrbitControls — passed to CameraRig
+const orbitRef = ref<InstanceType<typeof OrbitControls> | null>(null);
 
-const cameraUp = computed<[number, number, number]>(() => {
-  // For overhead view, "up" should be along -Z so the view isn't flipped
-  return appStore.viewMode === "overhead" ? [0, 0, -1] : [0, 1, 0];
-});
-
-const enableOrbit = computed(() => appStore.viewMode === "3d");
+// CameraRig manages controls enabled state; keep this for reference
+const cameraRigAnimating = ref(false);
 
 const viewportHint = computed(() => {
+  if (cameraRigAnimating.value) return "Transitioning…";
   switch (appStore.viewMode) {
     case "wall":
       return "Front elevation view";
@@ -426,17 +416,23 @@ function setShoeShelfCount(n: number) {
           class="h-full w-full"
         >
           <TresPerspectiveCamera
-            :position="cameraPos"
-            :up="cameraUp"
+            :position="initialCameraPos"
             :fov="45"
             :near="0.1"
             :far="5000"
           />
           <OrbitControls
-            :enabled="enableOrbit"
+            ref="orbitRef"
             :enable-damping="true"
             :damping-factor="0.08"
           />
+
+          <!-- Camera animation rig -->
+          <CameraRig
+            :orbit-controls-ref="orbitRef"
+            @animating="cameraRigAnimating = $event"
+          />
+
           <TresAmbientLight :intensity="0.8" />
           <TresDirectionalLight :position="[200, 300, 200]" :intensity="1.2" />
 
@@ -602,6 +598,7 @@ function setShoeShelfCount(n: number) {
       :price="quote.result?.total ?? 0"
       :show-view-toggle="true"
       :show-share="true"
+      :transitioning="cameraRigAnimating"
     />
   </div>
 </template>
