@@ -1,48 +1,156 @@
-# Closet Designer — User Manual
+# Closet Designer User Manual
 
-Welcome to the Closet Designer! This application allows you to design your perfect storage solution from floor plan to 3D visualization.
+## 1. What this app does
 
-## 1. Phase 1: Floor Plan Designer
+Closet Designer helps you plan a closet in four steps:
 
-The first step is defining the room where your closet will live.
+1. Select closet type
+2. Build the room floor plan
+3. Configure the closet in 3D
+4. Review and export your design
 
-- **Wall Configuration**: Click and drag wall corners or handles to resize the room.
-- **Room Height**: Use the "Room Height" button (top left) to set the ceiling height.
-- **Architecture Items**: Drag doors, windows, and columns from the left sidebar onto any wall.
-- **Repositioning**: Click and drag placed items along a wall to move them, or use the "✕" button to delete them.
-- **Smart Placement**: The system automatically detects which wall you are targeting for perfect alignment.
+## 2. Before you start
 
-## 2. Phase 2: Design Closet
+- Open the app and begin at the closet type page.
+- Your work is saved automatically in your browser storage.
+- Keyboard shortcuts are available for undo, redo, and save.
 
-Once your room is set, move to the Design step to build the closet itself.
+## 3. Main navigation
 
-- **Tower Management**: Click "Add Tower" to create new sections.
-- **Drag & Reorder**: You can drag towers left or right to change their order in the layout.
-- **Shelf & Rod Logic**: Use the configuration panel to add/remove shelves, rods, and drawers.
-- **Accessory Props**: Decorative hangers are automatically added to rods for a realistic look.
-- **Undo / Redo**: Made a mistake? Use `Ctrl+Z` to undo and `Ctrl+Shift+Z` to redo any change.
+The app uses top and bottom bars on each page:
 
-## 3. Phase 3: 3D Viewport & Visualization
+- Top bar: New, Open, Save, Undo, Redo, Share, and utility buttons
+- Bottom bar: Back/Next step navigation, view mode toggle, unit toggle, and estimated price
 
-Experience your design in full 3D with premium lighting and textures.
+## 4. Step-by-step guide
 
-- **View Modes**:
-  - **Wall**: A perfect front-on elevation for precise layout check.
-  - **Overhead**: A bird's-eye view of your design relative to the room.
-  - **3D**: Free-form orbit to see the closet from any angle.
-- **Animated Transitions**: Switching views triggers a smooth camera fly-through.
-- **Measurement Overlays**: Real-time dimension labels show the width, height, and depth of your setup directly in the viewport.
-- **Textures & Finishes**:
-  - Select from high-quality **Wood Finishes** (Walnut, Espresso, Driftwood) with realistic grain.
-  - Choose **Floor Materials** (Hardwood, Carpet, Tile) to match your home.
-  - Preview textures instantly via the sidebar swatches.
+### Step 1: Select Closet Type
 
-## 4. Settings & Export
+Choose one of these starting templates:
 
-- **Unit Toggle**: Switch between **Metric (cm)** and **Imperial (inches)** at any time. All inputs and labels will update instantly.
-- **Persistence**: Your design is automatically saved to your browser (`localStorage`) every 1.5 seconds. You can safely refresh the page.
-- **Pricing**: A live quote update is shown in the footer as you add or change components.
+- Reach-In Closet
+- Walk-In Closet
+- Custom Layout
 
----
+When you click a card, the app applies default room and closet values and moves you to Floor Plan.
 
-_Status: Priority 1-5 Features Fully Implemented._
+### Step 2: Floor Plan
+
+Use this page to define room size and architecture.
+
+Room editing:
+
+- Drag yellow corner handles to resize width and depth together
+- Drag blue mid-wall handles to resize one axis at a time
+- Click "Change Room Height" to set ceiling height
+
+Add architecture:
+
+- Use the left sidebar to add door, architecture, and wall decorator items
+- Click an item to place it
+- Drag placed items along walls to reposition them
+- Select an item and click the red delete button to remove it
+
+Room options:
+
+- Use the right sidebar to set floor finish, wall color, and trim color
+- Set architectural door options (door handle and door finish)
+
+Continue:
+
+- Click "Design Closet" in the footer to move to the 3D design step
+
+### Step 3: Design Closet
+
+Use this page to configure towers, materials, and components in 3D.
+
+Left sidebar tabs:
+
+- Auto Create: apply a preset tower layout
+- Towers: add/remove towers, select a tower, move left/right, set tower depth and height
+- Edit Components: set shelf, drawer, and shoe shelf counts for the selected tower
+
+3D viewport:
+
+- Drag to orbit in 3D mode
+- Scroll to zoom
+- Switch views with Overhead, Wall, and 3D buttons
+
+Right sidebar options:
+
+- Closet finish, backing, and handle style
+- Room wall/floor/trim colors
+- Live quote status and total
+
+Validation:
+
+- If dimensions are invalid, errors appear in the validation panel
+- Quote requests are paused while blocking errors exist
+
+Design slots:
+
+- Click Save (top bar) to open the design slots dialog and save a named design
+- Click Open (top bar) to load or delete previously saved designs
+
+Continue:
+
+- Click "Continue to Review" in the footer
+
+### Step 4: Review
+
+Use this page to inspect final design details.
+
+You can review:
+
+- Closet type and cabinet dimensions
+- Tower-by-tower accessory details
+- Room summary (shape, height, walls, placed items)
+
+Export:
+
+- Click "Download Design (JSON)" to download the current design file
+
+## 5. Save, load, and auto-save
+
+The app supports two save styles:
+
+1. Auto-save/current working state in LocalStorage
+2. Named design slots for multiple saved versions
+
+Auto-save behavior:
+
+- Changes are auto-saved with a short debounce (about 1.5 seconds)
+- Press `Ctrl+S` (or `Cmd+S`) to trigger save immediately
+
+## 6. Keyboard shortcuts
+
+- `Ctrl+Z` / `Cmd+Z`: Undo
+- `Ctrl+Shift+Z` / `Cmd+Shift+Z`: Redo
+- `Ctrl+S` / `Cmd+S`: Save
+
+## 7. Units and view modes
+
+Units:
+
+- Use the footer unit toggle to switch between `cm` and `in`
+
+View modes:
+
+- Overhead: top-down view
+- Wall: front elevation view
+- 3D: free orbit perspective view
+
+## 8. Troubleshooting
+
+If something looks wrong:
+
+1. Check the validation panel in Design Closet for dimension errors.
+2. Use Undo/Redo to step back through recent edits.
+3. Use Open to reload a saved design slot.
+4. Refresh the page to restore the last auto-saved working state.
+
+## 9. Current limitations
+
+- Share and Submit for Quote buttons are currently placeholders.
+- PDF export is not available yet.
+- Sign In in the top bar is not connected to an account system yet.
