@@ -27,6 +27,7 @@ import { getTextureSwatch } from "../../../composables/useTextureCache";
 import { AUTO_CREATE_PRESETS } from "../domain/closetTypes";
 import { Plus, Trash2 } from "lucide-vue-next";
 import type { Accessory } from "../domain/types/tower";
+import DesignSlotsDialog from "../../../components/DesignSlotsDialog.vue";
 
 const closet = useClosetStore();
 const appStore = useAppStore();
@@ -178,6 +179,15 @@ function setShoeShelfCount(n: number) {
   if (n > 0) accs.push({ type: "shoe_shelf", count: n });
   closet.setTowerAccessories(selectedTower.value.id, accs);
 }
+
+// ── Design Slots Dialog ──────────────────────────────────────────────────
+const slotsOpen = ref(false);
+const slotsMode = ref<"save" | "load">("save");
+
+function openSlots(mode: "save" | "load") {
+  slotsMode.value = mode;
+  slotsOpen.value = true;
+}
 </script>
 
 <template>
@@ -185,8 +195,8 @@ function setShoeShelfCount(n: number) {
     <TopToolbar
       @undo="historyStore.undo()"
       @redo="historyStore.redo()"
-      @save="historyStore.saveToLocalStorage()"
-      @open="historyStore.loadFromLocalStorage()"
+      @save="openSlots('save')"
+      @open="openSlots('load')"
       @new="closet.resetToDefaults()"
     >
       <template #title>Design Closet</template>
@@ -612,6 +622,12 @@ function setShoeShelfCount(n: number) {
       :show-view-toggle="true"
       :show-share="true"
       :transitioning="cameraRigAnimating"
+    />
+
+    <DesignSlotsDialog
+      :open="slotsOpen"
+      :initial-mode="slotsMode"
+      @close="slotsOpen = false"
     />
   </div>
 </template>

@@ -27,7 +27,7 @@
 - [x] Save/load design to/from localStorage
 - [x] Undo / Redo support (Ctrl+Z / Ctrl+Shift+Z)
 - [x] Auto-save on every state change (1.5 s debounce)
-- [ ] Named design slots (save multiple designs)ce
+- [x] Named design slots (save multiple designs)
 
 ## Priority 5 — Units & Measurements
 

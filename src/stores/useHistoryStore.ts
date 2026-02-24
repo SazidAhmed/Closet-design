@@ -8,11 +8,19 @@ import { useClosetStore } from './useClosetStore'
 import { useRoomStore } from './useRoomStore'
 
 const STORAGE_KEY = 'closet-design-save'
+const SLOTS_KEY = 'closet-design-slots'
 const MAX_HISTORY = 50
 
-type Snapshot = {
+export type Snapshot = {
   closet: string // JSON-stringified closet state
   room: string   // JSON-stringified room state
+}
+
+export type DesignSlot = {
+  id: string
+  name: string
+  timestamp: number
+  snapshot: Snapshot
 }
 
 export const useHistoryStore = defineStore('history', {
@@ -23,6 +31,10 @@ export const useHistoryStore = defineStore('history', {
     _replaying: false,
     /** Debounce timer for auto-save */
     _saveTimer: null as ReturnType<typeof setTimeout> | null,
+    /** Named design slots */
+    slots: [] as DesignSlot[],
+    /** Currently active design slot ID */
+    activeSlotId: null as string | null,
   }),
 
   getters: {
@@ -90,12 +102,22 @@ export const useHistoryStore = defineStore('history', {
 
     loadFromLocalStorage(): boolean {
       try {
+        // Load main save
         const raw = localStorage.getItem(STORAGE_KEY)
-        if (!raw) return false
-        const snap: Snapshot = JSON.parse(raw)
-        if (!snap.closet || !snap.room) return false
-        this._applySnapshot(snap)
-        // Clear history since we loaded a fresh state
+        if (raw) {
+          const snap: Snapshot = JSON.parse(raw)
+          if (snap.closet && snap.room) {
+            this._applySnapshot(snap)
+          }
+        }
+
+        // Load slots
+        const rawSlots = localStorage.getItem(SLOTS_KEY)
+        if (rawSlots) {
+          this.slots = JSON.parse(rawSlots)
+        }
+
+        // Clear history since we loaded/restored
         this.undoStack.splice(0)
         this.redoStack.splice(0)
         return true
@@ -106,6 +128,59 @@ export const useHistoryStore = defineStore('history', {
 
     clearSave() {
       localStorage.removeItem(STORAGE_KEY)
+    },
+
+    // ── Named Design Slots ───────────────────────────────────────────────
+    saveNamedDesign(name: string) {
+      const snapshot = this._takeSnapshot()
+      const timestamp = Date.now()
+      const existing = this.slots.find(s => s.name.toLowerCase() === name.toLowerCase())
+      
+      if (existing) {
+        // Update existing slot (or ask for confirm, but here we update)
+        existing.snapshot = snapshot
+        existing.timestamp = timestamp
+        this.activeSlotId = existing.id
+      } else {
+        // Create new slot
+        const newSlot: DesignSlot = {
+          id: crypto.randomUUID(),
+          name,
+          timestamp,
+          snapshot
+        }
+        this.slots.push(newSlot)
+        this.activeSlotId = newSlot.id
+      }
+      this.syncSlotsToLocalStorage()
+    },
+
+    loadNamedDesign(id: string) {
+      const slot = this.slots.find(s => s.id === id)
+      if (slot) {
+        this._applySnapshot(slot.snapshot)
+        this.activeSlotId = slot.id
+        // Clear history on fresh load
+        this.undoStack.splice(0)
+        this.redoStack.splice(0)
+        // Also update the "current" auto-save so it matches
+        this.saveToLocalStorage()
+      }
+    },
+
+    deleteNamedDesign(id: string) {
+      const idx = this.slots.findIndex(s => s.id === id)
+      if (idx !== -1) {
+        if (this.activeSlotId === id) this.activeSlotId = null
+        this.slots.splice(idx, 1)
+        this.syncSlotsToLocalStorage()
+      }
+    },
+
+    syncSlotsToLocalStorage() {
+      try {
+        localStorage.setItem(SLOTS_KEY, JSON.stringify(this.slots))
+      } catch { /* quota exceeded */ }
     },
 
     // ── Auto-save with debounce ──────────────────────────────────────────
