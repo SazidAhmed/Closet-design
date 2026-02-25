@@ -28,6 +28,7 @@ import { AUTO_CREATE_PRESETS } from "../domain/closetTypes";
 import { Plus, Trash2 } from "lucide-vue-next";
 import type { Accessory } from "../domain/types/tower";
 import DesignSlotsDialog from "../../../components/DesignSlotsDialog.vue";
+import PositionMeasures3D from "../../../components/PositionMeasures3D.vue";
 
 const closet = useClosetStore();
 const appStore = useAppStore();
@@ -188,6 +189,42 @@ function openSlots(mode: "save" | "load") {
   slotsMode.value = mode;
   slotsOpen.value = true;
 }
+// ── Closet position helpers ───────────────────────────────────────────────
+const roomWall = computed(() => roomStore.walls[0]?.length ?? 244);
+const roomCeil = computed(() => roomStore.height ?? 244);
+const cabW = computed(() => Number(closet.cabinet.width) || 60);
+const cabH = computed(() => Number(closet.cabinet.height) || 200);
+const cabD = computed(() => Number(closet.cabinet.depth) || 60);
+
+// Max travel: half the free space on each side
+const maxOffsetX = computed(() =>
+  Math.max(0, Math.floor((roomWall.value - cabW.value) / 2)),
+);
+const maxOffsetY = computed(() =>
+  Math.max(0, Math.floor(roomCeil.value - cabH.value)),
+);
+const roomDepth = computed(() => roomStore.walls[1]?.length ?? 244);
+const maxOffsetZ = computed(() =>
+  Math.max(0, Math.floor(roomDepth.value - cabD.value)),
+);
+
+// Human-readable labels
+const horizontalLabel = computed(() => {
+  const x = roomStore.closetOffsetX;
+  if (Math.abs(x) < 1) return "Centred";
+  const dist = Math.abs(Math.round(x + maxOffsetX.value));
+  return x < 0
+    ? `${dist} cm from left wall`
+    : `${Math.round(maxOffsetX.value * 2 - dist)} cm from right wall`;
+});
+const verticalLabel = computed(() => {
+  const y = Math.round(roomStore.closetOffsetY);
+  return y === 0 ? "On floor" : `${y} cm above floor`;
+});
+const depthLabel = computed(() => {
+  const z = Math.round(roomStore.closetOffsetZ);
+  return z === 0 ? "Against back wall" : `${z} cm from back wall`;
+});
 </script>
 
 <template>
@@ -461,9 +498,37 @@ function openSlots(mode: "save" | "load") {
 
           <Room3D />
           <Cabinet3D />
+          <PositionMeasures3D />
         </TresCanvas>
 
         <div class="viewport-hint">{{ viewportHint }}</div>
+
+        <!-- Position HUD -->
+        <div
+          v-if="
+            roomStore.closetOffsetX !== 0 ||
+            roomStore.closetOffsetY !== 0 ||
+            roomStore.closetOffsetZ !== 0
+          "
+          class="position-hud"
+        >
+          <div class="hud-title">Closet Position</div>
+          <div class="hud-row">
+            <span class="hud-icon">↔</span>
+            <span class="hud-label">Horizontal</span>
+            <span class="hud-value">{{ horizontalLabel }}</span>
+          </div>
+          <div class="hud-row">
+            <span class="hud-icon">↕</span>
+            <span class="hud-label">Vertical</span>
+            <span class="hud-value">{{ verticalLabel }}</span>
+          </div>
+          <div class="hud-row">
+            <span class="hud-icon">⇔</span>
+            <span class="hud-label">Depth</span>
+            <span class="hud-value">{{ depthLabel }}</span>
+          </div>
+        </div>
       </main>
 
       <!-- ── Right Sidebar ───────────────────────────────────────────── -->
@@ -588,7 +653,110 @@ function openSlots(mode: "save" | "load") {
           </div>
         </div>
 
+        <!-- Position -->
+        <div class="sidebar-section">
+          <h3 class="sidebar-heading">Position in Room</h3>
+
+          <!-- Horizontal: left ←→ right -->
+          <div class="option-group">
+            <div class="position-row">
+              <label class="option-label">Horizontal</label>
+              <span class="position-value">
+                {{ horizontalLabel }}
+              </span>
+            </div>
+            <input
+              type="range"
+              class="position-slider"
+              :min="-maxOffsetX"
+              :max="maxOffsetX"
+              :step="1"
+              :value="roomStore.closetOffsetX"
+              @input="
+                roomStore.setClosetOffsetX(
+                  Number(($event.target as HTMLInputElement).value),
+                  closet.cabinet.width,
+                )
+              "
+            />
+            <div class="position-ends">
+              <span>← Left wall</span>
+              <span>Right wall →</span>
+            </div>
+          </div>
+
+          <!-- Vertical: floor ↕ ceiling -->
+          <div class="option-group">
+            <div class="position-row">
+              <label class="option-label">Vertical</label>
+              <span class="position-value">
+                {{ verticalLabel }}
+              </span>
+            </div>
+            <input
+              type="range"
+              class="position-slider"
+              :min="0"
+              :max="maxOffsetY"
+              :step="1"
+              :value="roomStore.closetOffsetY"
+              @input="
+                roomStore.setClosetOffsetY(
+                  Number(($event.target as HTMLInputElement).value),
+                  closet.cabinet.height,
+                )
+              "
+            />
+            <div class="position-ends">
+              <span>Floor</span>
+              <span>Ceiling ↑</span>
+            </div>
+          </div>
+
+          <!-- Depth: back wall ↔ front -->
+          <div class="option-group">
+            <div class="position-row">
+              <label class="option-label">Depth</label>
+              <span class="position-value">
+                {{ depthLabel }}
+              </span>
+            </div>
+            <input
+              type="range"
+              class="position-slider"
+              :min="0"
+              :max="maxOffsetZ"
+              :step="1"
+              :value="roomStore.closetOffsetZ"
+              @input="
+                roomStore.setClosetOffsetZ(
+                  Number(($event.target as HTMLInputElement).value),
+                  closet.cabinet.depth,
+                )
+              "
+            />
+            <div class="position-ends">
+              <span>Back wall</span>
+              <span>Front →</span>
+            </div>
+          </div>
+
+          <!-- Reset -->
+          <button
+            class="action-btn"
+            style="font-size: 11px; padding: 6px 10px"
+            @click="
+              roomStore.setClosetOffsetX(0);
+              roomStore.setClosetOffsetY(0);
+              roomStore.setClosetOffsetZ(0);
+            "
+          >
+            Reset Position
+          </button>
+        </div>
+
         <!-- Quote -->
+
         <div class="quote-panel">
           <div class="quote-header">
             <span class="quote-title">Quote</span>
@@ -1142,5 +1310,87 @@ function openSlots(mode: "save" | "load") {
   border-radius: 4px;
   background: rgba(30, 41, 59, 0.6);
   font-size: 11px;
+}
+
+/* Position sliders */
+.position-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.position-value {
+  font-size: 11px;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+.position-slider {
+  width: 100%;
+  accent-color: #6366f1;
+  cursor: pointer;
+}
+
+.position-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #475569;
+  margin-top: 2px;
+}
+
+/* Position HUD (3D viewport overlay) */
+.position-hud {
+  position: absolute;
+  bottom: 52px;
+  right: 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(11, 18, 32, 0.82);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 210px;
+}
+
+.hud-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6366f1;
+  margin-bottom: 2px;
+}
+
+.hud-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hud-icon {
+  font-size: 13px;
+  color: #6366f1;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.hud-label {
+  font-size: 11px;
+  color: #64748b;
+  width: 64px;
+  flex-shrink: 0;
+}
+
+.hud-value {
+  font-size: 11px;
+  font-weight: 600;
+  color: #e2e8f0;
+  font-variant-numeric: tabular-nums;
 }
 </style>

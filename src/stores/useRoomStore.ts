@@ -12,7 +12,12 @@ function clampWall(v: number): number {
 }
 
 export const useRoomStore = defineStore('room', {
-  state: (): Room => createDefaultRoom(),
+  state: (): Room & { closetOffsetX: number; closetOffsetY: number; closetOffsetZ: number } => ({
+    ...createDefaultRoom(),
+    closetOffsetX: 0,
+    closetOffsetY: 0,
+    closetOffsetZ: 0,
+  }),
 
   getters: {
     wallById: (state) => (id: string) => state.walls.find((w) => w.id === id),
@@ -64,6 +69,39 @@ export const useRoomStore = defineStore('room', {
     /** Clear all placed items. */
     clearItems() {
       this.items.splice(0, this.items.length)
+    },
+
+    /**
+     * Set the horizontal offset of the closet inside the room.
+     * Clamped so the cabinet stays within the room walls.
+     * cabinetW is the total cabinet width in cm.
+     */
+    setClosetOffsetX(x: number, cabinetW = 0) {
+      const roomW = this.walls[0]?.length ?? 244
+      const maxOffset = Math.max(0, (roomW - cabinetW) / 2)
+      this.closetOffsetX = Math.max(-maxOffset, Math.min(maxOffset, x))
+    },
+
+    /**
+     * Set the vertical offset of the closet from the floor.
+     * Clamped between 0 (on the floor) and roomH - cabinetH.
+     * cabinetH is the total cabinet height in cm.
+     */
+    setClosetOffsetY(y: number, cabinetH = 0) {
+      const roomH = this.height ?? 244
+      const maxOffset = Math.max(0, roomH - cabinetH)
+      this.closetOffsetY = Math.max(0, Math.min(maxOffset, y))
+    },
+
+    /**
+     * Set the front-to-back offset of the closet.
+     * 0 = flush against the back wall, max = front of room.
+     * cabinetD is the cabinet depth in cm.
+     */
+    setClosetOffsetZ(z: number, cabinetD = 0) {
+      const roomD = this.walls[1]?.length ?? 244
+      const maxOffset = Math.max(0, roomD - cabinetD)
+      this.closetOffsetZ = Math.max(0, Math.min(maxOffset, z))
     },
 
     /**
