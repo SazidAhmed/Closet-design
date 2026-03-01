@@ -54,9 +54,15 @@ export const useClosetStore = defineStore('closet', {
     addTower() {
       const idx = this.towers.length + 1
       const innerW = this.innerCabinetWidth
-      const usedW = this.totalTowerWidth
-      const remainingW = Math.max(30, innerW - usedW)
-      this.towers.push(createDefaultTower(remainingW, this.cabinet.depth, this.cabinet.height, idx))
+      // Add the new tower first (placeholder width), then redistribute all towers
+      // evenly so no tower overflows the cabinet interior.
+      const newTower = createDefaultTower(30, this.cabinet.depth, this.cabinet.height, idx)
+      const allTowers = [...this.towers, newTower]
+      const evenWidth = Math.max(30, Math.floor((innerW / allTowers.length) * 10) / 10)
+      for (const t of allTowers) {
+        t.width = evenWidth
+      }
+      this.towers = allTowers
     },
 
     removeTower(towerId: string) {

@@ -109,6 +109,15 @@ const viewportHint = computed(() => {
   }
 });
 
+// ── Tower capacity guard ────────────────────────────────────────────────────
+// Disable "Add Tower" when distributing the inner width among one more tower
+// would drop below the 30 cm minimum per-tower width.
+const MIN_TOWER_WIDTH = 30;
+const canAddTower = computed(
+  () =>
+    closet.innerCabinetWidth / (closet.towers.length + 1) >= MIN_TOWER_WIDTH,
+);
+
 // ── Auto-create preset apply ──────────────────────────────────────────────
 function applyPreset(presetId: string) {
   const preset = AUTO_CREATE_PRESETS.find((p) => p.id === presetId);
@@ -329,7 +338,16 @@ const depthLabel = computed(() => {
             </button>
           </div>
 
-          <button class="action-btn" @click="closet.addTower()">
+          <button
+            class="action-btn"
+            :disabled="!canAddTower"
+            :title="
+              canAddTower
+                ? 'Add a new tower'
+                : 'Cabinet is full — no room for another tower'
+            "
+            @click="closet.addTower()"
+          >
             <Plus :size="16" />
             Add Tower
           </button>
@@ -1062,9 +1080,15 @@ const depthLabel = computed(() => {
   transition: all 0.15s;
 }
 
-.action-btn:hover {
+.action-btn:hover:not(:disabled) {
   background: rgba(30, 41, 59, 0.7);
   border-color: rgba(255, 255, 255, 0.2);
+}
+
+.action-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .action-btn.danger {
