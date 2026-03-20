@@ -465,6 +465,7 @@ const isDrawing = ref(false)
 const isClosed = ref(false)
 const mousePos = reactive({ x: 0, y: 0 })
 const selectedWallId = ref<string | null>(null)
+const selectedWallAnchor = ref<[number, number] | null>(null)
 const pendingStartVertex = ref<[number, number] | null>(null)
 const CLOSE_THRESHOLD = 15 // SVG units — snap distance to first vertex
 const GRID_SIZE = 10 // SVG grid snap size
@@ -533,9 +534,16 @@ const wallVertices = computed(() => {
   return verts
 })
 
+const chainEndVertex = computed<[number, number] | null>(() => {
+  if (drawWalls.value.length === 0) return null
+  const last = drawWalls.value[drawWalls.value.length - 1]!
+  return wallEndPoint(last)
+})
+
 /** The current last vertex (end of last wall, or nothing) */
 const lastVertex = computed(() => {
-  if (drawWalls.value.length === 0) return pendingStartVertex.value
+  if (pendingStartVertex.value) return pendingStartVertex.value
+  if (drawWalls.value.length === 0) return null
   const last = drawWalls.value[drawWalls.value.length - 1]!
   return wallEndPoint(last)
 })
@@ -595,6 +603,7 @@ function enterDrawMode() {
   isClosed.value = false
   isDrawing.value = false
   selectedWallId.value = null
+  selectedWallAnchor.value = null
   pendingStartVertex.value = null
 }
 
@@ -609,6 +618,7 @@ function enterQuickMode() {
   roomStore.closetOffsetY = 0
   roomStore.closetOffsetZ = 0
   selectedWallId.value = null
+  selectedWallAnchor.value = null
   pendingStartVertex.value = null
 }
 
@@ -619,7 +629,44 @@ function startFreshDraw() {
   isDrawing.value = true
   isClosed.value = false
   selectedWallId.value = null
+  selectedWallAnchor.value = null
   pendingStartVertex.value = null
+}
+
+function continueDrawing() {
+  if (drawWalls.value.length === 0 && !pendingStartVertex.value) {
+    startFreshDraw()
+    return
+  }
+
+  if (selectedWall.value && selectedWallAnchor.value) {
+    pendingStartVertex.value = [
+      snapToGrid(selectedWallAnchor.value[0]),
+      snapToGrid(selectedWallAnchor.value[1]),
+    ]
+    mousePos.x = pendingStartVertex.value[0]
+    mousePos.y = pendingStartVertex.value[1]
+  } else if (selectedWall.value) {
+    const end = wallEndPoint(selectedWall.value)
+    pendingStartVertex.value = [snapToGrid(end[0]), snapToGrid(end[1])]
+    mousePos.x = pendingStartVertex.value[0]
+    mousePos.y = pendingStartVertex.value[1]
+  } else if (chainEndVertex.value) {
+    pendingStartVertex.value = [
+      snapToGrid(chainEndVertex.value[0]),
+      snapToGrid(chainEndVertex.value[1]),
+    ]
+    mousePos.x = pendingStartVertex.value[0]
+    mousePos.y = pendingStartVertex.value[1]
+  } else {
+    pendingStartVertex.value = null
+  }
+
+  hasStartedDrawSession.value = true
+  isDrawing.value = true
+  isClosed.value = false
+  selectedWallId.value = null
+  selectedWallAnchor.value = null
 }
 
 function undoDrawStep() {
@@ -640,9 +687,9 @@ function undoDrawStep() {
 function onDrawCanvasClick(e: MouseEvent) {
   if (isClosed.value || !svgRef.value) return
 
-  // If not yet drawing, start fresh
+  // Drawing must be explicitly started from controls (Start Drawing / Add Wall).
   if (!isDrawing.value) {
-    startFreshDraw()
+    return
   }
 
   const pt = screenToSvg(svgRef.value, e.clientX, e.clientY)
@@ -656,22 +703,23 @@ function onDrawCanvasClick(e: MouseEvent) {
     return
   }
 
-  // Check if we should close the polygon
-  if (isNearFirstVertex.value && firstVertex.value) {
-    roomStore.closeRoom(drawWallThicknessInput.value)
-    isDrawing.value = false
-    isClosed.value = true
-    pendingStartVertex.value = null
-    return
-  }
-
-  if (drawWalls.value.length === 0 && pendingStartVertex.value) {
+  // The first click after choosing a start vertex must always draw from that start.
+  if (pendingStartVertex.value) {
     roomStore.addWallVertex(
       sx,
       sy,
       drawWallThicknessInput.value,
       pendingStartVertex.value,
     )
+    pendingStartVertex.value = null
+    return
+  }
+
+  // Check if we should close the polygon
+  if (isNearFirstVertex.value && firstVertex.value) {
+    roomStore.closeRoom(drawWallThicknessInput.value)
+    isDrawing.value = false
+    isClosed.value = true
     pendingStartVertex.value = null
     return
   }
@@ -692,7 +740,10 @@ function onDrawKeyDown(e: KeyboardEvent) {
   if (floorPlanMode.value !== 'draw') return
   if (e.key === 'Escape') {
     if (isDrawing.value) {
-      undoDrawStep()
+      isDrawing.value = false
+      pendingStartVertex.value = null
+      selectedWallId.value = null
+      selectedWallAnchor.value = null
     }
   }
 }
@@ -708,11 +759,53 @@ onUnmounted(() => {
 function selectWall(wallId: string, e: MouseEvent) {
   e.stopPropagation()
   selectedWallId.value = wallId
+
+  const wall = drawWalls.value.find((w) => w.id === wallId)
+  if (!wall || !svgRef.value) {
+    selectedWallAnchor.value = null
+    return
+  }
+
+  const pt = screenToSvg(svgRef.value, e.clientX, e.clientY)
+  const start: [number, number] = [wall.position[0], wall.position[1]]
+  const end = wallEndPoint(wall)
+  const dStart = Math.hypot(pt.x - start[0], pt.y - start[1])
+  const dEnd = Math.hypot(pt.x - end[0], pt.y - end[1])
+  selectedWallAnchor.value = dStart <= dEnd ? start : end
 }
 
 /** Deselect wall */
 function deselectWall() {
   selectedWallId.value = null
+  selectedWallAnchor.value = null
+}
+
+function removeSelectedWall() {
+  if (!selectedWall.value) return
+
+  const selectedId = selectedWall.value.id
+  const beforeLen = drawWalls.value.length
+  roomStore.removeWall(selectedId)
+
+  // Fallback: ensure removal even if action couldn't resolve by id.
+  if (drawWalls.value.length === beforeLen) {
+    const nextWalls = drawWalls.value.filter((w) => w.id !== selectedId)
+    if (nextWalls.length !== beforeLen) {
+      roomStore.setRoomFromWalls(nextWalls)
+      nextWalls.forEach((wall, i) => {
+        roomStore.updateWallProps(wall.id, { label: String(i + 1) })
+      })
+    }
+  }
+
+  selectedWallId.value = null
+  selectedWallAnchor.value = null
+  isClosed.value = false
+
+  if (drawWalls.value.length === 0) {
+    isDrawing.value = false
+    pendingStartVertex.value = null
+  }
 }
 
 /** Selected wall object */
@@ -847,6 +940,14 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
               </button>
 
               <button
+                v-if="!isDrawing && drawWalls.length > 0"
+                class="sidebar-action-btn draw-btn"
+                @click="continueDrawing"
+              >
+                ✏ Add Wall
+              </button>
+
+              <button
                 v-if="isDrawing && (roomStore.walls.length > 0 || pendingStartVertex)"
                 class="sidebar-action-btn undo-btn"
                 @click="undoDrawStep"
@@ -856,7 +957,11 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
               <p class="draw-hint" v-if="isDrawing">
                 Click on the canvas to place wall vertices.<br/>
                 Click near the <strong>first point</strong> to close the room.<br/>
-                Press <kbd>Esc</kbd> to undo.
+                Press <kbd>Esc</kbd> to finish drawing.
+              </p>
+              <p class="draw-hint" v-else-if="drawWalls.length > 0">
+                Click <strong>Add Wall</strong> to continue from the last wall endpoint,
+                or <strong>Start Drawing</strong> to clear and redraw.
               </p>
               <p class="draw-hint" v-else>
                 Click "Start Drawing" to begin placing walls.
@@ -868,6 +973,9 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
               <p class="draw-hint draw-complete">
                 ✅ Room complete — {{ roomStore.walls.length }} walls
               </p>
+              <button class="sidebar-action-btn draw-btn" @click="continueDrawing">
+                ✏ Add Wall
+              </button>
               <button class="sidebar-action-btn draw-btn" @click="startFreshDraw">
                 🗑 Clear & Redraw
               </button>
@@ -924,6 +1032,14 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
                   @change="(e: Event) => roomStore.updateWallProps(selectedWall!.id, { visible: (e.target as HTMLInputElement).checked })"
                 />
               </div>
+
+              <button
+                type="button"
+                class="sidebar-action-btn delete-wall-btn"
+                @click.stop.prevent="removeSelectedWall"
+              >
+                Remove Wall
+              </button>
             </div>
           </template>
 
@@ -1406,7 +1522,7 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
           Drag corners or mid-points to resize the room
         </div>
         <div class="canvas-hint" v-else-if="isDrawing">
-          Click to place vertices · Click near first point to close · Esc to undo
+          Click to place vertices · Click near first point to close · Esc to finish
         </div>
         <div class="canvas-hint" v-else-if="isClosed">
           Click a wall to select and edit · Click empty area to deselect
@@ -1855,6 +1971,18 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
 }
 
 .undo-btn:hover {
+  background: rgba(239, 68, 68, 0.15) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+.delete-wall-btn {
+  margin-top: 8px;
+  background: rgba(239, 68, 68, 0.08) !important;
+  border-color: rgba(239, 68, 68, 0.2) !important;
+  color: #f87171 !important;
+}
+
+.delete-wall-btn:hover {
   background: rgba(239, 68, 68, 0.15) !important;
   border-color: rgba(239, 68, 68, 0.3) !important;
 }

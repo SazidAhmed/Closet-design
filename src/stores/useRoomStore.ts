@@ -130,10 +130,11 @@ export const useRoomStore = defineStore('room', {
     addWallVertex(x: number, y: number, thickness = 6, firstStart?: Vec2) {
       const walls = this.walls
       let startPos: Vec2
-      if (walls.length === 0) {
-        // First actual segment must receive an explicit start vertex.
-        if (!firstStart) return
+      if (firstStart) {
         startPos = [firstStart[0], firstStart[1]]
+      } else if (walls.length === 0) {
+        // First actual segment must receive an explicit start vertex.
+        return
       } else {
         const prev = walls[walls.length - 1]
         if (!prev) return
@@ -196,6 +197,18 @@ export const useRoomStore = defineStore('room', {
       if (this.walls.length > 0) {
         this.walls.pop()
       }
+    },
+
+    /** Remove a wall segment by ID. */
+    removeWall(wallId: string) {
+      const idx = this.walls.findIndex((w) => w.id === wallId)
+      if (idx < 0) return
+      this.walls.splice(idx, 1)
+
+      // Keep default wall numbering intuitive after deletion.
+      this.walls.forEach((wall, i) => {
+        wall.label = String(i + 1)
+      })
     },
 
     /** Update properties of a single wall. */
