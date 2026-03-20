@@ -13,6 +13,7 @@ import {
   DOOR_MATERIALS,
 } from "../domain/materials/catalog";
 import { ROOM_CONSTRAINTS } from "../domain/constraints";
+import { createDefaultRoom } from "../domain/types/room";
 import { useHistoryStore } from "../../../stores/useHistoryStore";
 
 const roomStore = useRoomStore();
@@ -453,6 +454,255 @@ function isVerticalWall(wallId: string | null): boolean {
   const wIdx = roomStore.walls.findIndex((w) => w.id === wallId);
   return wIdx === 1 || wIdx === 3;
 }
+
+// ───── Draw Walls mode ─────────────────────────────────────────────────────
+type FloorPlanMode = 'quick' | 'draw'
+const floorPlanMode = ref<FloorPlanMode>('quick')
+const hasStartedDrawSession = ref(false)
+
+// Draw state
+const isDrawing = ref(false)
+const isClosed = ref(false)
+const mousePos = reactive({ x: 0, y: 0 })
+const selectedWallId = ref<string | null>(null)
+const CLOSE_THRESHOLD = 15 // SVG units — snap distance to first vertex
+const GRID_SIZE = 10 // SVG grid snap size
+
+/** Snap value to nearest grid */
+function snapToGrid(v: number): number {
+  return Math.round(v / GRID_SIZE) * GRID_SIZE
+}
+
+/** Get the end-point of a wall (start + direction * length) */
+function wallEndPoint(wall: { position: [number, number]; angle: number; length: number }): [number, number] {
+  return [
+    wall.position[0] + Math.cos(wall.angle) * wall.length,
+    wall.position[1] + Math.sin(wall.angle) * wall.length,
+  ]
+}
+
+/** Compute all vertices from the wall chain */
+const drawWalls = computed(() => (hasStartedDrawSession.value ? roomStore.walls : []))
+
+/** Compute all vertices from the wall chain */
+const wallVertices = computed(() => {
+  const verts: [number, number][] = []
+  for (const wall of drawWalls.value) {
+    verts.push([wall.position[0], wall.position[1]])
+  }
+  // Add the end of the last wall
+  if (drawWalls.value.length > 0) {
+    const last = drawWalls.value[drawWalls.value.length - 1]!
+    verts.push(wallEndPoint(last))
+  }
+  return verts
+})
+
+/** The current last vertex (end of last wall, or nothing) */
+const lastVertex = computed(() => {
+  if (drawWalls.value.length === 0) return null
+  const last = drawWalls.value[drawWalls.value.length - 1]!
+  return wallEndPoint(last)
+})
+
+/** First vertex */
+const firstVertex = computed(() => {
+  if (drawWalls.value.length === 0) return null
+  return drawWalls.value[0]!.position
+})
+
+/** Is the mouse near enough to the first vertex to close? */
+const isNearFirstVertex = computed(() => {
+  if (!lastVertex.value || !firstVertex.value || drawWalls.value.length < 2) return false
+  const dx = mousePos.x - firstVertex.value[0]
+  const dy = mousePos.y - firstVertex.value[1]
+  return Math.sqrt(dx * dx + dy * dy) < CLOSE_THRESHOLD
+})
+
+/** Points that should be visible while drawing (walls + live cursor). */
+const drawBoundsPoints = computed<[number, number][]>(() => {
+  const points = [...wallVertices.value]
+  if (isDrawing.value) {
+    points.push([mousePos.x, mousePos.y])
+  }
+  return points
+})
+
+/** SVG viewBox for draw mode — auto-fit to content */
+const drawViewBox = computed(() => {
+  const verts = drawBoundsPoints.value
+  if (verts.length === 0) {
+    // Empty canvas — large workspace
+    return '-240 -240 480 480'
+  }
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const [x, y] of verts) {
+    minX = Math.min(minX, x)
+    minY = Math.min(minY, y)
+    maxX = Math.max(maxX, x)
+    maxY = Math.max(maxY, y)
+  }
+  const pad = 80
+  const w = Math.max(maxX - minX + pad * 2, 220)
+  const h = Math.max(maxY - minY + pad * 2, 220)
+  return `${minX - pad} ${minY - pad} ${w} ${h}`
+})
+
+/** Start drawing mode */
+function enterDrawMode() {
+  floorPlanMode.value = 'draw'
+  hasStartedDrawSession.value = false
+  isClosed.value = false
+  isDrawing.value = false
+  selectedWallId.value = null
+}
+
+/** Switch back to quick room mode */
+function enterQuickMode() {
+  floorPlanMode.value = 'quick'
+  hasStartedDrawSession.value = false
+  // Reset to default rectangular room
+  const defaultRoom = createDefaultRoom()
+  roomStore.setRoom(defaultRoom)
+  roomStore.closetOffsetX = 0
+  roomStore.closetOffsetY = 0
+  roomStore.closetOffsetZ = 0
+  selectedWallId.value = null
+}
+
+/** Start fresh drawing */
+function startFreshDraw() {
+  hasStartedDrawSession.value = true
+  roomStore.startDrawWalls()
+  isDrawing.value = true
+  isClosed.value = false
+  selectedWallId.value = null
+}
+
+/** Handle canvas click in draw mode */
+function onDrawCanvasClick(e: MouseEvent) {
+  if (isClosed.value || !svgRef.value) return
+
+  // If not yet drawing, start fresh
+  if (!isDrawing.value) {
+    startFreshDraw()
+  }
+
+  const pt = screenToSvg(svgRef.value, e.clientX, e.clientY)
+  const sx = snapToGrid(pt.x)
+  const sy = snapToGrid(pt.y)
+
+  // Check if we should close the polygon
+  if (isNearFirstVertex.value && firstVertex.value) {
+    roomStore.closeRoom()
+    isDrawing.value = false
+    isClosed.value = true
+    return
+  }
+
+  roomStore.addWallVertex(sx, sy)
+}
+
+/** Handle mouse move in draw mode */
+function onDrawMouseMove(e: MouseEvent) {
+  if (!svgRef.value) return
+  const pt = screenToSvg(svgRef.value, e.clientX, e.clientY)
+  mousePos.x = snapToGrid(pt.x)
+  mousePos.y = snapToGrid(pt.y)
+}
+
+/** Handle Escape key — undo last wall segment */
+function onDrawKeyDown(e: KeyboardEvent) {
+  if (floorPlanMode.value !== 'draw') return
+  if (e.key === 'Escape') {
+    if (isDrawing.value && roomStore.walls.length > 0) {
+      roomStore.removeLastWall()
+      if (roomStore.walls.length === 0) {
+        isDrawing.value = false
+      }
+    }
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', onDrawKeyDown)
+})
+onUnmounted(() => {
+  document.removeEventListener('keydown', onDrawKeyDown)
+})
+
+/** Select a wall in draw mode */
+function selectWall(wallId: string, e: MouseEvent) {
+  e.stopPropagation()
+  selectedWallId.value = wallId
+}
+
+/** Deselect wall */
+function deselectWall() {
+  selectedWallId.value = null
+}
+
+/** Selected wall object */
+const selectedWall = computed(() => {
+  if (!selectedWallId.value) return null
+  return drawWalls.value.find(w => w.id === selectedWallId.value) ?? null
+})
+
+/** Computed angle in degrees for display */
+const selectedWallAngleDeg = computed(() => {
+  if (!selectedWall.value) return 0
+  return Math.round((selectedWall.value.angle * 180) / Math.PI)
+})
+
+/** Wall midpoint for label placement */
+function wallMidpoint(wall: { position: [number, number]; angle: number; length: number }): [number, number] {
+  return [
+    wall.position[0] + Math.cos(wall.angle) * wall.length / 2,
+    wall.position[1] + Math.sin(wall.angle) * wall.length / 2,
+  ]
+}
+
+/** Compute the filled polygon outline for a thick wall segment */
+function wallPolygonPoints(wall: { position: [number, number]; angle: number; length: number; thickness: number }): string {
+  const t = wall.thickness / 2
+  const perpAngle = wall.angle + Math.PI / 2
+  const cos = Math.cos(perpAngle) * t
+  const sin = Math.sin(perpAngle) * t
+  const end = wallEndPoint(wall)
+  // Four corners: start±perp, end±perp
+  const p1 = [wall.position[0] + cos, wall.position[1] + sin]
+  const p2 = [wall.position[0] - cos, wall.position[1] - sin]
+  const p3 = [end[0] - cos, end[1] - sin]
+  const p4 = [end[0] + cos, end[1] + sin]
+  return `${p1[0]},${p1[1]} ${p2[0]},${p2[1]} ${p3[0]},${p3[1]} ${p4[0]},${p4[1]}`
+}
+
+/** Format length for display */
+function formatLength(cm: number): string {
+  const totalIn = cm / 2.54
+  const ft = Math.floor(totalIn / 12)
+  const inches = Math.round(totalIn % 12)
+  return `${ft}' ${inches}\"`
+}
+
+/** Dimension line offset perpendicular to the wall */
+function dimLinePoints(wall: { position: [number, number]; angle: number; length: number }): {
+  x1: number; y1: number; x2: number; y2: number; tx: number; ty: number
+} {
+  const offset = 20
+  const perpAngle = wall.angle - Math.PI / 2
+  const cos = Math.cos(perpAngle) * offset
+  const sin = Math.sin(perpAngle) * offset
+  const end = wallEndPoint(wall)
+  return {
+    x1: wall.position[0] + cos,
+    y1: wall.position[1] + sin,
+    x2: end[0] + cos,
+    y2: end[1] + sin,
+    tx: (wall.position[0] + end[0]) / 2 + cos * 1.6,
+    ty: (wall.position[1] + end[1]) / 2 + sin * 1.6,
+  }
+}
 </script>
 
 <template>
@@ -471,6 +721,114 @@ function isVerticalWall(wallId: string | null): boolean {
       <!-- Left Sidebar: Add Architecture -->
       <aside class="sidebar sidebar-left">
         <div class="sidebar-section">
+          <!-- Mode Toggle -->
+          <div class="mode-toggle">
+            <button
+              class="mode-btn"
+              :class="{ active: floorPlanMode === 'quick' }"
+              @click="enterQuickMode"
+            >
+              Quick Room
+            </button>
+            <button
+              class="mode-btn"
+              :class="{ active: floorPlanMode === 'draw' }"
+              @click="enterDrawMode"
+            >
+              Draw Walls
+            </button>
+          </div>
+
+          <!-- ========== DRAW WALLS SIDEBAR ========== -->
+          <template v-if="floorPlanMode === 'draw'">
+            <!-- Drawing controls -->
+            <div v-if="!isClosed" class="draw-controls">
+              <button class="sidebar-action-btn draw-btn" @click="startFreshDraw">
+                🖊 Start Drawing
+              </button>
+              <button
+                v-if="isDrawing && roomStore.walls.length > 0"
+                class="sidebar-action-btn undo-btn"
+                @click="roomStore.removeLastWall()"
+              >
+                ↩ Undo Last Wall
+              </button>
+              <p class="draw-hint" v-if="isDrawing">
+                Click on the canvas to place wall vertices.<br/>
+                Click near the <strong>first point</strong> to close the room.<br/>
+                Press <kbd>Esc</kbd> to undo.
+              </p>
+              <p class="draw-hint" v-else>
+                Click "Start Drawing" to begin placing walls.
+              </p>
+            </div>
+
+            <!-- Room complete view -->
+            <div v-else class="draw-controls">
+              <p class="draw-hint draw-complete">
+                ✅ Room complete — {{ roomStore.walls.length }} walls
+              </p>
+              <button class="sidebar-action-btn draw-btn" @click="startFreshDraw">
+                🗑 Clear & Redraw
+              </button>
+            </div>
+
+            <!-- Selected wall properties -->
+            <div v-if="selectedWall" class="wall-props">
+              <h4 class="sidebar-subheading">Wall {{ selectedWall.label }}</h4>
+
+              <div class="prop-row">
+                <label class="prop-label">Label</label>
+                <input
+                  class="prop-input"
+                  :value="selectedWall.label"
+                  @input="(e: Event) => roomStore.updateWallProps(selectedWall!.id, { label: (e.target as HTMLInputElement).value })"
+                />
+              </div>
+
+              <div class="prop-row">
+                <label class="prop-label">Length</label>
+                <input
+                  class="prop-input"
+                  type="number"
+                  :value="selectedWall.length"
+                  @input="(e: Event) => roomStore.updateWallProps(selectedWall!.id, { length: Number((e.target as HTMLInputElement).value) })"
+                />
+              </div>
+
+              <div class="prop-row">
+                <label class="prop-label">Height</label>
+                <input class="prop-input" type="number" :value="roomStore.height" @input="(e: Event) => roomStore.setHeight(Number((e.target as HTMLInputElement).value))" />
+              </div>
+
+              <div class="prop-row">
+                <label class="prop-label">Thickness</label>
+                <input
+                  class="prop-input"
+                  type="number"
+                  :value="selectedWall.thickness"
+                  @input="(e: Event) => roomStore.updateWallProps(selectedWall!.id, { thickness: Number((e.target as HTMLInputElement).value) })"
+                />
+              </div>
+
+              <div class="prop-row">
+                <label class="prop-label">Angle</label>
+                <span class="prop-value">{{ selectedWallAngleDeg }}°</span>
+              </div>
+
+              <div class="prop-row">
+                <label class="prop-label">Visible</label>
+                <input
+                  type="checkbox"
+                  :checked="selectedWall.visible"
+                  @change="(e: Event) => roomStore.updateWallProps(selectedWall!.id, { visible: (e.target as HTMLInputElement).checked })"
+                />
+              </div>
+            </div>
+          </template>
+
+          <!-- ========== QUICK ROOM SIDEBAR (original) ========== -->
+          <template v-else>
           <h3 class="sidebar-heading">Add Architecture</h3>
 
           <button class="sidebar-action-btn" @click="openHeightDialog">
@@ -515,6 +873,7 @@ function isVerticalWall(wallId: string | null): boolean {
               <span class="item-label">{{ itemLabel(def.type) }}</span>
             </button>
           </div>
+          </template>
         </div>
       </aside>
 
@@ -523,6 +882,7 @@ function isVerticalWall(wallId: string | null): boolean {
         <div class="canvas-container">
           <!-- SVG Floor Plan -->
           <svg
+            v-if="floorPlanMode === 'quick'"
             ref="svgRef"
             :viewBox="svgViewBox"
             class="floorplan-svg"
@@ -802,11 +1162,154 @@ function isVerticalWall(wallId: string | null): boolean {
               </g>
             </g>
           </svg>
+
+          <!-- ========== DRAW WALLS SVG CANVAS ========== -->
+          <svg
+            v-else
+            ref="svgRef"
+            :viewBox="drawViewBox"
+            class="floorplan-svg draw-canvas"
+            xmlns="http://www.w3.org/2000/svg"
+            @click="onDrawCanvasClick"
+            @mousemove="onDrawMouseMove"
+            @click.self="deselectWall"
+          >
+            <!-- Grid pattern -->
+            <defs>
+              <pattern id="drawGrid" :width="GRID_SIZE" :height="GRID_SIZE" patternUnits="userSpaceOnUse">
+                <circle :cx="GRID_SIZE/2" :cy="GRID_SIZE/2" r="0.5" fill="rgba(148,163,184,0.15)" />
+              </pattern>
+              <!-- Arrow markers for dimensions -->
+              <marker id="dimArrowR" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8" fill="none" stroke="#94a3b8" stroke-width="1" />
+              </marker>
+              <marker id="dimArrowL" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto">
+                <path d="M8,0 L0,4 L8,8" fill="none" stroke="#94a3b8" stroke-width="1" />
+              </marker>
+            </defs>
+
+            <!-- Background grid -->
+            <rect x="-2000" y="-2000" width="4000" height="4000" fill="url(#drawGrid)" />
+
+            <!-- Filled room polygon (floor) -->
+            <polygon
+              v-if="drawWalls.length >= 3"
+              :points="wallVertices.map(v => v.join(',')).join(' ')"
+              fill="#d4c9b8"
+              fill-opacity="0.15"
+              stroke="none"
+            />
+
+            <!-- Drawn wall segments -->
+            <g v-for="wall in drawWalls" :key="wall.id">
+              <!-- Thick wall polygon -->
+              <polygon
+                v-if="wall.visible"
+                :points="wallPolygonPoints(wall)"
+                :fill="selectedWallId === wall.id ? '#e8c88a' : '#d4c9b8'"
+                :stroke="selectedWallId === wall.id ? '#f59e0b' : '#8b7355'"
+                :stroke-width="selectedWallId === wall.id ? 2 : 1"
+                class="wall-segment"
+                @click.stop="selectWall(wall.id, $event)"
+              />
+
+              <!-- Wall center line (for visual clarity) -->
+              <line
+                v-if="wall.visible"
+                :x1="wall.position[0]"
+                :y1="wall.position[1]"
+                :x2="wallEndPoint(wall)[0]"
+                :y2="wallEndPoint(wall)[1]"
+                stroke="#6b5c45"
+                stroke-width="0.5"
+                stroke-dasharray="3,3"
+                pointer-events="none"
+              />
+
+              <!-- Wall label (number) -->
+              <g :transform="`translate(${wallMidpoint(wall)[0]}, ${wallMidpoint(wall)[1]})`">
+                <circle r="10" fill="#f59e0b" stroke="#0f172a" stroke-width="1.5" />
+                <text
+                  text-anchor="middle"
+                  dominant-baseline="central"
+                  fill="#0f172a"
+                  font-size="9"
+                  font-weight="700"
+                >{{ wall.label }}</text>
+              </g>
+
+              <!-- Dimension annotation -->
+              <line
+                :x1="dimLinePoints(wall).x1"
+                :y1="dimLinePoints(wall).y1"
+                :x2="dimLinePoints(wall).x2"
+                :y2="dimLinePoints(wall).y2"
+                stroke="#94a3b8"
+                stroke-width="0.8"
+                marker-start="url(#dimArrowL)"
+                marker-end="url(#dimArrowR)"
+                pointer-events="none"
+              />
+              <text
+                :x="dimLinePoints(wall).tx"
+                :y="dimLinePoints(wall).ty"
+                text-anchor="middle"
+                fill="#e2e8f0"
+                font-size="9"
+                font-weight="600"
+              >{{ formatLength(wall.length) }}</text>
+            </g>
+
+            <!-- Vertices (dots at each corner) -->
+            <circle
+              v-for="(v, i) in wallVertices"
+              :key="'v-' + i"
+              :cx="v[0]"
+              :cy="v[1]"
+              :r="i === 0 && isNearFirstVertex ? 8 : 4"
+              :fill="i === 0 ? '#22c55e' : '#fbbf24'"
+              stroke="#0f172a"
+              stroke-width="1.5"
+              :class="{ 'close-snap': i === 0 && isNearFirstVertex }"
+            />
+
+            <!-- Preview line from last vertex to cursor -->
+            <line
+              v-if="isDrawing && lastVertex"
+              :x1="lastVertex[0]"
+              :y1="lastVertex[1]"
+              :x2="mousePos.x"
+              :y2="mousePos.y"
+              stroke="#60a5fa"
+              stroke-width="2"
+              stroke-dasharray="6,4"
+              pointer-events="none"
+            />
+
+            <!-- Preview snap circle at cursor when near first vertex -->
+            <circle
+              v-if="isDrawing && isNearFirstVertex && firstVertex"
+              :cx="firstVertex[0]"
+              :cy="firstVertex[1]"
+              r="12"
+              fill="none"
+              stroke="#22c55e"
+              stroke-width="2"
+              stroke-dasharray="4,3"
+              class="close-indicator"
+            />
+          </svg>
         </div>
 
         <!-- Hint overlay -->
-        <div class="canvas-hint">
+        <div class="canvas-hint" v-if="floorPlanMode === 'quick'">
           Drag corners or mid-points to resize the room
+        </div>
+        <div class="canvas-hint" v-else-if="isDrawing">
+          Click to place vertices · Click near first point to close · Esc to undo
+        </div>
+        <div class="canvas-hint" v-else-if="isClosed">
+          Click a wall to select and edit · Click empty area to deselect
         </div>
       </main>
 
@@ -1185,6 +1688,174 @@ function isVerticalWall(wallId: string | null): boolean {
 .swatch-none-label {
   font-size: 14px;
   color: #64748b;
+}
+
+/* ─── Draw Walls Mode ───────────────────────────────────────────────── */
+.mode-toggle {
+  display: flex;
+  gap: 4px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 3px;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 8px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.mode-btn:hover {
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.mode-btn.active {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.25);
+}
+
+.draw-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.draw-btn {
+  background: rgba(96, 165, 250, 0.1) !important;
+  border-color: rgba(96, 165, 250, 0.2) !important;
+  color: #60a5fa !important;
+}
+
+.draw-btn:hover {
+  background: rgba(96, 165, 250, 0.2) !important;
+  border-color: rgba(96, 165, 250, 0.35) !important;
+}
+
+.undo-btn {
+  background: rgba(239, 68, 68, 0.08) !important;
+  border-color: rgba(239, 68, 68, 0.2) !important;
+  color: #f87171 !important;
+}
+
+.undo-btn:hover {
+  background: rgba(239, 68, 68, 0.15) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+.draw-hint {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.6;
+  margin: 0;
+  padding: 8px 0;
+}
+
+.draw-hint strong {
+  color: #22c55e;
+}
+
+.draw-hint kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 10px;
+  font-family: monospace;
+  color: #e2e8f0;
+}
+
+.draw-complete {
+  color: #22c55e;
+  font-weight: 600;
+}
+
+/* Wall properties panel */
+.wall-props {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: 8px;
+}
+
+.prop-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.prop-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-width: 60px;
+}
+
+.prop-input {
+  width: 80px;
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.8);
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.prop-input:focus {
+  border-color: #fbbf24;
+}
+
+.prop-value {
+  font-size: 12px;
+  color: #e2e8f0;
+  font-weight: 500;
+}
+
+/* SVG draw canvas */
+.draw-canvas {
+  cursor: crosshair;
+}
+
+.wall-segment {
+  cursor: pointer;
+  transition: fill 0.1s, stroke 0.1s;
+}
+
+.wall-segment:hover {
+  fill: #e8c88a;
+  stroke: #f59e0b;
+}
+
+.close-snap {
+  filter: drop-shadow(0 0 4px rgba(34, 197, 94, 0.6));
+}
+
+.close-indicator {
+  animation: pulse-ring 1s ease-in-out infinite;
+}
+
+@keyframes pulse-ring {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 </style>
 

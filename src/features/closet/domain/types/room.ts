@@ -15,6 +15,12 @@ export type Wall = {
   angle: number
   /** Whether a closet section is placed against this wall. */
   hasCloset: boolean
+  /** Wall thickness in current units (cm or inches). Default 6. */
+  thickness: number
+  /** Display label for the wall (e.g. "1", "2", …). */
+  label: string
+  /** Whether this wall is visible/rendered. */
+  visible: boolean
 }
 
 // ---- Placed architectural items -------------------------------------------
@@ -113,10 +119,10 @@ export function createDefaultRoom(widthCm = 244, depthCm = 244, heightCm = 244):
   return {
     shape: 'rectangular',
     walls: [
-      { id: createWallId(), length: widthCm, position: [-hw, -hd], angle: 0, hasCloset: false },            // bottom
-      { id: createWallId(), length: depthCm, position: [hw, -hd], angle: Math.PI / 2, hasCloset: false },   // right
-      { id: createWallId(), length: widthCm, position: [hw, hd], angle: Math.PI, hasCloset: true },         // top (closet wall)
-      { id: createWallId(), length: depthCm, position: [-hw, hd], angle: (3 * Math.PI) / 2, hasCloset: false }, // left
+      { id: createWallId(), length: widthCm, position: [-hw, -hd], angle: 0, hasCloset: false, thickness: 6, label: '1', visible: true },            // bottom
+      { id: createWallId(), length: depthCm, position: [hw, -hd], angle: Math.PI / 2, hasCloset: false, thickness: 6, label: '2', visible: true },   // right
+      { id: createWallId(), length: widthCm, position: [hw, hd], angle: Math.PI, hasCloset: true, thickness: 6, label: '3', visible: true },         // top (closet wall)
+      { id: createWallId(), length: depthCm, position: [-hw, hd], angle: (3 * Math.PI) / 2, hasCloset: false, thickness: 6, label: '4', visible: true }, // left
     ],
     height: heightCm,
     items: [],

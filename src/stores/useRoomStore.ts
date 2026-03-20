@@ -3,8 +3,8 @@
 // ---------------------------------------------------------------------------
 
 import { defineStore } from 'pinia'
-import type { Room, PlacedItem, RoomColors } from '../features/closet/domain/types/room'
-import { createDefaultRoom, createItemId } from '../features/closet/domain/types/room'
+import type { Room, PlacedItem, RoomColors, Vec2 } from '../features/closet/domain/types/room'
+import { createDefaultRoom, createItemId, createWallId } from '../features/closet/domain/types/room'
 import { ROOM_CONSTRAINTS } from '../features/closet/domain/constraints'
 
 function clampWall(v: number): number {
@@ -115,6 +115,99 @@ export const useRoomStore = defineStore('room', {
       if (this.walls[2]) this.walls[2].length = w
       if (this.walls[1]) this.walls[1].length = d
       if (this.walls[3]) this.walls[3].length = d
+    },
+
+    // ─── Draw Walls actions ──────────────────────────────────────────
+
+    /** Start a fresh draw-walls session. */
+    startDrawWalls() {
+      this.shape = 'custom'
+      this.walls = []
+      this.items = []
+    },
+
+    /** Append a new wall segment from the previous endpoint to (x, y). */
+    addWallVertex(x: number, y: number) {
+      const walls = this.walls
+      let startPos: Vec2
+      if (walls.length === 0) {
+        // First vertex — just store a zero-length placeholder
+        startPos = [x, y]
+      } else {
+        const prev = walls[walls.length - 1]
+        if (!prev) return
+        // The end-point of the previous wall is its start + rotated length
+        startPos = [
+          prev.position[0] + Math.cos(prev.angle) * prev.length,
+          prev.position[1] + Math.sin(prev.angle) * prev.length,
+        ]
+      }
+      const dx = x - startPos[0]
+      const dy = y - startPos[1]
+      const length = Math.sqrt(dx * dx + dy * dy)
+      const angle = Math.atan2(dy, dx)
+
+      walls.push({
+        id: createWallId(),
+        length: Math.round(length),
+        position: [startPos[0], startPos[1]],
+        angle,
+        hasCloset: false,
+        thickness: 6,
+        label: String(walls.length + 1),
+        visible: true,
+      })
+    },
+
+    /** Close the polygon by adding a final segment back to the first vertex. */
+    closeRoom() {
+      const walls = this.walls
+      if (walls.length < 2) return
+      const first = walls[0]
+      const last = walls[walls.length - 1]
+      if (!first || !last) return
+      const endOfLast: Vec2 = [
+        last.position[0] + Math.cos(last.angle) * last.length,
+        last.position[1] + Math.sin(last.angle) * last.length,
+      ]
+      const dx = first.position[0] - endOfLast[0]
+      const dy = first.position[1] - endOfLast[1]
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      if (dist < 1) return // already closed
+      const angle = Math.atan2(dy, dx)
+      walls.push({
+        id: createWallId(),
+        length: Math.round(dist),
+        position: [endOfLast[0], endOfLast[1]],
+        angle,
+        hasCloset: false,
+        thickness: 6,
+        label: String(walls.length + 1),
+        visible: true,
+      })
+    },
+
+    /** Remove the last wall segment (undo while drawing). */
+    removeLastWall() {
+      if (this.walls.length > 0) {
+        this.walls.pop()
+      }
+    },
+
+    /** Update properties of a single wall. */
+    updateWallProps(wallId: string, props: Partial<{ length: number; thickness: number; label: string; visible: boolean }>) {
+      const wall = this.walls.find((w) => w.id === wallId)
+      if (!wall) return
+      if (props.length !== undefined) wall.length = clampWall(props.length)
+      if (props.thickness !== undefined) wall.thickness = Math.max(1, Math.min(30, props.thickness))
+      if (props.label !== undefined) wall.label = props.label
+      if (props.visible !== undefined) wall.visible = props.visible
+    },
+
+    /** Replace all walls (e.g. from import). */
+    setRoomFromWalls(walls: Room['walls']) {
+      this.walls = walls
+      this.shape = walls.length === 4 ? 'rectangular' : 'custom'
     },
   },
 })
