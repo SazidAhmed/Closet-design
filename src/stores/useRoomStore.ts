@@ -127,12 +127,13 @@ export const useRoomStore = defineStore('room', {
     },
 
     /** Append a new wall segment from the previous endpoint to (x, y). */
-    addWallVertex(x: number, y: number) {
+    addWallVertex(x: number, y: number, thickness = 6, firstStart?: Vec2) {
       const walls = this.walls
       let startPos: Vec2
       if (walls.length === 0) {
-        // First vertex — just store a zero-length placeholder
-        startPos = [x, y]
+        // First actual segment must receive an explicit start vertex.
+        if (!firstStart) return
+        startPos = [firstStart[0], firstStart[1]]
       } else {
         const prev = walls[walls.length - 1]
         if (!prev) return
@@ -145,7 +146,9 @@ export const useRoomStore = defineStore('room', {
       const dx = x - startPos[0]
       const dy = y - startPos[1]
       const length = Math.sqrt(dx * dx + dy * dy)
+      if (length < 1) return
       const angle = Math.atan2(dy, dx)
+      const wallThickness = Math.max(1, Math.min(30, Math.round(thickness)))
 
       walls.push({
         id: createWallId(),
@@ -153,14 +156,14 @@ export const useRoomStore = defineStore('room', {
         position: [startPos[0], startPos[1]],
         angle,
         hasCloset: false,
-        thickness: 6,
+        thickness: wallThickness,
         label: String(walls.length + 1),
         visible: true,
       })
     },
 
     /** Close the polygon by adding a final segment back to the first vertex. */
-    closeRoom() {
+    closeRoom(thickness = 6) {
       const walls = this.walls
       if (walls.length < 2) return
       const first = walls[0]
@@ -175,13 +178,14 @@ export const useRoomStore = defineStore('room', {
       const dist = Math.sqrt(dx * dx + dy * dy)
       if (dist < 1) return // already closed
       const angle = Math.atan2(dy, dx)
+      const wallThickness = Math.max(1, Math.min(30, Math.round(thickness)))
       walls.push({
         id: createWallId(),
         length: Math.round(dist),
         position: [endOfLast[0], endOfLast[1]],
         angle,
         hasCloset: false,
-        thickness: 6,
+        thickness: wallThickness,
         label: String(walls.length + 1),
         visible: true,
       })

@@ -465,8 +465,39 @@ const isDrawing = ref(false)
 const isClosed = ref(false)
 const mousePos = reactive({ x: 0, y: 0 })
 const selectedWallId = ref<string | null>(null)
+const pendingStartVertex = ref<[number, number] | null>(null)
 const CLOSE_THRESHOLD = 15 // SVG units — snap distance to first vertex
 const GRID_SIZE = 10 // SVG grid snap size
+const drawWallThicknessInput = ref(6)
+
+function clampDrawHeight(v: number): number {
+  return Math.max(
+    ROOM_CONSTRAINTS.height.min,
+    Math.min(ROOM_CONSTRAINTS.height.max, Math.round(v)),
+  )
+}
+
+function clampDrawThickness(v: number): number {
+  return Math.max(1, Math.min(30, Math.round(v)))
+}
+
+function onDrawHeightInput(e: Event) {
+  const value = Number((e.target as HTMLInputElement).value)
+  if (!Number.isFinite(value)) return
+  roomStore.setHeight(clampDrawHeight(value))
+}
+
+function onDrawThicknessInput(e: Event) {
+  const value = Number((e.target as HTMLInputElement).value)
+  if (!Number.isFinite(value)) return
+  const thickness = clampDrawThickness(value)
+  drawWallThicknessInput.value = thickness
+
+  // Keep already drawn walls consistent with the selected thickness.
+  for (const wall of drawWalls.value) {
+    roomStore.updateWallProps(wall.id, { thickness })
+  }
+}
 
 /** Snap value to nearest grid */
 function snapToGrid(v: number): number {
@@ -486,6 +517,10 @@ const drawWalls = computed(() => (hasStartedDrawSession.value ? roomStore.walls 
 
 /** Compute all vertices from the wall chain */
 const wallVertices = computed(() => {
+  if (drawWalls.value.length === 0) {
+    return pendingStartVertex.value ? [pendingStartVertex.value] : []
+  }
+
   const verts: [number, number][] = []
   for (const wall of drawWalls.value) {
     verts.push([wall.position[0], wall.position[1]])
@@ -500,14 +535,14 @@ const wallVertices = computed(() => {
 
 /** The current last vertex (end of last wall, or nothing) */
 const lastVertex = computed(() => {
-  if (drawWalls.value.length === 0) return null
+  if (drawWalls.value.length === 0) return pendingStartVertex.value
   const last = drawWalls.value[drawWalls.value.length - 1]!
   return wallEndPoint(last)
 })
 
 /** First vertex */
 const firstVertex = computed(() => {
-  if (drawWalls.value.length === 0) return null
+  if (drawWalls.value.length === 0) return pendingStartVertex.value
   return drawWalls.value[0]!.position
 })
 
@@ -520,9 +555,14 @@ const isNearFirstVertex = computed(() => {
 })
 
 /** Points that should be visible while drawing (walls + live cursor). */
+const hasPlacedDrawPoint = computed(
+  () => !!pendingStartVertex.value || drawWalls.value.length > 0,
+)
+
 const drawBoundsPoints = computed<[number, number][]>(() => {
   const points = [...wallVertices.value]
-  if (isDrawing.value) {
+  // Keep the canvas stable until the first anchor is placed.
+  if (isDrawing.value && hasPlacedDrawPoint.value) {
     points.push([mousePos.x, mousePos.y])
   }
   return points
@@ -555,6 +595,7 @@ function enterDrawMode() {
   isClosed.value = false
   isDrawing.value = false
   selectedWallId.value = null
+  pendingStartVertex.value = null
 }
 
 /** Switch back to quick room mode */
@@ -568,6 +609,7 @@ function enterQuickMode() {
   roomStore.closetOffsetY = 0
   roomStore.closetOffsetZ = 0
   selectedWallId.value = null
+  pendingStartVertex.value = null
 }
 
 /** Start fresh drawing */
@@ -577,6 +619,21 @@ function startFreshDraw() {
   isDrawing.value = true
   isClosed.value = false
   selectedWallId.value = null
+  pendingStartVertex.value = null
+}
+
+function undoDrawStep() {
+  if (roomStore.walls.length > 0) {
+    roomStore.removeLastWall()
+    if (roomStore.walls.length === 0 && !pendingStartVertex.value) {
+      isDrawing.value = false
+    }
+    return
+  }
+  if (pendingStartVertex.value) {
+    pendingStartVertex.value = null
+    isDrawing.value = false
+  }
 }
 
 /** Handle canvas click in draw mode */
@@ -592,15 +649,34 @@ function onDrawCanvasClick(e: MouseEvent) {
   const sx = snapToGrid(pt.x)
   const sy = snapToGrid(pt.y)
 
-  // Check if we should close the polygon
-  if (isNearFirstVertex.value && firstVertex.value) {
-    roomStore.closeRoom()
-    isDrawing.value = false
-    isClosed.value = true
+  if (!pendingStartVertex.value && drawWalls.value.length === 0) {
+    pendingStartVertex.value = [sx, sy]
+    mousePos.x = sx
+    mousePos.y = sy
     return
   }
 
-  roomStore.addWallVertex(sx, sy)
+  // Check if we should close the polygon
+  if (isNearFirstVertex.value && firstVertex.value) {
+    roomStore.closeRoom(drawWallThicknessInput.value)
+    isDrawing.value = false
+    isClosed.value = true
+    pendingStartVertex.value = null
+    return
+  }
+
+  if (drawWalls.value.length === 0 && pendingStartVertex.value) {
+    roomStore.addWallVertex(
+      sx,
+      sy,
+      drawWallThicknessInput.value,
+      pendingStartVertex.value,
+    )
+    pendingStartVertex.value = null
+    return
+  }
+
+  roomStore.addWallVertex(sx, sy, drawWallThicknessInput.value)
 }
 
 /** Handle mouse move in draw mode */
@@ -615,11 +691,8 @@ function onDrawMouseMove(e: MouseEvent) {
 function onDrawKeyDown(e: KeyboardEvent) {
   if (floorPlanMode.value !== 'draw') return
   if (e.key === 'Escape') {
-    if (isDrawing.value && roomStore.walls.length > 0) {
-      roomStore.removeLastWall()
-      if (roomStore.walls.length === 0) {
-        isDrawing.value = false
-      }
+    if (isDrawing.value) {
+      undoDrawStep()
     }
   }
 }
@@ -741,15 +814,42 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
 
           <!-- ========== DRAW WALLS SIDEBAR ========== -->
           <template v-if="floorPlanMode === 'draw'">
+            <div class="draw-input-grid">
+              <div class="prop-row">
+                <label class="prop-label">Wall Height</label>
+                <input
+                  class="prop-input"
+                  type="number"
+                  :value="roomStore.height"
+                  :min="ROOM_CONSTRAINTS.height.min"
+                  :max="ROOM_CONSTRAINTS.height.max"
+                  @input="onDrawHeightInput"
+                />
+              </div>
+
+              <div class="prop-row">
+                <label class="prop-label">Wall Thickness</label>
+                <input
+                  class="prop-input"
+                  type="number"
+                  :value="drawWallThicknessInput"
+                  min="1"
+                  max="30"
+                  @input="onDrawThicknessInput"
+                />
+              </div>
+            </div>
+
             <!-- Drawing controls -->
             <div v-if="!isClosed" class="draw-controls">
               <button class="sidebar-action-btn draw-btn" @click="startFreshDraw">
                 🖊 Start Drawing
               </button>
+
               <button
-                v-if="isDrawing && roomStore.walls.length > 0"
+                v-if="isDrawing && (roomStore.walls.length > 0 || pendingStartVertex)"
                 class="sidebar-action-btn undo-btn"
-                @click="roomStore.removeLastWall()"
+                @click="undoDrawStep"
               >
                 ↩ Undo Last Wall
               </button>
@@ -1728,6 +1828,13 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.draw-input-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
 }
 
 .draw-btn {
