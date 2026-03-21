@@ -199,7 +199,8 @@ function openSlots(mode: "save" | "load") {
   slotsOpen.value = true;
 }
 // ── Closet position helpers ───────────────────────────────────────────────
-const roomWall = computed(() => roomStore.walls[0]?.length ?? 244);
+const closetWall = computed(() => roomStore.closetWall);
+const roomWall = computed(() => closetWall.value?.length ?? roomStore.planBounds.width);
 const roomCeil = computed(() => roomStore.height ?? 244);
 const cabW = computed(() => Number(closet.cabinet.width) || 60);
 const cabH = computed(() => Number(closet.cabinet.height) || 200);
@@ -212,7 +213,7 @@ const maxOffsetX = computed(() =>
 const maxOffsetY = computed(() =>
   Math.max(0, Math.floor(roomCeil.value - cabH.value)),
 );
-const roomDepth = computed(() => roomStore.walls[1]?.length ?? 244);
+const roomDepth = computed(() => roomStore.planBounds.depth);
 const maxOffsetZ = computed(() =>
   Math.max(0, Math.floor(roomDepth.value - cabD.value)),
 );
@@ -220,11 +221,11 @@ const maxOffsetZ = computed(() =>
 // Human-readable labels
 const horizontalLabel = computed(() => {
   const x = roomStore.closetOffsetX;
-  if (Math.abs(x) < 1) return "Centred";
+  if (Math.abs(x) < 1) return "Centered on closet wall";
   const dist = Math.abs(Math.round(x + maxOffsetX.value));
   return x < 0
-    ? `${dist} cm from left wall`
-    : `${Math.round(maxOffsetX.value * 2 - dist)} cm from right wall`;
+    ? `${dist} cm from wall start`
+    : `${Math.round(maxOffsetX.value * 2 - dist)} cm from wall end`;
 });
 const verticalLabel = computed(() => {
   const y = Math.round(roomStore.closetOffsetY);

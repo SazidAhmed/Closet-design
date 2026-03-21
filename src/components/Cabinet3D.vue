@@ -96,16 +96,67 @@ const cabD = computed(() => Number(closet.cabinet.depth) || 60);
 // The room is centred at origin; floor is at -roomH/2. When offsetY = 0
 // the cabinet sits on the floor: its centre is at floor + cabH/2.
 const roomH = computed(() => roomStore.height ?? 244);
-const roomD = computed(() => roomStore.walls[1]?.length ?? 244);
-const closetPosX = computed(() => roomStore.closetOffsetX);
+const roomBounds = computed(() => roomStore.planBounds);
+const closetWall = computed(() => roomStore.closetWall);
+
+function polygonOrientationSign() {
+  const walls = roomStore.walls;
+  if (walls.length < 2) return 1;
+  const points: [number, number][] = walls.map((w) => [w.position[0], w.position[1]]);
+  const last = walls[walls.length - 1];
+  if (last) {
+    points.push([
+      last.position[0] + Math.cos(last.angle) * last.length,
+      last.position[1] + Math.sin(last.angle) * last.length,
+    ]);
+  }
+  let twiceArea = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    if (!a || !b) continue;
+    twiceArea += a[0] * b[1] - b[0] * a[1];
+  }
+  return twiceArea >= 0 ? 1 : -1;
+}
+
+const closetFrame = computed(() => {
+  const wall = closetWall.value;
+  if (!wall) {
+    return {
+      centerX: roomBounds.value.centerX + roomStore.closetOffsetX,
+      centerZ: roomBounds.value.minY + cabD.value / 2 + roomStore.closetOffsetZ,
+      yaw: 0,
+    };
+  }
+
+  const tx = Math.cos(wall.angle);
+  const tz = Math.sin(wall.angle);
+  const sign = polygonOrientationSign();
+  const leftNx = -tz;
+  const leftNz = tx;
+  const nx = sign >= 0 ? leftNx : -leftNx;
+  const nz = sign >= 0 ? leftNz : -leftNz;
+
+  const along = wall.length / 2 + roomStore.closetOffsetX;
+  const px = wall.position[0] + tx * along;
+  const pz = wall.position[1] + tz * along;
+  const depth = cabD.value / 2 + roomStore.closetOffsetZ;
+
+  return {
+    centerX: px + nx * depth,
+    centerZ: pz + nz * depth,
+    yaw: wall.angle,
+  };
+});
+
+const closetPosX = computed(() => closetFrame.value.centerX);
 // Y in 3D: floor = -roomH/2, cabinet centre when on floor = -roomH/2 + cabH/2
 const closetPosY = computed(
   () => -roomH.value / 2 + cabH.value / 2 + roomStore.closetOffsetY,
 );
-// Z in 3D: back wall = -roomD/2, cabinet front face when against back wall = -roomD/2 + cabD/2
-const closetPosZ = computed(
-  () => -roomD.value / 2 + cabD.value / 2 + roomStore.closetOffsetZ,
-);
+const closetPosZ = computed(() => closetFrame.value.centerZ);
+const closetYaw = computed(() => closetFrame.value.yaw);
 const closetPosition = computed<[number, number, number]>(() => [
   closetPosX.value,
   closetPosY.value,
@@ -139,7 +190,7 @@ const hangerProps = computed(() => {
 
 <template>
   <!-- Outer group positions the entire closet inside the room -->
-  <TresGroup :position="closetPosition">
+  <TresGroup :position="closetPosition" :rotation="[0, closetYaw, 0]">
     <TresGroup>
       <!-- Carcass panels + dividers -->
       <TresMesh

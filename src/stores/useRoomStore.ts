@@ -11,6 +11,73 @@ function clampWall(v: number): number {
   return Math.max(ROOM_CONSTRAINTS.wallLength.min, Math.min(ROOM_CONSTRAINTS.wallLength.max, Math.round(v)))
 }
 
+function roomPlanBounds(walls: Room['walls']): {
+  minX: number
+  maxX: number
+  minY: number
+  maxY: number
+  width: number
+  depth: number
+  centerX: number
+  centerY: number
+} {
+  if (walls.length === 0) {
+    const half = 244 / 2
+    return {
+      minX: -half,
+      maxX: half,
+      minY: -half,
+      maxY: half,
+      width: 244,
+      depth: 244,
+      centerX: 0,
+      centerY: 0,
+    }
+  }
+
+  let minX = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+
+  for (const wall of walls) {
+    const sx = wall.position[0]
+    const sy = wall.position[1]
+    const ex = sx + Math.cos(wall.angle) * wall.length
+    const ey = sy + Math.sin(wall.angle) * wall.length
+    minX = Math.min(minX, sx, ex)
+    maxX = Math.max(maxX, sx, ex)
+    minY = Math.min(minY, sy, ey)
+    maxY = Math.max(maxY, sy, ey)
+  }
+
+  const width = Math.max(1, maxX - minX)
+  const depth = Math.max(1, maxY - minY)
+  return {
+    minX,
+    maxX,
+    minY,
+    maxY,
+    width,
+    depth,
+    centerX: (minX + maxX) / 2,
+    centerY: (minY + maxY) / 2,
+  }
+}
+
+function closetWallOrFallback(walls: Room['walls']) {
+  const tagged = walls.find((w) => w.hasCloset)
+  if (tagged) return tagged
+  if (walls.length === 0) return null
+
+  // Fallback to the back-most wall in plan space (smallest mid-Y)
+  return walls.reduce((best, wall) => {
+    const wallMidY = wall.position[1] + Math.sin(wall.angle) * wall.length / 2
+    const bestMidY = best.position[1] + Math.sin(best.angle) * best.length / 2
+    return wallMidY < bestMidY ? wall : best
+  })
+}
+
 export const useRoomStore = defineStore('room', {
   state: (): Room & { closetOffsetX: number; closetOffsetY: number; closetOffsetZ: number } => ({
     ...createDefaultRoom(),
@@ -25,6 +92,8 @@ export const useRoomStore = defineStore('room', {
       state.items.filter((item) => item.wallId === wallId),
     floorItems: (state) =>
       state.items.filter((item) => item.wallId === null),
+    planBounds: (state) => roomPlanBounds(state.walls),
+    closetWall: (state) => closetWallOrFallback(state.walls),
   },
 
   actions: {
@@ -95,8 +164,10 @@ export const useRoomStore = defineStore('room', {
      * cabinetW is the total cabinet width in cm.
      */
     setClosetOffsetX(x: number, cabinetW = 0) {
-      const roomW = this.walls[0]?.length ?? 244
-      const maxOffset = Math.max(0, (roomW - cabinetW) / 2)
+      const wallSpan = closetWallOrFallback(this.walls)?.length
+      const roomW = roomPlanBounds(this.walls).width
+      const travelSpan = wallSpan ?? roomW
+      const maxOffset = Math.max(0, (travelSpan - cabinetW) / 2)
       this.closetOffsetX = Math.max(-maxOffset, Math.min(maxOffset, x))
     },
 
@@ -117,9 +188,16 @@ export const useRoomStore = defineStore('room', {
      * cabinetD is the cabinet depth in cm.
      */
     setClosetOffsetZ(z: number, cabinetD = 0) {
-      const roomD = this.walls[1]?.length ?? 244
+      const roomD = roomPlanBounds(this.walls).depth
       const maxOffset = Math.max(0, roomD - cabinetD)
       this.closetOffsetZ = Math.max(0, Math.min(maxOffset, z))
+    },
+
+    /** Mark exactly one wall as the closet wall anchor. */
+    setClosetWall(wallId: string) {
+      this.walls.forEach((wall) => {
+        wall.hasCloset = wall.id === wallId
+      })
     },
 
     /**
@@ -174,7 +252,7 @@ export const useRoomStore = defineStore('room', {
         length: Math.round(length),
         position: [startPos[0], startPos[1]],
         angle,
-        hasCloset: false,
+        hasCloset: walls.length === 0,
         thickness: wallThickness,
         label: String(walls.length + 1),
         visible: true,
@@ -227,6 +305,10 @@ export const useRoomStore = defineStore('room', {
       this.walls.forEach((wall, i) => {
         wall.label = String(i + 1)
       })
+
+      if (!this.walls.some((wall) => wall.hasCloset) && this.walls[0]) {
+        this.walls[0].hasCloset = true
+      }
     },
 
     /** Update properties of a single wall. */
@@ -243,6 +325,9 @@ export const useRoomStore = defineStore('room', {
     setRoomFromWalls(walls: Room['walls']) {
       this.walls = walls
       this.shape = walls.length === 4 ? 'rectangular' : 'custom'
+      if (!this.walls.some((wall) => wall.hasCloset) && this.walls[0]) {
+        this.walls[0].hasCloset = true
+      }
     },
   },
 })

@@ -1121,6 +1121,14 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
 
               <button
                 type="button"
+                class="sidebar-action-btn draw-btn"
+                @click="roomStore.setClosetWall(selectedWall.id)"
+              >
+                Use As Closet Wall
+              </button>
+
+              <button
+                type="button"
                 class="sidebar-action-btn delete-wall-btn"
                 @click.stop.prevent="removeSelectedWall"
               >
@@ -1530,7 +1538,12 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
 
               <!-- Wall label (number) -->
               <g :transform="`translate(${wallMidpoint(wall)[0]}, ${wallMidpoint(wall)[1]})`">
-                <circle r="10" fill="#f59e0b" stroke="#0f172a" stroke-width="1.5" />
+                <circle
+                  r="10"
+                  :fill="wall.hasCloset ? '#22c55e' : '#f59e0b'"
+                  stroke="#0f172a"
+                  stroke-width="1.5"
+                />
                 <text
                   text-anchor="middle"
                   dominant-baseline="central"
