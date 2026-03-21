@@ -44,6 +44,24 @@ export const useRoomStore = defineStore('room', {
       if (wall) wall.length = length
     },
 
+    /** Rotate a wall to the provided angle in radians. */
+    setWallAngle(wallId: string, angleRad: number, anchor: 'start' | 'end' = 'start') {
+      const wall = this.walls.find((w) => w.id === wallId)
+      if (!wall || !Number.isFinite(angleRad)) return
+
+      const nextAngle = Math.atan2(Math.sin(angleRad), Math.cos(angleRad))
+      if (anchor === 'end') {
+        const endX = wall.position[0] + Math.cos(wall.angle) * wall.length
+        const endY = wall.position[1] + Math.sin(wall.angle) * wall.length
+        wall.position = [
+          endX - Math.cos(nextAngle) * wall.length,
+          endY - Math.sin(nextAngle) * wall.length,
+        ]
+      }
+
+      wall.angle = nextAngle
+    },
+
     /** Place a new architectural item. */
     addItem(item: Omit<PlacedItem, 'id'>) {
       this.items.push({ ...item, id: createItemId() })

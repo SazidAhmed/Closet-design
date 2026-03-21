@@ -466,6 +466,7 @@ const isClosed = ref(false)
 const mousePos = reactive({ x: 0, y: 0 })
 const selectedWallId = ref<string | null>(null)
 const selectedWallAnchor = ref<[number, number] | null>(null)
+const selectedWallAnchorType = ref<'start' | 'end'>('start')
 const pendingStartVertex = ref<[number, number] | null>(null)
 const CLOSE_THRESHOLD = 15 // SVG units — snap distance to first vertex
 const GRID_SIZE = 10 // SVG grid snap size
@@ -480,6 +481,14 @@ function clampDrawHeight(v: number): number {
 
 function clampDrawThickness(v: number): number {
   return Math.max(1, Math.min(30, Math.round(v)))
+}
+
+function radToDeg(rad: number): number {
+  return (rad * 180) / Math.PI
+}
+
+function degToRad(deg: number): number {
+  return (deg * Math.PI) / 180
 }
 
 function onDrawHeightInput(e: Event) {
@@ -538,6 +547,26 @@ const chainEndVertex = computed<[number, number] | null>(() => {
   if (drawWalls.value.length === 0) return null
   const last = drawWalls.value[drawWalls.value.length - 1]!
   return wallEndPoint(last)
+})
+
+const previewWall = computed<{
+  position: [number, number]
+  angle: number
+  length: number
+} | null>(() => {
+  if (!isDrawing.value || !lastVertex.value) return null
+  const [sx, sy] = lastVertex.value
+  const ex = mousePos.x
+  const ey = mousePos.y
+  const dx = ex - sx
+  const dy = ey - sy
+  const length = Math.hypot(dx, dy)
+  if (length < 1) return null
+  return {
+    position: [sx, sy],
+    angle: Math.atan2(dy, dx),
+    length,
+  }
 })
 
 /** The current last vertex (end of last wall, or nothing) */
@@ -604,6 +633,7 @@ function enterDrawMode() {
   isDrawing.value = false
   selectedWallId.value = null
   selectedWallAnchor.value = null
+  selectedWallAnchorType.value = 'start'
   pendingStartVertex.value = null
 }
 
@@ -619,6 +649,7 @@ function enterQuickMode() {
   roomStore.closetOffsetZ = 0
   selectedWallId.value = null
   selectedWallAnchor.value = null
+  selectedWallAnchorType.value = 'start'
   pendingStartVertex.value = null
 }
 
@@ -630,6 +661,7 @@ function startFreshDraw() {
   isClosed.value = false
   selectedWallId.value = null
   selectedWallAnchor.value = null
+  selectedWallAnchorType.value = 'start'
   pendingStartVertex.value = null
 }
 
@@ -667,6 +699,7 @@ function continueDrawing() {
   isClosed.value = false
   selectedWallId.value = null
   selectedWallAnchor.value = null
+  selectedWallAnchorType.value = 'start'
 }
 
 function undoDrawStep() {
@@ -744,6 +777,7 @@ function onDrawKeyDown(e: KeyboardEvent) {
       pendingStartVertex.value = null
       selectedWallId.value = null
       selectedWallAnchor.value = null
+      selectedWallAnchorType.value = 'start'
     }
   }
 }
@@ -771,13 +805,20 @@ function selectWall(wallId: string, e: MouseEvent) {
   const end = wallEndPoint(wall)
   const dStart = Math.hypot(pt.x - start[0], pt.y - start[1])
   const dEnd = Math.hypot(pt.x - end[0], pt.y - end[1])
-  selectedWallAnchor.value = dStart <= dEnd ? start : end
+  if (dStart <= dEnd) {
+    selectedWallAnchor.value = start
+    selectedWallAnchorType.value = 'start'
+  } else {
+    selectedWallAnchor.value = end
+    selectedWallAnchorType.value = 'end'
+  }
 }
 
 /** Deselect wall */
 function deselectWall() {
   selectedWallId.value = null
   selectedWallAnchor.value = null
+  selectedWallAnchorType.value = 'start'
 }
 
 function removeSelectedWall() {
@@ -800,6 +841,7 @@ function removeSelectedWall() {
 
   selectedWallId.value = null
   selectedWallAnchor.value = null
+  selectedWallAnchorType.value = 'start'
   isClosed.value = false
 
   if (drawWalls.value.length === 0) {
@@ -817,8 +859,28 @@ const selectedWall = computed(() => {
 /** Computed angle in degrees for display */
 const selectedWallAngleDeg = computed(() => {
   if (!selectedWall.value) return 0
-  return Math.round((selectedWall.value.angle * 180) / Math.PI)
+  return Math.round(radToDeg(selectedWall.value.angle))
 })
+
+function setSelectedWallAngleDeg(angleDeg: number) {
+  if (!selectedWall.value || !Number.isFinite(angleDeg)) return
+  roomStore.setWallAngle(
+    selectedWall.value.id,
+    degToRad(angleDeg),
+    selectedWallAnchorType.value,
+  )
+}
+
+function onSelectedWallAngleInput(e: Event) {
+  const next = Number((e.target as HTMLInputElement).value)
+  if (!Number.isFinite(next)) return
+  setSelectedWallAngleDeg(next)
+}
+
+function rotateSelectedWall(deltaDeg: number) {
+  if (!selectedWall.value) return
+  setSelectedWallAngleDeg(radToDeg(selectedWall.value.angle) + deltaDeg)
+}
 
 /** Wall midpoint for label placement */
 function wallMidpoint(wall: { position: [number, number]; angle: number; length: number }): [number, number] {
@@ -1021,7 +1083,31 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
 
               <div class="prop-row">
                 <label class="prop-label">Angle</label>
-                <span class="prop-value">{{ selectedWallAngleDeg }}°</span>
+                <div class="angle-controls">
+                  <button
+                    type="button"
+                    class="angle-btn"
+                    @click="rotateSelectedWall(-15)"
+                    title="Rotate wall -15°"
+                  >
+                    -15°
+                  </button>
+                  <input
+                    class="prop-input angle-input"
+                    type="number"
+                    step="1"
+                    :value="selectedWallAngleDeg"
+                    @input="onSelectedWallAngleInput"
+                  />
+                  <button
+                    type="button"
+                    class="angle-btn"
+                    @click="rotateSelectedWall(15)"
+                    title="Rotate wall +15°"
+                  >
+                    +15°
+                  </button>
+                </div>
               </div>
 
               <div class="prop-row">
@@ -1501,6 +1587,30 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
               stroke-dasharray="6,4"
               pointer-events="none"
             />
+
+            <!-- Live dimension while drawing current wall -->
+            <line
+              v-if="previewWall"
+              :x1="dimLinePoints(previewWall).x1"
+              :y1="dimLinePoints(previewWall).y1"
+              :x2="dimLinePoints(previewWall).x2"
+              :y2="dimLinePoints(previewWall).y2"
+              stroke="#60a5fa"
+              stroke-width="0.9"
+              marker-start="url(#dimArrowL)"
+              marker-end="url(#dimArrowR)"
+              pointer-events="none"
+            />
+            <text
+              v-if="previewWall"
+              :x="dimLinePoints(previewWall).tx"
+              :y="dimLinePoints(previewWall).ty"
+              text-anchor="middle"
+              fill="#93c5fd"
+              font-size="9"
+              font-weight="700"
+              pointer-events="none"
+            >{{ formatLength(previewWall.length) }}</text>
 
             <!-- Preview snap circle at cursor when near first vertex -->
             <circle
@@ -2063,6 +2173,33 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
   font-size: 12px;
   color: #e2e8f0;
   font-weight: 500;
+}
+
+.angle-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.angle-input {
+  width: 62px;
+}
+
+.angle-btn {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #cbd5e1;
+  padding: 4px 6px;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.angle-btn:hover {
+  border-color: rgba(96, 165, 250, 0.4);
+  color: #93c5fd;
 }
 
 /* SVG draw canvas */
