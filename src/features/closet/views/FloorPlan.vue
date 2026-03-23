@@ -514,6 +514,32 @@ function snapToGrid(v: number): number {
   return Math.round(v / GRID_SIZE) * GRID_SIZE
 }
 
+function snapPointToOrthogonal(
+  start: [number, number],
+  target: [number, number],
+): [number, number] {
+  const dx = target[0] - start[0]
+  const dy = target[1] - start[1]
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return [target[0], start[1]]
+  }
+
+  return [start[0], target[1]]
+}
+
+function leftEndpointAnchor(wall: {
+  position: [number, number]
+  angle: number
+  length: number
+}): 'start' | 'end' {
+  const start: [number, number] = [wall.position[0], wall.position[1]]
+  const end = wallEndPoint(wall)
+  if (start[0] < end[0]) return 'start'
+  if (start[0] > end[0]) return 'end'
+  return start[1] <= end[1] ? 'start' : 'end'
+}
+
 /** Get the end-point of a wall (start + direction * length) */
 function wallEndPoint(wall: { position: [number, number]; angle: number; length: number }): [number, number] {
   return [
@@ -726,14 +752,20 @@ function onDrawCanvasClick(e: MouseEvent) {
   }
 
   const pt = screenToSvg(svgRef.value, e.clientX, e.clientY)
-  const sx = snapToGrid(pt.x)
-  const sy = snapToGrid(pt.y)
+  let sx = snapToGrid(pt.x)
+  let sy = snapToGrid(pt.y)
 
   if (!pendingStartVertex.value && drawWalls.value.length === 0) {
     pendingStartVertex.value = [sx, sy]
     mousePos.x = sx
     mousePos.y = sy
     return
+  }
+
+  if (lastVertex.value) {
+    const snapped = snapPointToOrthogonal(lastVertex.value, [sx, sy])
+    sx = snapToGrid(snapped[0])
+    sy = snapToGrid(snapped[1])
   }
 
   // The first click after choosing a start vertex must always draw from that start.
@@ -764,8 +796,17 @@ function onDrawCanvasClick(e: MouseEvent) {
 function onDrawMouseMove(e: MouseEvent) {
   if (!svgRef.value) return
   const pt = screenToSvg(svgRef.value, e.clientX, e.clientY)
-  mousePos.x = snapToGrid(pt.x)
-  mousePos.y = snapToGrid(pt.y)
+  let sx = snapToGrid(pt.x)
+  let sy = snapToGrid(pt.y)
+
+  if (lastVertex.value && isDrawing.value) {
+    const snapped = snapPointToOrthogonal(lastVertex.value, [sx, sy])
+    sx = snapToGrid(snapped[0])
+    sy = snapToGrid(snapped[1])
+  }
+
+  mousePos.x = sx
+  mousePos.y = sy
 }
 
 /** Handle Escape key — undo last wall segment */
@@ -864,10 +905,11 @@ const selectedWallAngleDeg = computed(() => {
 
 function setSelectedWallAngleDeg(angleDeg: number) {
   if (!selectedWall.value || !Number.isFinite(angleDeg)) return
+  const anchor = leftEndpointAnchor(selectedWall.value)
   roomStore.setWallAngle(
     selectedWall.value.id,
     degToRad(angleDeg),
-    selectedWallAnchorType.value,
+    anchor,
   )
 }
 
@@ -1087,10 +1129,10 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
                   <button
                     type="button"
                     class="angle-btn"
-                    @click="rotateSelectedWall(-15)"
-                    title="Rotate wall -15°"
+                    @click="rotateSelectedWall(-1)"
+                    title="Rotate wall -1°"
                   >
-                    -15°
+                    -1°
                   </button>
                   <input
                     class="prop-input angle-input"
@@ -1102,10 +1144,10 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
                   <button
                     type="button"
                     class="angle-btn"
-                    @click="rotateSelectedWall(15)"
-                    title="Rotate wall +15°"
+                    @click="rotateSelectedWall(1)"
+                    title="Rotate wall +1°"
                   >
-                    +15°
+                    +1°
                   </button>
                 </div>
               </div>

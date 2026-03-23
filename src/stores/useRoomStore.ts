@@ -11,6 +11,31 @@ function clampWall(v: number): number {
   return Math.max(ROOM_CONSTRAINTS.wallLength.min, Math.min(ROOM_CONSTRAINTS.wallLength.max, Math.round(v)))
 }
 
+function orthogonalSegment(start: Vec2, target: Vec2): { angle: number; length: number; end: Vec2 } | null {
+  const dx = target[0] - start[0]
+  const dy = target[1] - start[1]
+
+  if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return null
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    const dir = dx >= 0 ? 1 : -1
+    const length = Math.abs(dx)
+    return {
+      angle: dir > 0 ? 0 : Math.PI,
+      length,
+      end: [start[0] + dir * length, start[1]],
+    }
+  }
+
+  const dir = dy >= 0 ? 1 : -1
+  const length = Math.abs(dy)
+  return {
+    angle: dir > 0 ? Math.PI / 2 : -Math.PI / 2,
+    length,
+    end: [start[0], start[1] + dir * length],
+  }
+}
+
 function roomPlanBounds(walls: Room['walls']): {
   minX: number
   maxX: number
@@ -115,20 +140,122 @@ export const useRoomStore = defineStore('room', {
 
     /** Rotate a wall to the provided angle in radians. */
     setWallAngle(wallId: string, angleRad: number, anchor: 'start' | 'end' = 'start') {
-      const wall = this.walls.find((w) => w.id === wallId)
-      if (!wall || !Number.isFinite(angleRad)) return
+      const idx = this.walls.findIndex((w) => w.id === wallId)
+      if (idx < 0 || !Number.isFinite(angleRad)) return
+
+      const endPoint = (w: Room['walls'][number]): Vec2 => [
+        w.position[0] + Math.cos(w.angle) * w.length,
+        w.position[1] + Math.sin(w.angle) * w.length,
+      ]
+      const setWallFromPoints = (w: Room['walls'][number], start: Vec2, end: Vec2) => {
+        const dx = end[0] - start[0]
+        const dy = end[1] - start[1]
+        const dist = Math.hypot(dx, dy)
+        if (dist < 1) return
+        w.position = [start[0], start[1]]
+        w.length = dist
+        w.angle = Math.atan2(dy, dx)
+      }
+      const translateWall = (i: number, dx: number, dy: number) => {
+        const w = this.walls[i]!
+        w.position = [w.position[0] + dx, w.position[1] + dy]
+      }
+
+      const wasClosed = (() => {
+        if (this.walls.length < 3) return false
+        const first = this.walls[0]!
+        const last = this.walls[this.walls.length - 1]!
+        const lastEndX = last.position[0] + Math.cos(last.angle) * last.length
+        const lastEndY = last.position[1] + Math.sin(last.angle) * last.length
+        return Math.hypot(first.position[0] - lastEndX, first.position[1] - lastEndY) < 1
+      })()
+
+      const wall = this.walls[idx]!
+      const oldStart: Vec2 = [wall.position[0], wall.position[1]]
+      const oldEnd: Vec2 = [
+        oldStart[0] + Math.cos(wall.angle) * wall.length,
+        oldStart[1] + Math.sin(wall.angle) * wall.length,
+      ]
 
       const nextAngle = Math.atan2(Math.sin(angleRad), Math.cos(angleRad))
-      if (anchor === 'end') {
-        const endX = wall.position[0] + Math.cos(wall.angle) * wall.length
-        const endY = wall.position[1] + Math.sin(wall.angle) * wall.length
-        wall.position = [
-          endX - Math.cos(nextAngle) * wall.length,
-          endY - Math.sin(nextAngle) * wall.length,
+      let newStart: Vec2 = [oldStart[0], oldStart[1]]
+      let newEnd: Vec2 = [oldEnd[0], oldEnd[1]]
+
+      if (anchor === 'start') {
+        newEnd = [
+          oldStart[0] + Math.cos(nextAngle) * wall.length,
+          oldStart[1] + Math.sin(nextAngle) * wall.length,
+        ]
+      } else {
+        newStart = [
+          oldEnd[0] - Math.cos(nextAngle) * wall.length,
+          oldEnd[1] - Math.sin(nextAngle) * wall.length,
         ]
       }
 
+      wall.position = [newStart[0], newStart[1]]
       wall.angle = nextAngle
+
+      const n = this.walls.length
+      const nextIdx = (idx + 1) % n
+      const prevIdx = (idx - 1 + n) % n
+      const epsilon = 1e-9
+
+      if (anchor === 'start') {
+        const dx = newEnd[0] - oldEnd[0]
+        const dy = newEnd[1] - oldEnd[1]
+
+        if (!wasClosed || n < 3) {
+          if (Math.abs(dx) >= epsilon || Math.abs(dy) >= epsilon) {
+            for (let i = idx + 1; i < n; i += 1) {
+              translateWall(i, dx, dy)
+            }
+          }
+          return
+        }
+
+        if (Math.abs(dx) >= epsilon || Math.abs(dy) >= epsilon) {
+          let i = nextIdx
+          while (i !== prevIdx) {
+            translateWall(i, dx, dy)
+            i = (i + 1) % n
+          }
+        }
+
+        const prevPrevIdx = (prevIdx - 1 + n) % n
+        const bridgeStart = endPoint(this.walls[prevPrevIdx]!)
+        const bridgeEnd: Vec2 = [wall.position[0], wall.position[1]]
+        setWallFromPoints(this.walls[prevIdx]!, bridgeStart, bridgeEnd)
+        return
+      }
+
+      const dx = newStart[0] - oldStart[0]
+      const dy = newStart[1] - oldStart[1]
+
+      if (!wasClosed || n < 3) {
+        if (Math.abs(dx) >= epsilon || Math.abs(dy) >= epsilon) {
+          for (let i = 0; i < idx; i += 1) {
+            translateWall(i, dx, dy)
+          }
+        }
+        return
+      }
+
+      if (Math.abs(dx) >= epsilon || Math.abs(dy) >= epsilon) {
+        let i = prevIdx
+        while (i !== nextIdx) {
+          translateWall(i, dx, dy)
+          i = (i - 1 + n) % n
+        }
+      }
+
+      const nextNextIdx = (nextIdx + 1) % n
+      const bridgeStart = endPoint(wall)
+      const bridgeEnd: Vec2 = [
+        this.walls[nextNextIdx]!.position[0],
+        this.walls[nextNextIdx]!.position[1],
+      ]
+      setWallFromPoints(this.walls[nextIdx]!, bridgeStart, bridgeEnd)
     },
 
     /** Place a new architectural item. */
@@ -240,18 +367,15 @@ export const useRoomStore = defineStore('room', {
           prev.position[1] + Math.sin(prev.angle) * prev.length,
         ]
       }
-      const dx = x - startPos[0]
-      const dy = y - startPos[1]
-      const length = Math.sqrt(dx * dx + dy * dy)
-      if (length < 1) return
-      const angle = Math.atan2(dy, dx)
+      const segment = orthogonalSegment(startPos, [x, y])
+      if (!segment) return
       const wallThickness = Math.max(1, Math.min(30, Math.round(thickness)))
 
       walls.push({
         id: createWallId(),
-        length: Math.round(length),
+        length: Math.round(segment.length),
         position: [startPos[0], startPos[1]],
-        angle,
+        angle: segment.angle,
         hasCloset: walls.length === 0,
         thickness: wallThickness,
         label: String(walls.length + 1),
@@ -274,18 +398,35 @@ export const useRoomStore = defineStore('room', {
       const dy = first.position[1] - endOfLast[1]
       const dist = Math.sqrt(dx * dx + dy * dy)
       if (dist < 1) return // already closed
-      const angle = Math.atan2(dy, dx)
       const wallThickness = Math.max(1, Math.min(30, Math.round(thickness)))
-      walls.push({
-        id: createWallId(),
-        length: Math.round(dist),
-        position: [endOfLast[0], endOfLast[1]],
-        angle,
-        hasCloset: false,
-        thickness: wallThickness,
-        label: String(walls.length + 1),
-        visible: true,
-      })
+
+      const addSegment = (start: Vec2, target: Vec2) => {
+        const segment = orthogonalSegment(start, target)
+        if (!segment) return start
+        walls.push({
+          id: createWallId(),
+          length: Math.round(segment.length),
+          position: [start[0], start[1]],
+          angle: segment.angle,
+          hasCloset: false,
+          thickness: wallThickness,
+          label: String(walls.length + 1),
+          visible: true,
+        })
+        return segment.end
+      }
+
+      const needsHorizontal = Math.abs(first.position[0] - endOfLast[0]) >= 1
+      const needsVertical = Math.abs(first.position[1] - endOfLast[1]) >= 1
+
+      if (needsHorizontal && needsVertical) {
+        const corner: Vec2 = [first.position[0], endOfLast[1]]
+        const reached = addSegment(endOfLast, corner)
+        addSegment(reached, [first.position[0], first.position[1]])
+        return
+      }
+
+      addSegment(endOfLast, [first.position[0], first.position[1]])
     },
 
     /** Remove the last wall segment (undo while drawing). */
