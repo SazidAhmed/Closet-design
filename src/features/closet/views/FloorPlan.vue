@@ -456,316 +456,314 @@ function isVerticalWall(wallId: string | null): boolean {
 }
 
 // ───── Draw Walls mode ─────────────────────────────────────────────────────
-type FloorPlanMode = 'quick' | 'draw'
-const floorPlanMode = ref<FloorPlanMode>('quick')
-const hasStartedDrawSession = ref(false)
+type FloorPlanMode = "quick" | "draw";
+const floorPlanMode = ref<FloorPlanMode>("quick");
+const hasStartedDrawSession = ref(false);
 
 // Draw state
-const isDrawing = ref(false)
-const isClosed = ref(false)
-const mousePos = reactive({ x: 0, y: 0 })
-const selectedWallId = ref<string | null>(null)
-const selectedWallAnchor = ref<[number, number] | null>(null)
-const selectedWallAnchorType = ref<'start' | 'end'>('start')
-const pendingStartVertex = ref<[number, number] | null>(null)
-const CLOSE_THRESHOLD = 15 // SVG units — snap distance to first vertex
-const GRID_SIZE = 10 // SVG grid snap size
-const drawWallThicknessInput = ref(6)
+const isDrawing = ref(false);
+const isClosed = ref(false);
+const mousePos = reactive({ x: 0, y: 0 });
+const selectedWallId = ref<string | null>(null);
+const selectedWallAnchor = ref<[number, number] | null>(null);
+const selectedWallAnchorType = ref<"start" | "end">("start");
+const pendingStartVertex = ref<[number, number] | null>(null);
+const CLOSE_THRESHOLD = 15; // SVG units — snap distance to first vertex
+const GRID_SIZE = 10; // SVG grid snap size
+const drawWallThicknessInput = ref(6);
 
 function clampDrawHeight(v: number): number {
   return Math.max(
     ROOM_CONSTRAINTS.height.min,
     Math.min(ROOM_CONSTRAINTS.height.max, Math.round(v)),
-  )
+  );
 }
 
 function clampDrawThickness(v: number): number {
-  return Math.max(1, Math.min(30, Math.round(v)))
+  return Math.max(1, Math.min(30, Math.round(v)));
 }
 
 function radToDeg(rad: number): number {
-  return (rad * 180) / Math.PI
+  return (rad * 180) / Math.PI;
 }
 
 function degToRad(deg: number): number {
-  return (deg * Math.PI) / 180
+  return (deg * Math.PI) / 180;
 }
 
 function onDrawHeightInput(e: Event) {
-  const value = Number((e.target as HTMLInputElement).value)
-  if (!Number.isFinite(value)) return
-  roomStore.setHeight(clampDrawHeight(value))
+  const value = Number((e.target as HTMLInputElement).value);
+  if (!Number.isFinite(value)) return;
+  roomStore.setHeight(clampDrawHeight(value));
 }
 
 function onDrawThicknessInput(e: Event) {
-  const value = Number((e.target as HTMLInputElement).value)
-  if (!Number.isFinite(value)) return
-  const thickness = clampDrawThickness(value)
-  drawWallThicknessInput.value = thickness
+  const value = Number((e.target as HTMLInputElement).value);
+  if (!Number.isFinite(value)) return;
+  const thickness = clampDrawThickness(value);
+  drawWallThicknessInput.value = thickness;
 
   // Keep already drawn walls consistent with the selected thickness.
   for (const wall of drawWalls.value) {
-    roomStore.updateWallProps(wall.id, { thickness })
+    roomStore.updateWallProps(wall.id, { thickness });
   }
 }
 
 /** Snap value to nearest grid */
 function snapToGrid(v: number): number {
-  return Math.round(v / GRID_SIZE) * GRID_SIZE
+  return Math.round(v / GRID_SIZE) * GRID_SIZE;
 }
 
 function snapPointToOrthogonal(
   start: [number, number],
   target: [number, number],
 ): [number, number] {
-  const dx = target[0] - start[0]
-  const dy = target[1] - start[1]
+  const dx = target[0] - start[0];
+  const dy = target[1] - start[1];
 
   if (Math.abs(dx) >= Math.abs(dy)) {
-    return [target[0], start[1]]
+    return [target[0], start[1]];
   }
 
-  return [start[0], target[1]]
-}
-
-function leftEndpointAnchor(wall: {
-  position: [number, number]
-  angle: number
-  length: number
-}): 'start' | 'end' {
-  const start: [number, number] = [wall.position[0], wall.position[1]]
-  const end = wallEndPoint(wall)
-  if (start[0] < end[0]) return 'start'
-  if (start[0] > end[0]) return 'end'
-  return start[1] <= end[1] ? 'start' : 'end'
+  return [start[0], target[1]];
 }
 
 /** Get the end-point of a wall (start + direction * length) */
-function wallEndPoint(wall: { position: [number, number]; angle: number; length: number }): [number, number] {
+function wallEndPoint(wall: {
+  position: [number, number];
+  angle: number;
+  length: number;
+}): [number, number] {
   return [
     wall.position[0] + Math.cos(wall.angle) * wall.length,
     wall.position[1] + Math.sin(wall.angle) * wall.length,
-  ]
+  ];
 }
 
 /** Compute all vertices from the wall chain */
-const drawWalls = computed(() => (hasStartedDrawSession.value ? roomStore.walls : []))
+const drawWalls = computed(() =>
+  hasStartedDrawSession.value ? roomStore.walls : [],
+);
 
 /** Compute all vertices from the wall chain */
 const wallVertices = computed(() => {
   if (drawWalls.value.length === 0) {
-    return pendingStartVertex.value ? [pendingStartVertex.value] : []
+    return pendingStartVertex.value ? [pendingStartVertex.value] : [];
   }
 
-  const verts: [number, number][] = []
+  const verts: [number, number][] = [];
   for (const wall of drawWalls.value) {
-    verts.push([wall.position[0], wall.position[1]])
+    verts.push([wall.position[0], wall.position[1]]);
   }
   // Add the end of the last wall
   if (drawWalls.value.length > 0) {
-    const last = drawWalls.value[drawWalls.value.length - 1]!
-    verts.push(wallEndPoint(last))
+    const last = drawWalls.value[drawWalls.value.length - 1]!;
+    verts.push(wallEndPoint(last));
   }
-  return verts
-})
+  return verts;
+});
 
 const chainEndVertex = computed<[number, number] | null>(() => {
-  if (drawWalls.value.length === 0) return null
-  const last = drawWalls.value[drawWalls.value.length - 1]!
-  return wallEndPoint(last)
-})
+  if (drawWalls.value.length === 0) return null;
+  const last = drawWalls.value[drawWalls.value.length - 1]!;
+  return wallEndPoint(last);
+});
 
 const previewWall = computed<{
-  position: [number, number]
-  angle: number
-  length: number
+  position: [number, number];
+  angle: number;
+  length: number;
 } | null>(() => {
-  if (!isDrawing.value || !lastVertex.value) return null
-  const [sx, sy] = lastVertex.value
-  const ex = mousePos.x
-  const ey = mousePos.y
-  const dx = ex - sx
-  const dy = ey - sy
-  const length = Math.hypot(dx, dy)
-  if (length < 1) return null
+  if (!isDrawing.value || !lastVertex.value) return null;
+  const [sx, sy] = lastVertex.value;
+  const ex = mousePos.x;
+  const ey = mousePos.y;
+  const dx = ex - sx;
+  const dy = ey - sy;
+  const length = Math.hypot(dx, dy);
+  if (length < 1) return null;
   return {
     position: [sx, sy],
     angle: Math.atan2(dy, dx),
     length,
-  }
-})
+  };
+});
 
 /** The current last vertex (end of last wall, or nothing) */
 const lastVertex = computed(() => {
-  if (pendingStartVertex.value) return pendingStartVertex.value
-  if (drawWalls.value.length === 0) return null
-  const last = drawWalls.value[drawWalls.value.length - 1]!
-  return wallEndPoint(last)
-})
+  if (pendingStartVertex.value) return pendingStartVertex.value;
+  if (drawWalls.value.length === 0) return null;
+  const last = drawWalls.value[drawWalls.value.length - 1]!;
+  return wallEndPoint(last);
+});
 
 /** First vertex */
 const firstVertex = computed(() => {
-  if (drawWalls.value.length === 0) return pendingStartVertex.value
-  return drawWalls.value[0]!.position
-})
+  if (drawWalls.value.length === 0) return pendingStartVertex.value;
+  return drawWalls.value[0]!.position;
+});
 
 /** Is the mouse near enough to the first vertex to close? */
 const isNearFirstVertex = computed(() => {
-  if (!lastVertex.value || !firstVertex.value || drawWalls.value.length < 2) return false
-  const dx = mousePos.x - firstVertex.value[0]
-  const dy = mousePos.y - firstVertex.value[1]
-  return Math.sqrt(dx * dx + dy * dy) < CLOSE_THRESHOLD
-})
+  if (!lastVertex.value || !firstVertex.value || drawWalls.value.length < 2)
+    return false;
+  const dx = mousePos.x - firstVertex.value[0];
+  const dy = mousePos.y - firstVertex.value[1];
+  return Math.sqrt(dx * dx + dy * dy) < CLOSE_THRESHOLD;
+});
 
 /** Points that should be visible while drawing (walls + live cursor). */
 const hasPlacedDrawPoint = computed(
   () => !!pendingStartVertex.value || drawWalls.value.length > 0,
-)
+);
 
 const drawBoundsPoints = computed<[number, number][]>(() => {
-  const points = [...wallVertices.value]
+  const points = [...wallVertices.value];
   // Keep the canvas stable until the first anchor is placed.
   if (isDrawing.value && hasPlacedDrawPoint.value) {
-    points.push([mousePos.x, mousePos.y])
+    points.push([mousePos.x, mousePos.y]);
   }
-  return points
-})
+  return points;
+});
 
 /** SVG viewBox for draw mode — auto-fit to content */
 const drawViewBox = computed(() => {
-  const verts = drawBoundsPoints.value
+  const verts = drawBoundsPoints.value;
   if (verts.length === 0) {
     // Empty canvas — large workspace
-    return '-240 -240 480 480'
+    return "-240 -240 480 480";
   }
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   for (const [x, y] of verts) {
-    minX = Math.min(minX, x)
-    minY = Math.min(minY, y)
-    maxX = Math.max(maxX, x)
-    maxY = Math.max(maxY, y)
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
   }
-  const pad = 80
-  const w = Math.max(maxX - minX + pad * 2, 220)
-  const h = Math.max(maxY - minY + pad * 2, 220)
-  return `${minX - pad} ${minY - pad} ${w} ${h}`
-})
+  const pad = 80;
+  const w = Math.max(maxX - minX + pad * 2, 220);
+  const h = Math.max(maxY - minY + pad * 2, 220);
+  return `${minX - pad} ${minY - pad} ${w} ${h}`;
+});
 
 /** Start drawing mode */
 function enterDrawMode() {
-  floorPlanMode.value = 'draw'
-  hasStartedDrawSession.value = false
-  isClosed.value = false
-  isDrawing.value = false
-  selectedWallId.value = null
-  selectedWallAnchor.value = null
-  selectedWallAnchorType.value = 'start'
-  pendingStartVertex.value = null
+  floorPlanMode.value = "draw";
+  hasStartedDrawSession.value = false;
+  isClosed.value = false;
+  isDrawing.value = false;
+  selectedWallId.value = null;
+  selectedWallAnchor.value = null;
+  selectedWallAnchorType.value = "start";
+  pendingStartVertex.value = null;
 }
 
 /** Switch back to quick room mode */
 function enterQuickMode() {
-  floorPlanMode.value = 'quick'
-  hasStartedDrawSession.value = false
+  floorPlanMode.value = "quick";
+  hasStartedDrawSession.value = false;
   // Reset to default rectangular room
-  const defaultRoom = createDefaultRoom()
-  roomStore.setRoom(defaultRoom)
-  roomStore.closetOffsetX = 0
-  roomStore.closetOffsetY = 0
-  roomStore.closetOffsetZ = 0
-  selectedWallId.value = null
-  selectedWallAnchor.value = null
-  selectedWallAnchorType.value = 'start'
-  pendingStartVertex.value = null
+  const defaultRoom = createDefaultRoom();
+  roomStore.setRoom(defaultRoom);
+  roomStore.closetOffsetX = 0;
+  roomStore.closetOffsetY = 0;
+  roomStore.closetOffsetZ = 0;
+  selectedWallId.value = null;
+  selectedWallAnchor.value = null;
+  selectedWallAnchorType.value = "start";
+  pendingStartVertex.value = null;
 }
 
 /** Start fresh drawing */
 function startFreshDraw() {
-  hasStartedDrawSession.value = true
-  roomStore.startDrawWalls()
-  isDrawing.value = true
-  isClosed.value = false
-  selectedWallId.value = null
-  selectedWallAnchor.value = null
-  selectedWallAnchorType.value = 'start'
-  pendingStartVertex.value = null
+  hasStartedDrawSession.value = true;
+  roomStore.startDrawWalls();
+  isDrawing.value = true;
+  isClosed.value = false;
+  selectedWallId.value = null;
+  selectedWallAnchor.value = null;
+  selectedWallAnchorType.value = "start";
+  pendingStartVertex.value = null;
 }
 
 function continueDrawing() {
   if (drawWalls.value.length === 0 && !pendingStartVertex.value) {
-    startFreshDraw()
-    return
+    startFreshDraw();
+    return;
   }
 
   if (selectedWall.value && selectedWallAnchor.value) {
     pendingStartVertex.value = [
       snapToGrid(selectedWallAnchor.value[0]),
       snapToGrid(selectedWallAnchor.value[1]),
-    ]
-    mousePos.x = pendingStartVertex.value[0]
-    mousePos.y = pendingStartVertex.value[1]
+    ];
+    mousePos.x = pendingStartVertex.value[0];
+    mousePos.y = pendingStartVertex.value[1];
   } else if (selectedWall.value) {
-    const end = wallEndPoint(selectedWall.value)
-    pendingStartVertex.value = [snapToGrid(end[0]), snapToGrid(end[1])]
-    mousePos.x = pendingStartVertex.value[0]
-    mousePos.y = pendingStartVertex.value[1]
+    const end = wallEndPoint(selectedWall.value);
+    pendingStartVertex.value = [snapToGrid(end[0]), snapToGrid(end[1])];
+    mousePos.x = pendingStartVertex.value[0];
+    mousePos.y = pendingStartVertex.value[1];
   } else if (chainEndVertex.value) {
     pendingStartVertex.value = [
       snapToGrid(chainEndVertex.value[0]),
       snapToGrid(chainEndVertex.value[1]),
-    ]
-    mousePos.x = pendingStartVertex.value[0]
-    mousePos.y = pendingStartVertex.value[1]
+    ];
+    mousePos.x = pendingStartVertex.value[0];
+    mousePos.y = pendingStartVertex.value[1];
   } else {
-    pendingStartVertex.value = null
+    pendingStartVertex.value = null;
   }
 
-  hasStartedDrawSession.value = true
-  isDrawing.value = true
-  isClosed.value = false
-  selectedWallId.value = null
-  selectedWallAnchor.value = null
-  selectedWallAnchorType.value = 'start'
+  hasStartedDrawSession.value = true;
+  isDrawing.value = true;
+  isClosed.value = false;
+  selectedWallId.value = null;
+  selectedWallAnchor.value = null;
+  selectedWallAnchorType.value = "start";
 }
 
 function undoDrawStep() {
   if (roomStore.walls.length > 0) {
-    roomStore.removeLastWall()
+    roomStore.removeLastWall();
     if (roomStore.walls.length === 0 && !pendingStartVertex.value) {
-      isDrawing.value = false
+      isDrawing.value = false;
     }
-    return
+    return;
   }
   if (pendingStartVertex.value) {
-    pendingStartVertex.value = null
-    isDrawing.value = false
+    pendingStartVertex.value = null;
+    isDrawing.value = false;
   }
 }
 
 /** Handle canvas click in draw mode */
 function onDrawCanvasClick(e: MouseEvent) {
-  if (isClosed.value || !svgRef.value) return
+  if (isClosed.value || !svgRef.value) return;
 
   // Drawing must be explicitly started from controls (Start Drawing / Add Wall).
   if (!isDrawing.value) {
-    return
+    return;
   }
 
-  const pt = screenToSvg(svgRef.value, e.clientX, e.clientY)
-  let sx = snapToGrid(pt.x)
-  let sy = snapToGrid(pt.y)
+  const pt = screenToSvg(svgRef.value, e.clientX, e.clientY);
+  let sx = snapToGrid(pt.x);
+  let sy = snapToGrid(pt.y);
 
   if (!pendingStartVertex.value && drawWalls.value.length === 0) {
-    pendingStartVertex.value = [sx, sy]
-    mousePos.x = sx
-    mousePos.y = sy
-    return
+    pendingStartVertex.value = [sx, sy];
+    mousePos.x = sx;
+    mousePos.y = sy;
+    return;
   }
 
   if (lastVertex.value) {
-    const snapped = snapPointToOrthogonal(lastVertex.value, [sx, sy])
-    sx = snapToGrid(snapped[0])
-    sy = snapToGrid(snapped[1])
+    const snapped = snapPointToOrthogonal(lastVertex.value, [sx, sy]);
+    sx = snapToGrid(snapped[0]);
+    sy = snapToGrid(snapped[1]);
   }
 
   // The first click after choosing a start vertex must always draw from that start.
@@ -775,208 +773,225 @@ function onDrawCanvasClick(e: MouseEvent) {
       sy,
       drawWallThicknessInput.value,
       pendingStartVertex.value,
-    )
-    pendingStartVertex.value = null
-    return
+    );
+    pendingStartVertex.value = null;
+    return;
   }
 
   // Check if we should close the polygon
   if (isNearFirstVertex.value && firstVertex.value) {
-    roomStore.closeRoom(drawWallThicknessInput.value)
-    isDrawing.value = false
-    isClosed.value = true
-    pendingStartVertex.value = null
-    return
+    roomStore.closeRoom(drawWallThicknessInput.value);
+    isDrawing.value = false;
+    isClosed.value = true;
+    pendingStartVertex.value = null;
+    return;
   }
 
-  roomStore.addWallVertex(sx, sy, drawWallThicknessInput.value)
+  roomStore.addWallVertex(sx, sy, drawWallThicknessInput.value);
 }
 
 /** Handle mouse move in draw mode */
 function onDrawMouseMove(e: MouseEvent) {
-  if (!svgRef.value) return
-  const pt = screenToSvg(svgRef.value, e.clientX, e.clientY)
-  let sx = snapToGrid(pt.x)
-  let sy = snapToGrid(pt.y)
+  if (!svgRef.value) return;
+  const pt = screenToSvg(svgRef.value, e.clientX, e.clientY);
+  let sx = snapToGrid(pt.x);
+  let sy = snapToGrid(pt.y);
 
   if (lastVertex.value && isDrawing.value) {
-    const snapped = snapPointToOrthogonal(lastVertex.value, [sx, sy])
-    sx = snapToGrid(snapped[0])
-    sy = snapToGrid(snapped[1])
+    const snapped = snapPointToOrthogonal(lastVertex.value, [sx, sy]);
+    sx = snapToGrid(snapped[0]);
+    sy = snapToGrid(snapped[1]);
   }
 
-  mousePos.x = sx
-  mousePos.y = sy
+  mousePos.x = sx;
+  mousePos.y = sy;
 }
 
 /** Handle Escape key — undo last wall segment */
 function onDrawKeyDown(e: KeyboardEvent) {
-  if (floorPlanMode.value !== 'draw') return
-  if (e.key === 'Escape') {
+  if (floorPlanMode.value !== "draw") return;
+  if (e.key === "Escape") {
     if (isDrawing.value) {
-      isDrawing.value = false
-      pendingStartVertex.value = null
-      selectedWallId.value = null
-      selectedWallAnchor.value = null
-      selectedWallAnchorType.value = 'start'
+      isDrawing.value = false;
+      pendingStartVertex.value = null;
+      selectedWallId.value = null;
+      selectedWallAnchor.value = null;
+      selectedWallAnchorType.value = "start";
     }
   }
 }
 
 onMounted(() => {
-  document.addEventListener('keydown', onDrawKeyDown)
-})
+  document.addEventListener("keydown", onDrawKeyDown);
+});
 onUnmounted(() => {
-  document.removeEventListener('keydown', onDrawKeyDown)
-})
+  document.removeEventListener("keydown", onDrawKeyDown);
+});
 
 /** Select a wall in draw mode */
 function selectWall(wallId: string, e: MouseEvent) {
-  e.stopPropagation()
-  selectedWallId.value = wallId
+  e.stopPropagation();
+  selectedWallId.value = wallId;
 
-  const wall = drawWalls.value.find((w) => w.id === wallId)
+  const wall = drawWalls.value.find((w) => w.id === wallId);
   if (!wall || !svgRef.value) {
-    selectedWallAnchor.value = null
-    return
+    selectedWallAnchor.value = null;
+    return;
   }
 
-  const pt = screenToSvg(svgRef.value, e.clientX, e.clientY)
-  const start: [number, number] = [wall.position[0], wall.position[1]]
-  const end = wallEndPoint(wall)
-  const dStart = Math.hypot(pt.x - start[0], pt.y - start[1])
-  const dEnd = Math.hypot(pt.x - end[0], pt.y - end[1])
+  const pt = screenToSvg(svgRef.value, e.clientX, e.clientY);
+  const start: [number, number] = [wall.position[0], wall.position[1]];
+  const end = wallEndPoint(wall);
+  const dStart = Math.hypot(pt.x - start[0], pt.y - start[1]);
+  const dEnd = Math.hypot(pt.x - end[0], pt.y - end[1]);
   if (dStart <= dEnd) {
-    selectedWallAnchor.value = start
-    selectedWallAnchorType.value = 'start'
+    selectedWallAnchor.value = start;
+    selectedWallAnchorType.value = "start";
   } else {
-    selectedWallAnchor.value = end
-    selectedWallAnchorType.value = 'end'
+    selectedWallAnchor.value = end;
+    selectedWallAnchorType.value = "end";
   }
 }
 
 /** Deselect wall */
 function deselectWall() {
-  selectedWallId.value = null
-  selectedWallAnchor.value = null
-  selectedWallAnchorType.value = 'start'
+  selectedWallId.value = null;
+  selectedWallAnchor.value = null;
+  selectedWallAnchorType.value = "start";
 }
 
 function removeSelectedWall() {
-  if (!selectedWall.value) return
+  if (!selectedWall.value) return;
 
-  const selectedId = selectedWall.value.id
-  const beforeLen = drawWalls.value.length
-  roomStore.removeWall(selectedId)
+  const selectedId = selectedWall.value.id;
+  const beforeLen = drawWalls.value.length;
+  roomStore.removeWall(selectedId);
 
   // Fallback: ensure removal even if action couldn't resolve by id.
   if (drawWalls.value.length === beforeLen) {
-    const nextWalls = drawWalls.value.filter((w) => w.id !== selectedId)
+    const nextWalls = drawWalls.value.filter((w) => w.id !== selectedId);
     if (nextWalls.length !== beforeLen) {
-      roomStore.setRoomFromWalls(nextWalls)
+      roomStore.setRoomFromWalls(nextWalls);
       nextWalls.forEach((wall, i) => {
-        roomStore.updateWallProps(wall.id, { label: String(i + 1) })
-      })
+        roomStore.updateWallProps(wall.id, { label: String(i + 1) });
+      });
     }
   }
 
-  selectedWallId.value = null
-  selectedWallAnchor.value = null
-  selectedWallAnchorType.value = 'start'
-  isClosed.value = false
+  selectedWallId.value = null;
+  selectedWallAnchor.value = null;
+  selectedWallAnchorType.value = "start";
+  isClosed.value = false;
 
   if (drawWalls.value.length === 0) {
-    isDrawing.value = false
-    pendingStartVertex.value = null
+    isDrawing.value = false;
+    pendingStartVertex.value = null;
   }
 }
 
 /** Selected wall object */
 const selectedWall = computed(() => {
-  if (!selectedWallId.value) return null
-  return drawWalls.value.find(w => w.id === selectedWallId.value) ?? null
-})
+  if (!selectedWallId.value) return null;
+  return drawWalls.value.find((w) => w.id === selectedWallId.value) ?? null;
+});
 
 /** Computed angle in degrees for display */
 const selectedWallAngleDeg = computed(() => {
-  if (!selectedWall.value) return 0
-  return Math.round(radToDeg(selectedWall.value.angle))
-})
+  if (!selectedWall.value) return 0;
+  return Math.round(radToDeg(selectedWall.value.angle));
+});
 
 function setSelectedWallAngleDeg(angleDeg: number) {
-  if (!selectedWall.value || !Number.isFinite(angleDeg)) return
+  if (!selectedWall.value || !Number.isFinite(angleDeg)) return;
 
   if (roomStore.roomIsClosed) {
     // For a closed room: compute delta from the selected wall's current angle
     // so the input field acts as an absolute room orientation target.
-    const currentDeg = radToDeg(selectedWall.value.angle)
-    const delta = angleDeg - currentDeg
-    roomStore.rotateClosedRoom(degToRad(delta))
+    const currentDeg = radToDeg(selectedWall.value.angle);
+    const delta = angleDeg - currentDeg;
+    roomStore.rotateClosedRoom(degToRad(delta));
   } else {
-    const anchor = leftEndpointAnchor(selectedWall.value)
-    roomStore.setWallAngle(
-      selectedWall.value.id,
-      degToRad(angleDeg),
-      anchor,
-    )
+    // Open chain: always pivot around the wall's START (the junction with the
+    // previous wall). This rotates only the selected wall's free end — nothing
+    // else translates. Using 'end' anchor was incorrectly translating all
+    // preceding walls when rotating upward/leftward walls.
+    roomStore.setWallAngle(selectedWall.value.id, degToRad(angleDeg), "start");
   }
 }
 
 function onSelectedWallAngleInput(e: Event) {
-  const next = Number((e.target as HTMLInputElement).value)
-  if (!Number.isFinite(next)) return
-  setSelectedWallAngleDeg(next)
+  const next = Number((e.target as HTMLInputElement).value);
+  if (!Number.isFinite(next)) return;
+  setSelectedWallAngleDeg(next);
 }
 
 function rotateSelectedWall(deltaDeg: number) {
-  if (!selectedWall.value) return
+  if (!selectedWall.value) return;
   if (roomStore.roomIsClosed) {
-    roomStore.rotateClosedRoom(degToRad(deltaDeg))
+    roomStore.rotateClosedRoom(degToRad(deltaDeg));
   } else {
-    setSelectedWallAngleDeg(radToDeg(selectedWall.value.angle) + deltaDeg)
+    setSelectedWallAngleDeg(radToDeg(selectedWall.value.angle) + deltaDeg);
   }
 }
 
 /** Wall midpoint for label placement */
-function wallMidpoint(wall: { position: [number, number]; angle: number; length: number }): [number, number] {
+function wallMidpoint(wall: {
+  position: [number, number];
+  angle: number;
+  length: number;
+}): [number, number] {
   return [
-    wall.position[0] + Math.cos(wall.angle) * wall.length / 2,
-    wall.position[1] + Math.sin(wall.angle) * wall.length / 2,
-  ]
+    wall.position[0] + (Math.cos(wall.angle) * wall.length) / 2,
+    wall.position[1] + (Math.sin(wall.angle) * wall.length) / 2,
+  ];
 }
 
 /** Compute the filled polygon outline for a thick wall segment */
-function wallPolygonPoints(wall: { position: [number, number]; angle: number; length: number; thickness: number }): string {
-  const t = wall.thickness / 2
-  const perpAngle = wall.angle + Math.PI / 2
-  const cos = Math.cos(perpAngle) * t
-  const sin = Math.sin(perpAngle) * t
-  const end = wallEndPoint(wall)
+function wallPolygonPoints(wall: {
+  position: [number, number];
+  angle: number;
+  length: number;
+  thickness: number;
+}): string {
+  const t = wall.thickness / 2;
+  const perpAngle = wall.angle + Math.PI / 2;
+  const cos = Math.cos(perpAngle) * t;
+  const sin = Math.sin(perpAngle) * t;
+  const end = wallEndPoint(wall);
   // Four corners: start±perp, end±perp
-  const p1 = [wall.position[0] + cos, wall.position[1] + sin]
-  const p2 = [wall.position[0] - cos, wall.position[1] - sin]
-  const p3 = [end[0] - cos, end[1] - sin]
-  const p4 = [end[0] + cos, end[1] + sin]
-  return `${p1[0]},${p1[1]} ${p2[0]},${p2[1]} ${p3[0]},${p3[1]} ${p4[0]},${p4[1]}`
+  const p1 = [wall.position[0] + cos, wall.position[1] + sin];
+  const p2 = [wall.position[0] - cos, wall.position[1] - sin];
+  const p3 = [end[0] - cos, end[1] - sin];
+  const p4 = [end[0] + cos, end[1] + sin];
+  return `${p1[0]},${p1[1]} ${p2[0]},${p2[1]} ${p3[0]},${p3[1]} ${p4[0]},${p4[1]}`;
 }
 
 /** Format length for display */
 function formatLength(cm: number): string {
-  const totalIn = cm / 2.54
-  const ft = Math.floor(totalIn / 12)
-  const inches = Math.round(totalIn % 12)
-  return `${ft}' ${inches}\"`
+  const totalIn = cm / 2.54;
+  const ft = Math.floor(totalIn / 12);
+  const inches = Math.round(totalIn % 12);
+  return `${ft}' ${inches}\"`;
 }
 
 /** Dimension line offset perpendicular to the wall */
-function dimLinePoints(wall: { position: [number, number]; angle: number; length: number }): {
-  x1: number; y1: number; x2: number; y2: number; tx: number; ty: number
+function dimLinePoints(wall: {
+  position: [number, number];
+  angle: number;
+  length: number;
+}): {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  tx: number;
+  ty: number;
 } {
-  const offset = 20
-  const perpAngle = wall.angle - Math.PI / 2
-  const cos = Math.cos(perpAngle) * offset
-  const sin = Math.sin(perpAngle) * offset
-  const end = wallEndPoint(wall)
+  const offset = 20;
+  const perpAngle = wall.angle - Math.PI / 2;
+  const cos = Math.cos(perpAngle) * offset;
+  const sin = Math.sin(perpAngle) * offset;
+  const end = wallEndPoint(wall);
   return {
     x1: wall.position[0] + cos,
     y1: wall.position[1] + sin,
@@ -984,7 +999,7 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
     y2: end[1] + sin,
     tx: (wall.position[0] + end[0]) / 2 + cos * 1.6,
     ty: (wall.position[1] + end[1]) / 2 + sin * 1.6,
-  }
+  };
 }
 </script>
 
@@ -1052,7 +1067,10 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
 
             <!-- Drawing controls -->
             <div v-if="!isClosed" class="draw-controls">
-              <button class="sidebar-action-btn draw-btn" @click="startFreshDraw">
+              <button
+                class="sidebar-action-btn draw-btn"
+                @click="startFreshDraw"
+              >
                 🖊 Start Drawing
               </button>
 
@@ -1065,20 +1083,24 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
               </button>
 
               <button
-                v-if="isDrawing && (roomStore.walls.length > 0 || pendingStartVertex)"
+                v-if="
+                  isDrawing &&
+                  (roomStore.walls.length > 0 || pendingStartVertex)
+                "
                 class="sidebar-action-btn undo-btn"
                 @click="undoDrawStep"
               >
                 ↩ Undo Last Wall
               </button>
               <p class="draw-hint" v-if="isDrawing">
-                Click on the canvas to place wall vertices.<br/>
-                Click near the <strong>first point</strong> to close the room.<br/>
+                Click on the canvas to place wall vertices.<br />
+                Click near the <strong>first point</strong> to close the
+                room.<br />
                 Press <kbd>Esc</kbd> to finish drawing.
               </p>
               <p class="draw-hint" v-else-if="drawWalls.length > 0">
-                Click <strong>Add Wall</strong> to continue from the last wall endpoint,
-                or <strong>Start Drawing</strong> to clear and redraw.
+                Click <strong>Add Wall</strong> to continue from the last wall
+                endpoint, or <strong>Start Drawing</strong> to clear and redraw.
               </p>
               <p class="draw-hint" v-else>
                 Click "Start Drawing" to begin placing walls.
@@ -1090,10 +1112,16 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
               <p class="draw-hint draw-complete">
                 ✅ Room complete — {{ roomStore.walls.length }} walls
               </p>
-              <button class="sidebar-action-btn draw-btn" @click="continueDrawing">
+              <button
+                class="sidebar-action-btn draw-btn"
+                @click="continueDrawing"
+              >
                 ✏ Add Wall
               </button>
-              <button class="sidebar-action-btn draw-btn" @click="startFreshDraw">
+              <button
+                class="sidebar-action-btn draw-btn"
+                @click="startFreshDraw"
+              >
                 🗑 Clear & Redraw
               </button>
             </div>
@@ -1107,7 +1135,12 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
                 <input
                   class="prop-input"
                   :value="selectedWall.label"
-                  @input="(e: Event) => roomStore.updateWallProps(selectedWall!.id, { label: (e.target as HTMLInputElement).value })"
+                  @input="
+                    (e: Event) =>
+                      roomStore.updateWallProps(selectedWall!.id, {
+                        label: (e.target as HTMLInputElement).value,
+                      })
+                  "
                 />
               </div>
 
@@ -1117,13 +1150,28 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
                   class="prop-input"
                   type="number"
                   :value="selectedWall.length"
-                  @input="(e: Event) => roomStore.updateWallProps(selectedWall!.id, { length: Number((e.target as HTMLInputElement).value) })"
+                  @input="
+                    (e: Event) =>
+                      roomStore.updateWallProps(selectedWall!.id, {
+                        length: Number((e.target as HTMLInputElement).value),
+                      })
+                  "
                 />
               </div>
 
               <div class="prop-row">
                 <label class="prop-label">Height</label>
-                <input class="prop-input" type="number" :value="roomStore.height" @input="(e: Event) => roomStore.setHeight(Number((e.target as HTMLInputElement).value))" />
+                <input
+                  class="prop-input"
+                  type="number"
+                  :value="roomStore.height"
+                  @input="
+                    (e: Event) =>
+                      roomStore.setHeight(
+                        Number((e.target as HTMLInputElement).value),
+                      )
+                  "
+                />
               </div>
 
               <div class="prop-row">
@@ -1132,12 +1180,19 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
                   class="prop-input"
                   type="number"
                   :value="selectedWall.thickness"
-                  @input="(e: Event) => roomStore.updateWallProps(selectedWall!.id, { thickness: Number((e.target as HTMLInputElement).value) })"
+                  @input="
+                    (e: Event) =>
+                      roomStore.updateWallProps(selectedWall!.id, {
+                        thickness: Number((e.target as HTMLInputElement).value),
+                      })
+                  "
                 />
               </div>
 
               <div class="prop-row">
-                <label class="prop-label">{{ isClosed ? 'Rotate Room' : 'Angle' }}</label>
+                <label class="prop-label">{{
+                  isClosed ? "Rotate Room" : "Angle"
+                }}</label>
                 <div class="angle-controls">
                   <button
                     type="button"
@@ -1170,7 +1225,12 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
                 <input
                   type="checkbox"
                   :checked="selectedWall.visible"
-                  @change="(e: Event) => roomStore.updateWallProps(selectedWall!.id, { visible: (e.target as HTMLInputElement).checked })"
+                  @change="
+                    (e: Event) =>
+                      roomStore.updateWallProps(selectedWall!.id, {
+                        visible: (e.target as HTMLInputElement).checked,
+                      })
+                  "
                 />
               </div>
 
@@ -1194,50 +1254,50 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
 
           <!-- ========== QUICK ROOM SIDEBAR (original) ========== -->
           <template v-else>
-          <h3 class="sidebar-heading">Add Architecture</h3>
+            <h3 class="sidebar-heading">Add Architecture</h3>
 
-          <button class="sidebar-action-btn" @click="openHeightDialog">
-            Change Room Height ({{ cmToImperial(roomStore.height) }})
-          </button>
-
-          <h4 class="sidebar-subheading">Add Door</h4>
-          <div class="item-grid">
-            <button
-              class="item-card"
-              v-for="def in DOOR_ITEMS"
-              :key="def.type"
-              @click="addArchItem(def)"
-            >
-              <div class="item-icon">{{ def.icon }}</div>
-              <span class="item-label">{{ itemLabel(def.type) }}</span>
+            <button class="sidebar-action-btn" @click="openHeightDialog">
+              Change Room Height ({{ cmToImperial(roomStore.height) }})
             </button>
-          </div>
 
-          <h4 class="sidebar-subheading">Add Architecture</h4>
-          <div class="item-grid">
-            <button
-              class="item-card"
-              v-for="def in ARCH_ITEMS"
-              :key="def.type"
-              @click="addArchItem(def)"
-            >
-              <div class="item-icon">{{ def.icon }}</div>
-              <span class="item-label">{{ itemLabel(def.type) }}</span>
-            </button>
-          </div>
+            <h4 class="sidebar-subheading">Add Door</h4>
+            <div class="item-grid">
+              <button
+                class="item-card"
+                v-for="def in DOOR_ITEMS"
+                :key="def.type"
+                @click="addArchItem(def)"
+              >
+                <div class="item-icon">{{ def.icon }}</div>
+                <span class="item-label">{{ itemLabel(def.type) }}</span>
+              </button>
+            </div>
 
-          <h4 class="sidebar-subheading">Add Wall Decorator</h4>
-          <div class="item-grid">
-            <button
-              class="item-card"
-              v-for="def in DECO_ITEMS"
-              :key="def.type"
-              @click="addArchItem(def)"
-            >
-              <div class="item-icon">{{ def.icon }}</div>
-              <span class="item-label">{{ itemLabel(def.type) }}</span>
-            </button>
-          </div>
+            <h4 class="sidebar-subheading">Add Architecture</h4>
+            <div class="item-grid">
+              <button
+                class="item-card"
+                v-for="def in ARCH_ITEMS"
+                :key="def.type"
+                @click="addArchItem(def)"
+              >
+                <div class="item-icon">{{ def.icon }}</div>
+                <span class="item-label">{{ itemLabel(def.type) }}</span>
+              </button>
+            </div>
+
+            <h4 class="sidebar-subheading">Add Wall Decorator</h4>
+            <div class="item-grid">
+              <button
+                class="item-card"
+                v-for="def in DECO_ITEMS"
+                :key="def.type"
+                @click="addArchItem(def)"
+              >
+                <div class="item-icon">{{ def.icon }}</div>
+                <span class="item-label">{{ itemLabel(def.type) }}</span>
+              </button>
+            </div>
           </template>
         </div>
       </aside>
@@ -1541,25 +1601,65 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
           >
             <!-- Grid pattern -->
             <defs>
-              <pattern id="drawGrid" :width="GRID_SIZE" :height="GRID_SIZE" patternUnits="userSpaceOnUse">
-                <circle :cx="GRID_SIZE/2" :cy="GRID_SIZE/2" r="0.5" fill="rgba(148,163,184,0.15)" />
+              <pattern
+                id="drawGrid"
+                :width="GRID_SIZE"
+                :height="GRID_SIZE"
+                patternUnits="userSpaceOnUse"
+              >
+                <circle
+                  :cx="GRID_SIZE / 2"
+                  :cy="GRID_SIZE / 2"
+                  r="0.5"
+                  fill="rgba(148,163,184,0.15)"
+                />
               </pattern>
               <!-- Arrow markers for dimensions -->
-              <marker id="dimArrowR" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
-                <path d="M0,0 L8,4 L0,8" fill="none" stroke="#94a3b8" stroke-width="1" />
+              <marker
+                id="dimArrowR"
+                markerWidth="8"
+                markerHeight="8"
+                refX="6"
+                refY="4"
+                orient="auto"
+              >
+                <path
+                  d="M0,0 L8,4 L0,8"
+                  fill="none"
+                  stroke="#94a3b8"
+                  stroke-width="1"
+                />
               </marker>
-              <marker id="dimArrowL" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto">
-                <path d="M8,0 L0,4 L8,8" fill="none" stroke="#94a3b8" stroke-width="1" />
+              <marker
+                id="dimArrowL"
+                markerWidth="8"
+                markerHeight="8"
+                refX="2"
+                refY="4"
+                orient="auto"
+              >
+                <path
+                  d="M8,0 L0,4 L8,8"
+                  fill="none"
+                  stroke="#94a3b8"
+                  stroke-width="1"
+                />
               </marker>
             </defs>
 
             <!-- Background grid -->
-            <rect x="-2000" y="-2000" width="4000" height="4000" fill="url(#drawGrid)" />
+            <rect
+              x="-2000"
+              y="-2000"
+              width="4000"
+              height="4000"
+              fill="url(#drawGrid)"
+            />
 
             <!-- Filled room polygon (floor) -->
             <polygon
               v-if="drawWalls.length >= 3"
-              :points="wallVertices.map(v => v.join(',')).join(' ')"
+              :points="wallVertices.map((v) => v.join(',')).join(' ')"
               fill="#d4c9b8"
               fill-opacity="0.15"
               stroke="none"
@@ -1592,7 +1692,9 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
               />
 
               <!-- Wall label (number) -->
-              <g :transform="`translate(${wallMidpoint(wall)[0]}, ${wallMidpoint(wall)[1]})`">
+              <g
+                :transform="`translate(${wallMidpoint(wall)[0]}, ${wallMidpoint(wall)[1]})`"
+              >
                 <circle
                   r="10"
                   :fill="wall.hasCloset ? '#22c55e' : '#f59e0b'"
@@ -1605,7 +1707,9 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
                   fill="#0f172a"
                   font-size="9"
                   font-weight="700"
-                >{{ wall.label }}</text>
+                >
+                  {{ wall.label }}
+                </text>
               </g>
 
               <!-- Dimension annotation -->
@@ -1627,7 +1731,9 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
                 fill="#e2e8f0"
                 font-size="9"
                 font-weight="600"
-              >{{ formatLength(wall.length) }}</text>
+              >
+                {{ formatLength(wall.length) }}
+              </text>
             </g>
 
             <!-- Vertices (dots at each corner) -->
@@ -1678,7 +1784,9 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
               font-size="9"
               font-weight="700"
               pointer-events="none"
-            >{{ formatLength(previewWall.length) }}</text>
+            >
+              {{ formatLength(previewWall.length) }}
+            </text>
 
             <!-- Preview snap circle at cursor when near first vertex -->
             <circle
@@ -1700,7 +1808,8 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
           Drag corners or mid-points to resize the room
         </div>
         <div class="canvas-hint" v-else-if="isDrawing">
-          Click to place vertices · Click near first point to close · Esc to finish
+          Click to place vertices · Click near first point to close · Esc to
+          finish
         </div>
         <div class="canvas-hint" v-else-if="isClosed">
           Click a wall to select and edit · Click empty area to deselect
@@ -2277,7 +2386,9 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
 
 .wall-segment {
   cursor: pointer;
-  transition: fill 0.1s, stroke 0.1s;
+  transition:
+    fill 0.1s,
+    stroke 0.1s;
 }
 
 .wall-segment:hover {
@@ -2294,8 +2405,13 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
 }
 
 @keyframes pulse-ring {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 </style>
 
