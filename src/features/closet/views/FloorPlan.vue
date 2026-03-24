@@ -905,12 +905,21 @@ const selectedWallAngleDeg = computed(() => {
 
 function setSelectedWallAngleDeg(angleDeg: number) {
   if (!selectedWall.value || !Number.isFinite(angleDeg)) return
-  const anchor = leftEndpointAnchor(selectedWall.value)
-  roomStore.setWallAngle(
-    selectedWall.value.id,
-    degToRad(angleDeg),
-    anchor,
-  )
+
+  if (roomStore.roomIsClosed) {
+    // For a closed room: compute delta from the selected wall's current angle
+    // so the input field acts as an absolute room orientation target.
+    const currentDeg = radToDeg(selectedWall.value.angle)
+    const delta = angleDeg - currentDeg
+    roomStore.rotateClosedRoom(degToRad(delta))
+  } else {
+    const anchor = leftEndpointAnchor(selectedWall.value)
+    roomStore.setWallAngle(
+      selectedWall.value.id,
+      degToRad(angleDeg),
+      anchor,
+    )
+  }
 }
 
 function onSelectedWallAngleInput(e: Event) {
@@ -921,7 +930,11 @@ function onSelectedWallAngleInput(e: Event) {
 
 function rotateSelectedWall(deltaDeg: number) {
   if (!selectedWall.value) return
-  setSelectedWallAngleDeg(radToDeg(selectedWall.value.angle) + deltaDeg)
+  if (roomStore.roomIsClosed) {
+    roomStore.rotateClosedRoom(degToRad(deltaDeg))
+  } else {
+    setSelectedWallAngleDeg(radToDeg(selectedWall.value.angle) + deltaDeg)
+  }
 }
 
 /** Wall midpoint for label placement */
@@ -1124,13 +1137,13 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
               </div>
 
               <div class="prop-row">
-                <label class="prop-label">Angle</label>
+                <label class="prop-label">{{ isClosed ? 'Rotate Room' : 'Angle' }}</label>
                 <div class="angle-controls">
                   <button
                     type="button"
                     class="angle-btn"
                     @click="rotateSelectedWall(-1)"
-                    title="Rotate wall -1°"
+                    title="Rotate -1°"
                   >
                     -1°
                   </button>
@@ -1145,7 +1158,7 @@ function dimLinePoints(wall: { position: [number, number]; angle: number; length
                     type="button"
                     class="angle-btn"
                     @click="rotateSelectedWall(1)"
-                    title="Rotate wall +1°"
+                    title="Rotate +1°"
                   >
                     +1°
                   </button>

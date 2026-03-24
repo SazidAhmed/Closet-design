@@ -119,6 +119,16 @@ export const useRoomStore = defineStore('room', {
       state.items.filter((item) => item.wallId === null),
     planBounds: (state) => roomPlanBounds(state.walls),
     closetWall: (state) => closetWallOrFallback(state.walls),
+    /** True when every wall is connected end-to-end forming a closed polygon. */
+    roomIsClosed: (state): boolean => {
+      const n = state.walls.length
+      if (n < 3) return false
+      const first = state.walls[0]!
+      const last = state.walls[n - 1]!
+      const lastEndX = last.position[0] + Math.cos(last.angle) * last.length
+      const lastEndY = last.position[1] + Math.sin(last.angle) * last.length
+      return Math.hypot(first.position[0] - lastEndX, first.position[1] - lastEndY) < 1
+    },
   },
 
   actions: {
@@ -138,11 +148,61 @@ export const useRoomStore = defineStore('room', {
       if (wall) wall.length = length
     },
 
-    /** Rotate a wall to the provided angle in radians. */
+    /**
+     * Rotate the entire closed polygon rigidly by deltaRad around its centroid.
+     * All wall positions and angles are updated; lengths are untouched.
+     */
+    rotateClosedRoom(deltaRad: number) {
+      if (!Number.isFinite(deltaRad) || deltaRad === 0) return
+      const walls = this.walls
+      if (walls.length === 0) return
+
+      // Compute centroid of all wall start-positions
+      let cx = 0
+      let cy = 0
+      for (const w of walls) {
+        cx += w.position[0]
+        cy += w.position[1]
+      }
+      cx /= walls.length
+      cy /= walls.length
+
+      const cosD = Math.cos(deltaRad)
+      const sinD = Math.sin(deltaRad)
+
+      for (const w of walls) {
+        // Rotate position around centroid
+        const rx = w.position[0] - cx
+        const ry = w.position[1] - cy
+        w.position = [
+          cx + rx * cosD - ry * sinD,
+          cy + rx * sinD + ry * cosD,
+        ]
+        // Rotate angle
+        w.angle = Math.atan2(
+          Math.sin(w.angle + deltaRad),
+          Math.cos(w.angle + deltaRad),
+        )
+      }
+    },
+
+    /** Rotate a wall to the provided angle in radians.
+     *  For a closed polygon this rotates the ENTIRE room rigidly.
+     *  For an open chain, only the selected wall rotates (adjacent walls translate). */
     setWallAngle(wallId: string, angleRad: number, anchor: 'start' | 'end' = 'start') {
       const idx = this.walls.findIndex((w) => w.id === wallId)
       if (idx < 0 || !Number.isFinite(angleRad)) return
 
+      // ── Closed-room branch: rigid rotation of the whole polygon ────────────
+      if (this.roomIsClosed) {
+        const wall = this.walls[idx]!
+        const nextAngle = Math.atan2(Math.sin(angleRad), Math.cos(angleRad))
+        const deltaRad = nextAngle - wall.angle
+        this.rotateClosedRoom(deltaRad)
+        return
+      }
+
+      // ── Open-chain branch: original per-wall rotate logic ──────────────────
       const endPoint = (w: Room['walls'][number]): Vec2 => [
         w.position[0] + Math.cos(w.angle) * w.length,
         w.position[1] + Math.sin(w.angle) * w.length,
@@ -160,15 +220,6 @@ export const useRoomStore = defineStore('room', {
         const w = this.walls[i]!
         w.position = [w.position[0] + dx, w.position[1] + dy]
       }
-
-      const wasClosed = (() => {
-        if (this.walls.length < 3) return false
-        const first = this.walls[0]!
-        const last = this.walls[this.walls.length - 1]!
-        const lastEndX = last.position[0] + Math.cos(last.angle) * last.length
-        const lastEndY = last.position[1] + Math.sin(last.angle) * last.length
-        return Math.hypot(first.position[0] - lastEndX, first.position[1] - lastEndY) < 1
-      })()
 
       const wall = this.walls[idx]!
       const oldStart: Vec2 = [wall.position[0], wall.position[1]]
@@ -198,54 +249,24 @@ export const useRoomStore = defineStore('room', {
 
       const n = this.walls.length
       const nextIdx = (idx + 1) % n
-      const prevIdx = (idx - 1 + n) % n
       const epsilon = 1e-9
 
       if (anchor === 'start') {
         const dx = newEnd[0] - oldEnd[0]
         const dy = newEnd[1] - oldEnd[1]
-
-        if (!wasClosed || n < 3) {
-          if (Math.abs(dx) >= epsilon || Math.abs(dy) >= epsilon) {
-            for (let i = idx + 1; i < n; i += 1) {
-              translateWall(i, dx, dy)
-            }
-          }
-          return
-        }
-
         if (Math.abs(dx) >= epsilon || Math.abs(dy) >= epsilon) {
-          let i = nextIdx
-          while (i !== prevIdx) {
+          for (let i = idx + 1; i < n; i += 1) {
             translateWall(i, dx, dy)
-            i = (i + 1) % n
           }
         }
-
-        const prevPrevIdx = (prevIdx - 1 + n) % n
-        const bridgeStart = endPoint(this.walls[prevPrevIdx]!)
-        const bridgeEnd: Vec2 = [wall.position[0], wall.position[1]]
-        setWallFromPoints(this.walls[prevIdx]!, bridgeStart, bridgeEnd)
         return
       }
 
       const dx = newStart[0] - oldStart[0]
       const dy = newStart[1] - oldStart[1]
-
-      if (!wasClosed || n < 3) {
-        if (Math.abs(dx) >= epsilon || Math.abs(dy) >= epsilon) {
-          for (let i = 0; i < idx; i += 1) {
-            translateWall(i, dx, dy)
-          }
-        }
-        return
-      }
-
       if (Math.abs(dx) >= epsilon || Math.abs(dy) >= epsilon) {
-        let i = prevIdx
-        while (i !== nextIdx) {
+        for (let i = 0; i < idx; i += 1) {
           translateWall(i, dx, dy)
-          i = (i - 1 + n) % n
         }
       }
 
