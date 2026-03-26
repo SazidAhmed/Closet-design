@@ -4,7 +4,7 @@ import FooterBar from "../../../components/FooterBar.vue";
 import { useRoomStore } from "../../../stores/useRoomStore";
 import { useClosetStore } from "../../../stores/useClosetStore";
 import { useAppStore } from "../../../stores/useAppStore";
-import { onMounted, onUnmounted, computed, ref, reactive } from "vue";
+import { onMounted, onUnmounted, computed, ref, reactive, watch } from "vue";
 import {
   FLOOR_MATERIALS,
   WALL_COLORS,
@@ -627,8 +627,9 @@ const drawBoundsPoints = computed<[number, number][]>(() => {
 });
 
 /** SVG viewBox for draw mode — auto-fit to content */
-const drawViewBox = computed(() => {
-  const verts = drawBoundsPoints.value;
+const lockedDrawViewBox = ref<string | null>(null);
+
+function drawViewBoxFromPoints(verts: [number, number][]): string {
   if (verts.length === 0) {
     // Empty canvas — large workspace
     return "-240 -240 480 480";
@@ -647,7 +648,27 @@ const drawViewBox = computed(() => {
   const w = Math.max(maxX - minX + pad * 2, 220);
   const h = Math.max(maxY - minY + pad * 2, 220);
   return `${minX - pad} ${minY - pad} ${w} ${h}`;
+}
+
+const drawViewBox = computed(() => {
+  if (isClosed.value && lockedDrawViewBox.value) {
+    return lockedDrawViewBox.value;
+  }
+  return drawViewBoxFromPoints(drawBoundsPoints.value);
 });
+
+watch(
+  () => isClosed.value,
+  (closed) => {
+    if (!closed) {
+      lockedDrawViewBox.value = null;
+      return;
+    }
+    // Freeze the world frame for closed-room edits so rigid rotations do not
+    // appear to drift due to continuous auto-fit recentering.
+    lockedDrawViewBox.value = drawViewBoxFromPoints(wallVertices.value);
+  },
+);
 
 /** Start drawing mode */
 function enterDrawMode() {
@@ -903,20 +924,7 @@ const selectedWallAngleDeg = computed(() => {
 
 function setSelectedWallAngleDeg(angleDeg: number) {
   if (!selectedWall.value || !Number.isFinite(angleDeg)) return;
-
-  if (roomStore.roomIsClosed) {
-    // For a closed room: compute delta from the selected wall's current angle
-    // so the input field acts as an absolute room orientation target.
-    const currentDeg = radToDeg(selectedWall.value.angle);
-    const delta = angleDeg - currentDeg;
-    roomStore.rotateClosedRoom(degToRad(delta));
-  } else {
-    // Open chain: always pivot around the wall's START (the junction with the
-    // previous wall). This rotates only the selected wall's free end — nothing
-    // else translates. Using 'end' anchor was incorrectly translating all
-    // preceding walls when rotating upward/leftward walls.
-    roomStore.setWallAngle(selectedWall.value.id, degToRad(angleDeg), "start");
-  }
+  roomStore.setWallAngle(selectedWall.value.id, degToRad(angleDeg), "start");
 }
 
 function onSelectedWallAngleInput(e: Event) {
@@ -927,11 +935,7 @@ function onSelectedWallAngleInput(e: Event) {
 
 function rotateSelectedWall(deltaDeg: number) {
   if (!selectedWall.value) return;
-  if (roomStore.roomIsClosed) {
-    roomStore.rotateClosedRoom(degToRad(deltaDeg));
-  } else {
-    setSelectedWallAngleDeg(radToDeg(selectedWall.value.angle) + deltaDeg);
-  }
+  setSelectedWallAngleDeg(radToDeg(selectedWall.value.angle) + deltaDeg);
 }
 
 /** Wall midpoint for label placement */

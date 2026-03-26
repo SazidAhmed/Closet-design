@@ -103,6 +103,56 @@ function closetWallOrFallback(walls: Room['walls']) {
   })
 }
 
+function wallEndPoint(wall: Room['walls'][number]): Vec2 {
+  return [
+    wall.position[0] + Math.cos(wall.angle) * wall.length,
+    wall.position[1] + Math.sin(wall.angle) * wall.length,
+  ]
+}
+
+function normalizeAngle(angleRad: number): number {
+  return Math.atan2(Math.sin(angleRad), Math.cos(angleRad))
+}
+
+function polygonSignedArea(vertices: Vec2[]): number {
+  if (vertices.length < 3) return 0
+  let sum = 0
+  for (let i = 0; i < vertices.length; i += 1) {
+    const [x1, y1] = vertices[i]!
+    const [x2, y2] = vertices[(i + 1) % vertices.length]!
+    sum += x1 * y2 - x2 * y1
+  }
+  return sum / 2
+}
+
+function rotatePointAroundPivot(point: Vec2, pivot: Vec2, cosD: number, sinD: number): Vec2 {
+  const dx = point[0] - pivot[0]
+  const dy = point[1] - pivot[1]
+  return [
+    pivot[0] + dx * cosD - dy * sinD,
+    pivot[1] + dx * sinD + dy * cosD,
+  ]
+}
+
+function insideLeftPivot(vertices: Vec2[], wallIndex: number): Vec2 {
+  const n = vertices.length
+  const signedArea = polygonSignedArea(vertices)
+  const wallStart = vertices[wallIndex]!
+  const wallEnd = vertices[(wallIndex + 1) % n]!
+
+  // Inside is derived from winding:
+  // - positive signed area => clockwise wall order in this floor-plan space
+  // - negative signed area => counterclockwise wall order
+  //
+  // "Left endpoint from inside" means: stand on the wall and face into the room.
+  // Under that viewpoint in this screen-space coordinate system:
+  // - clockwise order => left endpoint is wall START
+  // - counterclockwise order => left endpoint is wall END
+  return signedArea >= 0
+    ? [wallStart[0], wallStart[1]]
+    : [wallEnd[0], wallEnd[1]]
+}
+
 export const useRoomStore = defineStore('room', {
   state: (): Room & { closetOffsetX: number; closetOffsetY: number; closetOffsetZ: number } => ({
     ...createDefaultRoom(),
@@ -149,40 +199,35 @@ export const useRoomStore = defineStore('room', {
     },
 
     /**
-     * Rotate the entire closed polygon rigidly by deltaRad around its centroid.
-     * All wall positions and angles are updated; lengths are untouched.
+     * Rotate the entire closed room rigidly around the selected wall's inside-left corner.
      */
-    rotateClosedRoom(deltaRad: number) {
+    rotateClosedRoom(deltaRad: number, wallId: string) {
       if (!Number.isFinite(deltaRad) || deltaRad === 0) return
       const walls = this.walls
-      if (walls.length === 0) return
+      if (!this.roomIsClosed || walls.length < 3) return
 
-      // Compute centroid of all wall start-positions
-      let cx = 0
-      let cy = 0
-      for (const w of walls) {
-        cx += w.position[0]
-        cy += w.position[1]
-      }
-      cx /= walls.length
-      cy /= walls.length
+      const selectedIdx = walls.findIndex((w) => w.id === wallId)
+      if (selectedIdx < 0) return
+
+      const n = walls.length
+      const vertices = walls.map((w) => [w.position[0], w.position[1]] as Vec2)
+      const pivot = insideLeftPivot(vertices, selectedIdx)
 
       const cosD = Math.cos(deltaRad)
       const sinD = Math.sin(deltaRad)
+      // Rigid rotation: rotate every room vertex around one fixed pivot,
+      // then rebuild each wall from consecutive rotated vertices.
+      const rotatedVertices = vertices.map((v) => rotatePointAroundPivot(v, pivot, cosD, sinD))
 
-      for (const w of walls) {
-        // Rotate position around centroid
-        const rx = w.position[0] - cx
-        const ry = w.position[1] - cy
-        w.position = [
-          cx + rx * cosD - ry * sinD,
-          cy + rx * sinD + ry * cosD,
-        ]
-        // Rotate angle
-        w.angle = Math.atan2(
-          Math.sin(w.angle + deltaRad),
-          Math.cos(w.angle + deltaRad),
-        )
+      for (let i = 0; i < n; i += 1) {
+        const wall = walls[i]!
+        const start = rotatedVertices[i]!
+        const end = rotatedVertices[(i + 1) % n]!
+        const dx = end[0] - start[0]
+        const dy = end[1] - start[1]
+        wall.position = [start[0], start[1]]
+        wall.length = Math.hypot(dx, dy)
+        wall.angle = normalizeAngle(Math.atan2(dy, dx))
       }
     },
 
@@ -196,17 +241,13 @@ export const useRoomStore = defineStore('room', {
       // ── Closed-room branch: rigid rotation of the whole polygon ────────────
       if (this.roomIsClosed) {
         const wall = this.walls[idx]!
-        const nextAngle = Math.atan2(Math.sin(angleRad), Math.cos(angleRad))
+        const nextAngle = normalizeAngle(angleRad)
         const deltaRad = nextAngle - wall.angle
-        this.rotateClosedRoom(deltaRad)
+        this.rotateClosedRoom(deltaRad, wallId)
         return
       }
 
       // ── Open-chain branch: original per-wall rotate logic ──────────────────
-      const endPoint = (w: Room['walls'][number]): Vec2 => [
-        w.position[0] + Math.cos(w.angle) * w.length,
-        w.position[1] + Math.sin(w.angle) * w.length,
-      ]
       const setWallFromPoints = (w: Room['walls'][number], start: Vec2, end: Vec2) => {
         const dx = end[0] - start[0]
         const dy = end[1] - start[1]
@@ -228,7 +269,7 @@ export const useRoomStore = defineStore('room', {
         oldStart[1] + Math.sin(wall.angle) * wall.length,
       ]
 
-      const nextAngle = Math.atan2(Math.sin(angleRad), Math.cos(angleRad))
+      const nextAngle = normalizeAngle(angleRad)
       let newStart: Vec2 = [oldStart[0], oldStart[1]]
       let newEnd: Vec2 = [oldEnd[0], oldEnd[1]]
 
@@ -271,7 +312,7 @@ export const useRoomStore = defineStore('room', {
       }
 
       const nextNextIdx = (nextIdx + 1) % n
-      const bridgeStart = endPoint(wall)
+      const bridgeStart = wallEndPoint(wall)
       const bridgeEnd: Vec2 = [
         this.walls[nextNextIdx]!.position[0],
         this.walls[nextNextIdx]!.position[1],
