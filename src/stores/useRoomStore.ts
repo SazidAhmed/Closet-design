@@ -11,28 +11,34 @@ function clampWall(v: number): number {
   return Math.max(ROOM_CONSTRAINTS.wallLength.min, Math.min(ROOM_CONSTRAINTS.wallLength.max, Math.round(v)))
 }
 
-function orthogonalSegment(start: Vec2, target: Vec2): { angle: number; length: number; end: Vec2 } | null {
+function snapped45Segment(start: Vec2, target: Vec2): { angle: number; length: number; end: Vec2 } | null {
   const dx = target[0] - start[0]
   const dy = target[1] - start[1]
+  const rawLength = Math.hypot(dx, dy)
 
-  if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return null
+  if (rawLength < 1) return null
 
-  if (Math.abs(dx) >= Math.abs(dy)) {
-    const dir = dx >= 0 ? 1 : -1
-    const length = Math.abs(dx)
-    return {
-      angle: dir > 0 ? 0 : Math.PI,
-      length,
-      end: [start[0] + dir * length, start[1]],
-    }
-  }
+  const step = Math.PI / 4
+  const snappedAngle = Math.atan2(
+    Math.sin(Math.round(Math.atan2(dy, dx) / step) * step),
+    Math.cos(Math.round(Math.atan2(dy, dx) / step) * step),
+  )
+  const ux = Math.cos(snappedAngle)
+  const uy = Math.sin(snappedAngle)
 
-  const dir = dy >= 0 ? 1 : -1
-  const length = Math.abs(dy)
+  // Project onto the snapped direction so the resulting endpoint lies exactly
+  // on the 45° lattice (0, 45, 90, ..., 315 degrees).
+  const length = dx * ux + dy * uy
+  if (Math.abs(length) < 1) return null
+
+  const dir = length >= 0 ? 1 : -1
+  const sx = ux * dir
+  const sy = uy * dir
+  const segLength = Math.abs(length)
   return {
-    angle: dir > 0 ? Math.PI / 2 : -Math.PI / 2,
-    length,
-    end: [start[0], start[1] + dir * length],
+    angle: Math.atan2(sy, sx),
+    length: segLength,
+    end: [start[0] + sx * segLength, start[1] + sy * segLength],
   }
 }
 
@@ -429,13 +435,13 @@ export const useRoomStore = defineStore('room', {
           prev.position[1] + Math.sin(prev.angle) * prev.length,
         ]
       }
-      const segment = orthogonalSegment(startPos, [x, y])
+      const segment = snapped45Segment(startPos, [x, y])
       if (!segment) return
       const wallThickness = Math.max(1, Math.min(30, Math.round(thickness)))
 
       walls.push({
         id: createWallId(),
-        length: Math.round(segment.length),
+        length: segment.length,
         position: [startPos[0], startPos[1]],
         angle: segment.angle,
         hasCloset: walls.length === 0,
@@ -461,34 +467,34 @@ export const useRoomStore = defineStore('room', {
       const dist = Math.sqrt(dx * dx + dy * dy)
       if (dist < 1) return // already closed
       const wallThickness = Math.max(1, Math.min(30, Math.round(thickness)))
+      const targetFirst: Vec2 = [first.position[0], first.position[1]]
+      const snapped = snapped45Segment(endOfLast, targetFirst)
 
-      const addSegment = (start: Vec2, target: Vec2) => {
-        const segment = orthogonalSegment(start, target)
-        if (!segment) return start
-        walls.push({
-          id: createWallId(),
-          length: Math.round(segment.length),
-          position: [start[0], start[1]],
-          angle: segment.angle,
-          hasCloset: false,
-          thickness: wallThickness,
-          label: String(walls.length + 1),
-          visible: true,
-        })
-        return segment.end
+      let length = dist
+      let angle = Math.atan2(dy, dx)
+      // Prefer 45° closure when it reaches the exact first vertex. Otherwise,
+      // close directly to preserve topology and avoid extra bridging walls.
+      if (
+        snapped &&
+        Math.hypot(
+          snapped.end[0] - targetFirst[0],
+          snapped.end[1] - targetFirst[1],
+        ) < 1
+      ) {
+        length = snapped.length
+        angle = snapped.angle
       }
 
-      const needsHorizontal = Math.abs(first.position[0] - endOfLast[0]) >= 1
-      const needsVertical = Math.abs(first.position[1] - endOfLast[1]) >= 1
-
-      if (needsHorizontal && needsVertical) {
-        const corner: Vec2 = [first.position[0], endOfLast[1]]
-        const reached = addSegment(endOfLast, corner)
-        addSegment(reached, [first.position[0], first.position[1]])
-        return
-      }
-
-      addSegment(endOfLast, [first.position[0], first.position[1]])
+      walls.push({
+        id: createWallId(),
+        length,
+        position: [endOfLast[0], endOfLast[1]],
+        angle,
+        hasCloset: false,
+        thickness: wallThickness,
+        label: String(walls.length + 1),
+        visible: true,
+      })
     },
 
     /** Remove the last wall segment (undo while drawing). */

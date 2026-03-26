@@ -514,18 +514,22 @@ function snapToGrid(v: number): number {
   return Math.round(v / GRID_SIZE) * GRID_SIZE;
 }
 
-function snapPointToOrthogonal(
+function snapPointTo45Direction(
   start: [number, number],
   target: [number, number],
 ): [number, number] {
   const dx = target[0] - start[0];
   const dy = target[1] - start[1];
+  const rawLength = Math.hypot(dx, dy);
+  if (rawLength < 1) return start;
 
-  if (Math.abs(dx) >= Math.abs(dy)) {
-    return [target[0], start[1]];
-  }
-
-  return [start[0], target[1]];
+  const step = Math.PI / 4;
+  const snappedAngle =
+    Math.round(Math.atan2(dy, dx) / step) * step;
+  const ux = Math.cos(snappedAngle);
+  const uy = Math.sin(snappedAngle);
+  const projected = dx * ux + dy * uy;
+  return [start[0] + ux * projected, start[1] + uy * projected];
 }
 
 /** Get the end-point of a wall (start + direction * length) */
@@ -782,7 +786,7 @@ function onDrawCanvasClick(e: MouseEvent) {
   }
 
   if (lastVertex.value) {
-    const snapped = snapPointToOrthogonal(lastVertex.value, [sx, sy]);
+    const snapped = snapPointTo45Direction(lastVertex.value, [sx, sy]);
     sx = snapToGrid(snapped[0]);
     sy = snapToGrid(snapped[1]);
   }
@@ -819,7 +823,7 @@ function onDrawMouseMove(e: MouseEvent) {
   let sy = snapToGrid(pt.y);
 
   if (lastVertex.value && isDrawing.value) {
-    const snapped = snapPointToOrthogonal(lastVertex.value, [sx, sy]);
+    const snapped = snapPointTo45Direction(lastVertex.value, [sx, sy]);
     sx = snapToGrid(snapped[0]);
     sy = snapToGrid(snapped[1]);
   }
