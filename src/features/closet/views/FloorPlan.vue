@@ -573,6 +573,199 @@ const chainEndVertex = computed<[number, number] | null>(() => {
   return wallEndPoint(last);
 });
 
+function polygonSignedArea2D(vertices: [number, number][]): number {
+  if (vertices.length < 3) return 0;
+  let sum = 0;
+  for (let i = 0; i < vertices.length; i += 1) {
+    const [x1, y1] = vertices[i]!;
+    const [x2, y2] = vertices[(i + 1) % vertices.length]!;
+    sum += x1 * y2 - x2 * y1;
+  }
+  return sum / 2;
+}
+
+function polygonCentroid2D(
+  vertices: [number, number][],
+): [number, number] | null {
+  if (vertices.length === 0) return null;
+  if (vertices.length < 3) return averagePoint(vertices);
+
+  const area = polygonSignedArea2D(vertices);
+  if (Math.abs(area) < 1e-6) return averagePoint(vertices);
+
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0; i < vertices.length; i += 1) {
+    const [x1, y1] = vertices[i]!;
+    const [x2, y2] = vertices[(i + 1) % vertices.length]!;
+    const cross = x1 * y2 - x2 * y1;
+    cx += (x1 + x2) * cross;
+    cy += (y1 + y2) * cross;
+  }
+  return [cx / (6 * area), cy / (6 * area)];
+}
+
+function normalizedVerticesForInterior(): [number, number][] {
+  const verts = [...wallVertices.value];
+  if (verts.length < 2) return verts;
+
+  const first = verts[0]!;
+  const last = verts[verts.length - 1]!;
+  if (Math.hypot(first[0] - last[0], first[1] - last[1]) < 1e-6) {
+    return verts.slice(0, -1);
+  }
+  return verts;
+}
+
+function averagePoint(points: [number, number][]): [number, number] | null {
+  if (points.length === 0) return null;
+  let sx = 0;
+  let sy = 0;
+  for (const [x, y] of points) {
+    sx += x;
+    sy += y;
+  }
+  return [sx / points.length, sy / points.length];
+}
+
+function structureReferencePointExcludingWall(wallId: string): [number, number] | null {
+  const points: [number, number][] = [];
+  for (const wall of drawWalls.value) {
+    if (wall.id === wallId) continue;
+    points.push([wall.position[0], wall.position[1]]);
+    points.push(wallEndPoint(wall));
+  }
+  return averagePoint(points);
+}
+
+function pointsApproximatelyEqual(
+  a: [number, number],
+  b: [number, number],
+  tolerance = 1,
+): boolean {
+  return Math.hypot(a[0] - b[0], a[1] - b[1]) <= tolerance;
+}
+
+function wallEndpointConnectivity(wallId: string): {
+  startConnected: boolean;
+  endConnected: boolean;
+} {
+  const wall = drawWalls.value.find((w) => w.id === wallId);
+  if (!wall) {
+    return { startConnected: false, endConnected: false };
+  }
+
+  const start: [number, number] = [wall.position[0], wall.position[1]];
+  const end = wallEndPoint(wall);
+  let startConnected = false;
+  let endConnected = false;
+
+  for (const other of drawWalls.value) {
+    if (other.id === wallId) continue;
+    const otherStart: [number, number] = [other.position[0], other.position[1]];
+    const otherEnd = wallEndPoint(other);
+
+    if (
+      pointsApproximatelyEqual(start, otherStart) ||
+      pointsApproximatelyEqual(start, otherEnd)
+    ) {
+      startConnected = true;
+    }
+    if (
+      pointsApproximatelyEqual(end, otherStart) ||
+      pointsApproximatelyEqual(end, otherEnd)
+    ) {
+      endConnected = true;
+    }
+
+    if (startConnected && endConnected) break;
+  }
+
+  return { startConnected, endConnected };
+}
+
+function insideLeftAnchorTypeForWall(wall: {
+  id: string;
+  position: [number, number];
+  angle: number;
+  length: number;
+}): "start" | "end" {
+  if (isClosed.value) {
+    const vertices = normalizedVerticesForInterior();
+    const n = vertices.length;
+    const wallIdx = drawWalls.value.findIndex((w) => w.id === wall.id);
+    if (wallIdx >= 0 && n >= 3) {
+      const wallStart = vertices[wallIdx]!;
+      const wallEnd = vertices[(wallIdx + 1) % n]!;
+      const midX = (wallStart[0] + wallEnd[0]) / 2;
+      const midY = (wallStart[1] + wallEnd[1]) / 2;
+      const interior = polygonCentroid2D(vertices);
+
+      if (interior) {
+        const insideX = interior[0] - midX;
+        const insideY = interior[1] - midY;
+        const insideLen = Math.hypot(insideX, insideY);
+
+        if (insideLen >= 1e-6) {
+          // Match store semantics exactly for closed rooms.
+          const leftX = insideY;
+          const leftY = -insideX;
+          const startProj =
+            (wallStart[0] - midX) * leftX + (wallStart[1] - midY) * leftY;
+          const endProj =
+            (wallEnd[0] - midX) * leftX + (wallEnd[1] - midY) * leftY;
+
+          if (Math.abs(startProj - endProj) >= 1e-6) {
+            return startProj >= endProj ? "start" : "end";
+          }
+        }
+      }
+
+      const signedArea = polygonSignedArea2D(vertices);
+      return signedArea >= 0 ? "start" : "end";
+    }
+  }
+
+  const connectivity = wallEndpointConnectivity(wall.id);
+
+  // Boundary-wall rule: keep pivot at the connected joint so the chain rotates
+  // around the attached structure and never around the free endpoint.
+  if (connectivity.startConnected !== connectivity.endConnected) {
+    return connectivity.startConnected ? "start" : "end";
+  }
+
+  const start: [number, number] = [wall.position[0], wall.position[1]];
+  const end = wallEndPoint(wall);
+  const midX = (start[0] + end[0]) / 2;
+  const midY = (start[1] + end[1]) / 2;
+
+  // Use the rest of the structure as an "inside" reference so endpoint choice
+  // remains stable even when the wall chain is open or partially disconnected.
+  const ref = structureReferencePointExcludingWall(wall.id);
+  if (ref) {
+    const insideX = ref[0] - midX;
+    const insideY = ref[1] - midY;
+    const insideLen = Math.hypot(insideX, insideY);
+
+    if (insideLen >= 1e-6) {
+      // In screen space (y grows downward), left-of-facing is clockwise rotation.
+      const leftX = insideY;
+      const leftY = -insideX;
+
+      const startProj = (start[0] - midX) * leftX + (start[1] - midY) * leftY;
+      const endProj = (end[0] - midX) * leftX + (end[1] - midY) * leftY;
+
+      if (Math.abs(startProj - endProj) >= 1e-6) {
+        return startProj >= endProj ? "start" : "end";
+      }
+    }
+  }
+
+  // Fallback: preserve the closed-room winding rule used by store pivot math.
+  const signedArea = polygonSignedArea2D(normalizedVerticesForInterior());
+  return signedArea >= 0 ? "start" : "end";
+}
+
 const previewWall = computed<{
   position: [number, number];
   angle: number;
@@ -872,22 +1065,20 @@ function selectWall(wallId: string, e: MouseEvent) {
   selectedWallId.value = wallId;
 
   const wall = drawWalls.value.find((w) => w.id === wallId);
-  if (!wall || !svgRef.value) {
+  if (!wall) {
     selectedWallAnchor.value = null;
     return;
   }
 
-  const pt = screenToSvg(svgRef.value, e.clientX, e.clientY);
   const start: [number, number] = [wall.position[0], wall.position[1]];
   const end = wallEndPoint(wall);
-  const dStart = Math.hypot(pt.x - start[0], pt.y - start[1]);
-  const dEnd = Math.hypot(pt.x - end[0], pt.y - end[1]);
-  if (dStart <= dEnd) {
+  const anchorType = insideLeftAnchorTypeForWall(wall);
+  selectedWallAnchorType.value = anchorType;
+
+  if (anchorType === "start") {
     selectedWallAnchor.value = start;
-    selectedWallAnchorType.value = "start";
   } else {
     selectedWallAnchor.value = end;
-    selectedWallAnchorType.value = "end";
   }
 }
 
@@ -946,10 +1137,18 @@ function setSelectedWallAngleDeg(angleDeg: number) {
     // Keep the frame fixed while rotating an open/boundary structure.
     lockDrawViewBoxToCurrentFrame();
   }
+
+  const anchorType = insideLeftAnchorTypeForWall(selectedWall.value);
+  selectedWallAnchorType.value = anchorType;
+  selectedWallAnchor.value =
+    anchorType === "start"
+      ? [selectedWall.value.position[0], selectedWall.value.position[1]]
+      : wallEndPoint(selectedWall.value);
+
   roomStore.setWallAngle(
     selectedWall.value.id,
     degToRad(angleDeg),
-    selectedWallAnchorType.value,
+    anchorType,
   );
 }
 
