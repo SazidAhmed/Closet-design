@@ -159,6 +159,56 @@ function insideLeftPivot(vertices: Vec2[], wallIndex: number): Vec2 {
     : [wallEnd[0], wallEnd[1]]
 }
 
+/** Check if a point is approximately equal to another (within 1 unit tolerance) */
+function pointsApproximatelyEqual(p1: Vec2, p2: Vec2, tolerance = 1): boolean {
+  return Math.hypot(p1[0] - p2[0], p1[1] - p2[1]) <= tolerance
+}
+
+/** Find which wall's end/start connects to this wall's start point, if any */
+function findWallConnectedToStart(walls: Room['walls'], wallIdx: number): { idx: number; endpoint: 'end' } | null {
+  const wall = walls[wallIdx]!
+  const start: Vec2 = [wall.position[0], wall.position[1]]
+
+  for (let i = 0; i < walls.length; i += 1) {
+    if (i === wallIdx) continue
+    const other = walls[i]!
+    const otherEnd: Vec2 = [
+      other.position[0] + Math.cos(other.angle) * other.length,
+      other.position[1] + Math.sin(other.angle) * other.length,
+    ]
+    if (pointsApproximatelyEqual(start, otherEnd)) {
+      return { idx: i, endpoint: 'end' }
+    }
+  }
+  return null
+}
+
+/** Find which wall's start/end connects to this wall's end point, if any */
+function findWallConnectedToEnd(walls: Room['walls'], wallIdx: number): { idx: number; endpoint: 'start' } | null {
+  const wall = walls[wallIdx]!
+  const end: Vec2 = [
+    wall.position[0] + Math.cos(wall.angle) * wall.length,
+    wall.position[1] + Math.sin(wall.angle) * wall.length,
+  ]
+
+  for (let i = 0; i < walls.length; i += 1) {
+    if (i === wallIdx) continue
+    const other = walls[i]!
+    const otherStart: Vec2 = [other.position[0], other.position[1]]
+    if (pointsApproximatelyEqual(end, otherStart)) {
+      return { idx: i, endpoint: 'start' }
+    }
+  }
+  return null
+}
+
+/** True when a selected wall has exactly one connected endpoint. */
+function isBoundaryWall(walls: Room['walls'], wallIdx: number): boolean {
+  const startConnected = findWallConnectedToStart(walls, wallIdx) !== null
+  const endConnected = findWallConnectedToEnd(walls, wallIdx) !== null
+  return startConnected !== endConnected
+}
+
 export const useRoomStore = defineStore('room', {
   state: (): Room & { closetOffsetX: number; closetOffsetY: number; closetOffsetZ: number } => ({
     ...createDefaultRoom(),
@@ -205,6 +255,78 @@ export const useRoomStore = defineStore('room', {
     },
 
     /**
+     * Rotate the entire connected chain rigidly around one endpoint of the selected wall.
+     * Used when a boundary wall (one end free) is rotated.
+     */
+    rotateBoundaryChain(deltaRad: number, wallId: string, anchor: 'start' | 'end' = 'start') {
+      if (!Number.isFinite(deltaRad) || deltaRad === 0) return
+      const walls = this.walls
+      const selectedIdx = walls.findIndex((w) => w.id === wallId)
+      if (selectedIdx < 0) return
+
+      const selectedWall = walls[selectedIdx]!
+      const pivot: Vec2 = anchor === 'start'
+        ? [selectedWall.position[0], selectedWall.position[1]]
+        : wallEndPoint(selectedWall)
+
+      // Collect all walls in the connected chain
+      const chain: number[] = [selectedIdx]
+      let current = selectedIdx
+
+      // Traverse forward to collect connected walls ahead
+      while (true) {
+        const next = findWallConnectedToEnd(walls, current)
+        if (!next || chain.includes(next.idx)) break
+        chain.push(next.idx)
+        current = next.idx
+      }
+
+      // Traverse backward to collect connected walls behind
+      current = selectedIdx
+      while (true) {
+        const prev = findWallConnectedToStart(walls, current)
+        if (!prev || chain.includes(prev.idx)) break
+        chain.unshift(prev.idx)
+        current = prev.idx
+      }
+
+      // Build all vertices from the chain in sequence
+      const chainVertices: Vec2[] = []
+      for (const idx of chain) {
+        const wall = walls[idx]!
+        chainVertices.push([wall.position[0], wall.position[1]])
+      }
+      // Add the end of the last wall to complete the chain
+      if (chain.length > 0) {
+        const lastIdx = chain[chain.length - 1]!
+        const lastWall = walls[lastIdx]!
+        chainVertices.push([
+          lastWall.position[0] + Math.cos(lastWall.angle) * lastWall.length,
+          lastWall.position[1] + Math.sin(lastWall.angle) * lastWall.length,
+        ])
+      }
+
+      const cosD = Math.cos(deltaRad)
+      const sinD = Math.sin(deltaRad)
+
+      // Rigid rotation: rotate every vertex around the pivot,
+      // then rebuild each wall from consecutive rotated vertices.
+      const rotatedVertices = chainVertices.map((v) => rotatePointAroundPivot(v, pivot, cosD, sinD))
+
+      for (let i = 0; i < chain.length; i += 1) {
+        const wallIdx = chain[i]!
+        const wall = walls[wallIdx]!
+        const start = rotatedVertices[i]!
+        const end = rotatedVertices[i + 1]!
+        const dx = end[0] - start[0]
+        const dy = end[1] - start[1]
+        wall.position = [start[0], start[1]]
+        wall.length = Math.hypot(dx, dy)
+        wall.angle = normalizeAngle(Math.atan2(dy, dx))
+      }
+    },
+
+    /**
      * Rotate the entire closed room rigidly around the selected wall's inside-left corner.
      */
     rotateClosedRoom(deltaRad: number, wallId: string) {
@@ -238,8 +360,9 @@ export const useRoomStore = defineStore('room', {
     },
 
     /** Rotate a wall to the provided angle in radians.
-     *  For a closed polygon this rotates the ENTIRE room rigidly.
-     *  For an open chain, only the selected wall rotates (adjacent walls translate). */
+     *  For a closed polygon, rotates the ENTIRE room rigidly.
+     *  For a boundary wall (one end disconnected), rotates the entire connected chain.
+     *  For an open chain (both ends connected or both disconnected), rotates just the wall and translates adjacent walls. */
     setWallAngle(wallId: string, angleRad: number, anchor: 'start' | 'end' = 'start') {
       const idx = this.walls.findIndex((w) => w.id === wallId)
       if (idx < 0 || !Number.isFinite(angleRad)) return
@@ -250,6 +373,15 @@ export const useRoomStore = defineStore('room', {
         const nextAngle = normalizeAngle(angleRad)
         const deltaRad = nextAngle - wall.angle
         this.rotateClosedRoom(deltaRad, wallId)
+        return
+      }
+
+      // ── Boundary-wall branch: rigid rotation of connected chain ──────────────
+      if (isBoundaryWall(this.walls, idx)) {
+        const wall = this.walls[idx]!
+        const nextAngle = normalizeAngle(angleRad)
+        const deltaRad = nextAngle - wall.angle
+        this.rotateBoundaryChain(deltaRad, wallId, anchor)
         return
       }
 

@@ -633,6 +633,14 @@ const drawBoundsPoints = computed<[number, number][]>(() => {
 /** SVG viewBox for draw mode — auto-fit to content */
 const lockedDrawViewBox = ref<string | null>(null);
 
+function lockDrawViewBoxToCurrentFrame() {
+  lockedDrawViewBox.value = drawViewBoxFromPoints(wallVertices.value);
+}
+
+function unlockDrawViewBox() {
+  lockedDrawViewBox.value = null;
+}
+
 function drawViewBoxFromPoints(verts: [number, number][]): string {
   if (verts.length === 0) {
     // Empty canvas — large workspace
@@ -655,7 +663,7 @@ function drawViewBoxFromPoints(verts: [number, number][]): string {
 }
 
 const drawViewBox = computed(() => {
-  if (isClosed.value && lockedDrawViewBox.value) {
+  if (lockedDrawViewBox.value) {
     return lockedDrawViewBox.value;
   }
   return drawViewBoxFromPoints(drawBoundsPoints.value);
@@ -665,12 +673,12 @@ watch(
   () => isClosed.value,
   (closed) => {
     if (!closed) {
-      lockedDrawViewBox.value = null;
+      unlockDrawViewBox();
       return;
     }
     // Freeze the world frame for closed-room edits so rigid rotations do not
     // appear to drift due to continuous auto-fit recentering.
-    lockedDrawViewBox.value = drawViewBoxFromPoints(wallVertices.value);
+    lockDrawViewBoxToCurrentFrame();
   },
 );
 
@@ -678,6 +686,7 @@ watch(
 function enterDrawMode() {
   floorPlanMode.value = "draw";
   hasStartedDrawSession.value = false;
+  unlockDrawViewBox();
   isClosed.value = false;
   isDrawing.value = false;
   selectedWallId.value = null;
@@ -690,6 +699,7 @@ function enterDrawMode() {
 function enterQuickMode() {
   floorPlanMode.value = "quick";
   hasStartedDrawSession.value = false;
+  unlockDrawViewBox();
   // Reset to default rectangular room
   const defaultRoom = createDefaultRoom();
   roomStore.setRoom(defaultRoom);
@@ -705,6 +715,7 @@ function enterQuickMode() {
 /** Start fresh drawing */
 function startFreshDraw() {
   hasStartedDrawSession.value = true;
+  unlockDrawViewBox();
   roomStore.startDrawWalls();
   isDrawing.value = true;
   isClosed.value = false;
@@ -715,6 +726,7 @@ function startFreshDraw() {
 }
 
 function continueDrawing() {
+  unlockDrawViewBox();
   if (drawWalls.value.length === 0 && !pendingStartVertex.value) {
     startFreshDraw();
     return;
@@ -752,6 +764,7 @@ function continueDrawing() {
 }
 
 function undoDrawStep() {
+  unlockDrawViewBox();
   if (roomStore.walls.length > 0) {
     roomStore.removeLastWall();
     if (roomStore.walls.length === 0 && !pendingStartVertex.value) {
@@ -906,6 +919,7 @@ function removeSelectedWall() {
   selectedWallId.value = null;
   selectedWallAnchor.value = null;
   selectedWallAnchorType.value = "start";
+  unlockDrawViewBox();
   isClosed.value = false;
 
   if (drawWalls.value.length === 0) {
@@ -928,7 +942,15 @@ const selectedWallAngleDeg = computed(() => {
 
 function setSelectedWallAngleDeg(angleDeg: number) {
   if (!selectedWall.value || !Number.isFinite(angleDeg)) return;
-  roomStore.setWallAngle(selectedWall.value.id, degToRad(angleDeg), "start");
+  if (!isClosed.value && !lockedDrawViewBox.value) {
+    // Keep the frame fixed while rotating an open/boundary structure.
+    lockDrawViewBoxToCurrentFrame();
+  }
+  roomStore.setWallAngle(
+    selectedWall.value.id,
+    degToRad(angleDeg),
+    selectedWallAnchorType.value,
+  );
 }
 
 function onSelectedWallAngleInput(e: Event) {
