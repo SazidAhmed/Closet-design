@@ -1,6 +1,7 @@
+
 ## Plan: One-Side Pivot Rotation For Open Chain
 
-Add a dedicated rotation path for open rooms when the selected wall is connected on both endpoints: rotate only the non-pivot side as one rigid chain around the inside-left pivot, so the pivot-side angle changes (for example wall 3-2), while the opposite local angle (for example wall 4-3) remains unchanged.
+Add a dedicated rotation path for open rooms when the selected wall is connected on both endpoints: rotate only the non-pivot side as one rigid chain around the inside-left pivot, so the pivot-side angle changes (for example wall 1-2 or wall 3-2 depending on selected wall), while all downstream/non-pivot local corner angles remain unchanged (including both bottom 90 degree corners in your wall-2 scenario).
 
 **Steps**
 
@@ -22,10 +23,10 @@ Add a dedicated rotation path for open rooms when the selected wall is connected
 **Verification**
 
 1. Unit test: open shape with one disconnected joint and selected wall connected at both ends; rotate selected wall and verify only pivot-side angle changes.
-2. Unit test: opposite-side corner angle remains unchanged (for example wall 4-3 remains 90 degrees in your illustrated topology).
+2. Unit test: all non-pivot downstream corner angles remain unchanged (for example for selected wall 2, both wall2-wall3 and wall3-wall4 corners remain 90 degrees).
 3. Unit test: pivot endpoint stays numerically fixed across repeated updates within tolerance.
 4. Unit test: branch precedence remains correct (closed room first, boundary wall second, both-connected-open third, fallback last).
-5. Manual check in draw mode on the same topology as your image: selecting wall 3 and changing angle should rotate around the green-circled endpoint and keep the opposite corner geometry unchanged.
+5. Manual check in draw mode on the same topology as your image: selecting wall 2 and changing angle should rotate around the green-circled endpoint, change only wall1-wall2 angle, and keep both bottom corner geometries unchanged.
 
 **Decisions**
 
