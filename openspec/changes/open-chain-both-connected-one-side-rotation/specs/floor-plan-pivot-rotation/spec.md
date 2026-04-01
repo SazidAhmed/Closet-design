@@ -1,5 +1,15 @@
 ## MODIFIED Requirements
 
+### Requirement: Deterministic Inside-Left Projection Orientation
+For non-boundary pivot resolution based on interior reference projection, the endpoint projection basis SHALL use `left = (-insideY, insideX)`.
+
+#### Scenario: Opposite-Endpoint Pivot Flip Is Prevented
+- **GIVEN** an open topology where selected wall has both endpoints connected and inside-left projection is used
+- **WHEN** pivot endpoint is resolved for repeated angle updates
+- **THEN** the selected pivot SHALL remain on the inside-left expected endpoint
+- **THEN** the opposite endpoint SHALL NOT be selected due to projection orientation inversion
+- **THEN** click location along the wall body SHALL NOT alter this endpoint choice
+
 ### Requirement: Rotation Dispatcher Contract
 The public wall-angle action SHALL dispatch to closed-room rigid rotation, boundary-chain rigid rotation, open both-connected one-side rigid rotation, or open fallback local rotation based on topology.
 

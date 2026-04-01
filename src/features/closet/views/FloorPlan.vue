@@ -708,8 +708,8 @@ function insideLeftAnchorTypeForWall(wall: {
 
         if (insideLen >= 1e-6) {
           // Match store semantics exactly for closed rooms.
-          const leftX = insideY;
-          const leftY = -insideX;
+          const leftX = -insideY;
+          const leftY = insideX;
           const startProj =
             (wallStart[0] - midX) * leftX + (wallStart[1] - midY) * leftY;
           const endProj =
@@ -748,9 +748,10 @@ function insideLeftAnchorTypeForWall(wall: {
     const insideLen = Math.hypot(insideX, insideY);
 
     if (insideLen >= 1e-6) {
-      // In screen space (y grows downward), left-of-facing is clockwise rotation.
-      const leftX = insideY;
-      const leftY = -insideX;
+      // In screen space (y grows downward), left-of-facing uses counterclockwise
+      // rotation of the inside vector for deterministic inside-left endpoint picks.
+      const leftX = -insideY;
+      const leftY = insideX;
 
       const startProj = (start[0] - midX) * leftX + (start[1] - midY) * leftY;
       const endProj = (end[0] - midX) * leftX + (end[1] - midY) * leftY;

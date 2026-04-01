@@ -38,7 +38,7 @@ When both endpoints are connected or both are free:
 2. Build an inside reference from other walls (`structureReferencePointExcludingWall`).
 3. Form inside vector from midpoint to that reference.
 4. Compute left-of-facing vector in screen space:
-   - $left = (insideY, -insideX)$
+	- $left = (-insideY, insideX)$
 5. Project start and end offsets onto `left`.
 6. Endpoint with larger projection is chosen as pivot endpoint.
 

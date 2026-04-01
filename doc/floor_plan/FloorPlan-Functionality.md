@@ -59,12 +59,21 @@ For creating complex, non-rectangular room shapes with manual control.
 
 #### Room Closure & Rigid Rotation:
 
+**Deterministic Pivot Selection (Click-Independent):**
+- Pivot endpoint is resolved by geometry rules, not by click proximity on the wall body
+- Rule priority for draw-mode anchor selection:
+  1. Boundary wall rule: connected endpoint wins
+  2. Inside-facing projection rule using structure reference
+  3. Winding fallback rule
+- Inside-facing left projection basis in screen space:
+  - $left = (-insideY, insideX)$
+
 **Room Closure Detection:**
 - `roomIsClosed` getter checks if all walls form a continuous polygon
 - Checks that the last wall's endpoint is within 1 unit of the first wall's start
 - Requires minimum 3 walls to be considered closed
 
-**Rigid Room Rotation** (Three-tier priority system):
+**Rigid Room Rotation** (Four-tier priority system):
 
 1. **Closed Room Rotation** (when `isClosed = true`):
    - **Pivot Point Calculation**: (`insideLeftPivot` function)
@@ -83,7 +92,7 @@ For creating complex, non-rectangular room shapes with manual control.
      - Connected end: Attached to another wall (within 1 unit tolerance)
      - Disconnected/free end: Not touching any other wall
    - **Pivot Point**: Uses the selected wall endpoint anchor (`start` or `end`)
-     - Anchor is chosen from the clicked side of the selected wall
+     - Anchor is chosen from deterministic geometry rules (not click side)
      - The chosen anchor point remains fixed while rotating
    - **Behavior**: Entire connected chain rotates rigidly around the selected anchor endpoint
      - Traverses forward and backward through connected walls to identify full chain
@@ -92,11 +101,18 @@ For creating complex, non-rectangular room shapes with manual control.
      - Intuitive interaction: "grab" the free corner and rotate the attached structure
    - **Use Case**: Perfect for adjusting angled room sections while keeping a specific endpoint visually fixed (pivot lock)
 
-3. **Open Chain Rotation** (when both ends are connected or both disconnected):
-   - Only the selected wall rotates individually
-   - Adjacent connected walls translate to maintain endpoints
-   - No rigid rotation of the entire structure
-   - Original per-wall behavior
+3. **Open Both-Connected One-Side Rotation** (when selected wall has both ends connected and room is open):
+   - **Detection**: Selected wall has both endpoints connected and topology is not closed
+   - **Pivot Point**: Uses deterministic inside-left endpoint (`start` or `end`)
+   - **Behavior**: Rotates only one side of the connected structure as a rigid chain around pivot
+     - Anchor `start`: traverse and rotate through end connectivity
+     - Anchor `end`: traverse and rotate through start connectivity
+   - **Invariant**: Non-pivot downstream corner angles remain unchanged while pivot-side joint angle changes
+
+4. **Open Fallback Rotation** (all other open cases, including both-disconnected selected wall):
+   - Selected wall rotates locally
+   - Adjacent affected walls are translated/rebuilt to preserve endpoint continuity
+   - No rigid rotation of the full structure
 
 - **Angle Control**:
   - Input field for direct angle entry (degrees converted to radians)
@@ -334,10 +350,13 @@ Enforced via `ROOM_CONSTRAINTS`:
 - **`findWallConnectedToStart()`**: Find wall attached to a wall's start endpoint
 - **`findWallConnectedToEnd()`**: Find wall attached to a wall's end endpoint
 - **`isBoundaryWall()`**: Detect boundary walls (exactly one connected endpoint)
+- **`isBothConnectedWall()`**: Detect selected walls connected at both endpoints
 - **`rotateBoundaryChain(deltaRad, wallId, anchor)`**: Execute rigid rotation of the connected chain around the selected endpoint anchor
+- **`rotateOpenBothConnectedOneSide(deltaRad, wallId, anchor)`**: Execute one-side rigid rotation for open both-connected selected walls
 
 ### Rotation/View Helpers in FloorPlan
 
+- **`insideLeftAnchorTypeForWall()`**: Resolves deterministic anchor endpoint with boundary, projection, and winding priority
 - **`selectedWallAnchorType`**: Tracks whether the selected endpoint anchor is `start` or `end`
 - **`lockDrawViewBoxToCurrentFrame()`**: Freezes draw viewBox before rotation edits
 - **`unlockDrawViewBox()`**: Restores auto-fit when editing context changes
@@ -351,7 +370,7 @@ Enforced via `ROOM_CONSTRAINTS`:
 | Room Shape | Rectangular | Any polygon |
 | Wall Count | 4 fixed | 1+ variable |
 | Resize | Drag handles | Manual angle/length |
-| Rotation Modes | N/A | 3-tier: Closed room / Boundary wall / Open chain |
+| Rotation Modes | N/A | 4-tier: Closed room / Boundary wall / Open both-connected one-side / Open fallback |
 | Snap | None | 45° grid snap |
 | Items | Yes | Yes |
 | Closet Wall | Default Wall 0 | Selectable any wall |

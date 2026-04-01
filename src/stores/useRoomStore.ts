@@ -209,6 +209,13 @@ function isBoundaryWall(walls: Room['walls'], wallIdx: number): boolean {
   return startConnected !== endConnected
 }
 
+/** True when a selected wall has both endpoints connected. */
+function isBothConnectedWall(walls: Room['walls'], wallIdx: number): boolean {
+  const startConnected = findWallConnectedToStart(walls, wallIdx) !== null
+  const endConnected = findWallConnectedToEnd(walls, wallIdx) !== null
+  return startConnected && endConnected
+}
+
 export const useRoomStore = defineStore('room', {
   state: (): Room & { closetOffsetX: number; closetOffsetY: number; closetOffsetZ: number } => ({
     ...createDefaultRoom(),
@@ -327,6 +334,67 @@ export const useRoomStore = defineStore('room', {
     },
 
     /**
+     * Rotate only one side of an open topology where the selected wall is connected at both ends.
+     * Anchor `start` rotates through end connectivity, anchor `end` rotates through start connectivity.
+     */
+    rotateOpenBothConnectedOneSide(deltaRad: number, wallId: string, anchor: 'start' | 'end' = 'start') {
+      if (!Number.isFinite(deltaRad) || deltaRad === 0) return
+      const walls = this.walls
+      const selectedIdx = walls.findIndex((w) => w.id === wallId)
+      if (selectedIdx < 0) return
+
+      const selectedWall = walls[selectedIdx]!
+      const pivot: Vec2 = anchor === 'start'
+        ? [selectedWall.position[0], selectedWall.position[1]]
+        : wallEndPoint(selectedWall)
+
+      const chain: number[] = [selectedIdx]
+      const visited = new Set<number>([selectedIdx])
+      let current = selectedIdx
+
+      while (true) {
+        const next = anchor === 'start'
+          ? findWallConnectedToEnd(walls, current)
+          : findWallConnectedToStart(walls, current)
+        if (!next || visited.has(next.idx)) break
+
+        if (anchor === 'start') {
+          chain.push(next.idx)
+        } else {
+          chain.unshift(next.idx)
+        }
+        visited.add(next.idx)
+        current = next.idx
+      }
+
+      const chainVertices: Vec2[] = []
+      for (const chainIdx of chain) {
+        const wall = walls[chainIdx]!
+        chainVertices.push([wall.position[0], wall.position[1]])
+      }
+      if (chain.length > 0) {
+        const lastIdx = chain[chain.length - 1]!
+        chainVertices.push(wallEndPoint(walls[lastIdx]!))
+      }
+
+      const cosD = Math.cos(deltaRad)
+      const sinD = Math.sin(deltaRad)
+      const rotatedVertices = chainVertices.map((v) => rotatePointAroundPivot(v, pivot, cosD, sinD))
+
+      for (let i = 0; i < chain.length; i += 1) {
+        const wallIdx = chain[i]!
+        const wall = walls[wallIdx]!
+        const start = rotatedVertices[i]!
+        const end = rotatedVertices[i + 1]!
+        const dx = end[0] - start[0]
+        const dy = end[1] - start[1]
+        wall.position = [start[0], start[1]]
+        wall.length = Math.hypot(dx, dy)
+        wall.angle = normalizeAngle(Math.atan2(dy, dx))
+      }
+    },
+
+    /**
      * Rotate the entire closed room rigidly around the selected wall's inside-left corner.
      */
     rotateClosedRoom(deltaRad: number, wallId: string) {
@@ -362,7 +430,8 @@ export const useRoomStore = defineStore('room', {
     /** Rotate a wall to the provided angle in radians.
      *  For a closed polygon, rotates the ENTIRE room rigidly.
      *  For a boundary wall (one end disconnected), rotates the entire connected chain.
-     *  For an open chain (both ends connected or both disconnected), rotates just the wall and translates adjacent walls. */
+     *  For an open both-connected wall, rotates one side as a rigid chain.
+     *  For all other open cases, rotates locally and translates adjacent walls. */
     setWallAngle(wallId: string, angleRad: number, anchor: 'start' | 'end' = 'start') {
       const idx = this.walls.findIndex((w) => w.id === wallId)
       if (idx < 0 || !Number.isFinite(angleRad)) return
@@ -385,7 +454,15 @@ export const useRoomStore = defineStore('room', {
         return
       }
 
-      // ── Open-chain branch: original per-wall rotate logic ──────────────────
+      if (isBothConnectedWall(this.walls, idx)) {
+        const wall = this.walls[idx]!
+        const nextAngle = normalizeAngle(angleRad)
+        const deltaRad = nextAngle - wall.angle
+        this.rotateOpenBothConnectedOneSide(deltaRad, wallId, anchor)
+        return
+      }
+
+      // ── Open-chain fallback branch: original per-wall rotate logic ─────────
       const setWallFromPoints = (w: Room['walls'][number], start: Vec2, end: Vec2) => {
         const dx = end[0] - start[0]
         const dy = end[1] - start[1]
