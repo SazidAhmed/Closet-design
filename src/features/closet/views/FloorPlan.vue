@@ -726,14 +726,6 @@ function insideLeftAnchorTypeForWall(wall: {
     }
   }
 
-  const connectivity = wallEndpointConnectivity(wall.id);
-
-  // Boundary-wall rule: keep pivot at the connected joint so the chain rotates
-  // around the attached structure and never around the free endpoint.
-  if (connectivity.startConnected !== connectivity.endConnected) {
-    return connectivity.startConnected ? "start" : "end";
-  }
-
   const start: [number, number] = [wall.position[0], wall.position[1]];
   const end = wallEndPoint(wall);
   const midX = (start[0] + end[0]) / 2;

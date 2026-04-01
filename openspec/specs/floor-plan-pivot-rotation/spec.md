@@ -9,7 +9,7 @@ The system SHALL choose one pivot endpoint for a selected wall using inside-faci
 #### Scenario: Pivot Rule Priority Is Enforced
 Given a selected wall in draw mode  
 When pivot endpoint is resolved  
-Then resolution SHALL apply rules in this order: boundary-wall connected-endpoint, inside-facing geometric projection, winding fallback  
+Then resolution SHALL apply rules in this order: inside-facing geometric projection, winding fallback  
 And lower-priority rules SHALL NOT override higher-priority rule matches.
 
 #### Scenario: Closed Polygon Uses Winding Rule
@@ -18,14 +18,14 @@ When a wall is selected for rotation
 Then the pivot endpoint is computed from closed-polygon inside-left semantics using polygon winding  
 And the returned endpoint is deterministic for that wall index and geometry.
 
-#### Scenario: Boundary Wall Uses Connected Endpoint
+#### Scenario: Boundary Wall Uses Inside-Left Endpoint
 Given an open chain where the selected wall has exactly one connected endpoint  
 When the wall is selected for rotation  
-Then the pivot endpoint SHALL be the connected endpoint  
-And SHALL NOT switch to the free endpoint based on wall angle or chain orientation.
+Then the pivot endpoint SHALL be chosen by inside-facing left projection semantics  
+And may be either connected or free endpoint depending on geometry.
 
-#### Scenario: Open Non-Boundary Uses Stable Fallback
-Given an open non-boundary selected wall  
+#### Scenario: Open Wall Uses Stable Fallback
+Given an open selected wall  
 When inside-left is derived from structure reference geometry  
 Then tie-breaking SHALL be deterministic  
 And repeated calls with unchanged geometry SHALL return the same endpoint.
@@ -57,14 +57,15 @@ And the anchor endpoint remains fixed
 And chain connectivity remains continuous.
 
 ### Requirement: Rotation Dispatcher Contract
-The public wall-angle action SHALL dispatch to closed-room rigid rotation, boundary-chain rigid rotation, or open-chain local rotation based on topology.
+The public wall-angle action SHALL dispatch to closed-room rigid rotation, boundary-chain rigid rotation, open both-connected one-side rigid rotation, or open-chain local rotation based on topology.
 
 #### Scenario: Topology-Based Branching
 Given a selected wall  
 When wall angle is updated  
 Then closed topology routes to closed-room rigid rotation  
 And boundary topology routes to boundary-chain rigid rotation  
-And non-boundary open topology routes to open-chain local behavior.
+And open topology where selected wall has both endpoints connected routes to one-side rigid rotation  
+And all other open topology routes to open-chain local behavior.
 
 #### Scenario: Closed-Topology Pivot Is Store-Computed
 Given closed topology and any UI-provided anchor value  

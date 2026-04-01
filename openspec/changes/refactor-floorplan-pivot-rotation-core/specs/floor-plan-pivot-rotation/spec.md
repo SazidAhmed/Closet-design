@@ -5,7 +5,7 @@ The system SHALL choose one pivot endpoint for a selected wall using inside-faci
 
 #### Scenario: Pivot Rule Priority Is Enforced
 - **WHEN** pivot endpoint is resolved for a selected wall in draw mode
-- **THEN** rule priority SHALL be boundary-wall connected-endpoint, then inside-facing geometric projection, then winding fallback
+- **THEN** rule priority SHALL be inside-facing geometric projection, then winding fallback
 - **THEN** lower-priority rules SHALL NOT override higher-priority rule matches
 
 #### Scenario: Closed Polygon Uses Winding Rule
@@ -13,13 +13,13 @@ The system SHALL choose one pivot endpoint for a selected wall using inside-faci
 - **THEN** pivot endpoint SHALL be computed from closed-polygon inside-left semantics using polygon winding
 - **THEN** the returned endpoint SHALL be deterministic for that wall index and geometry
 
-#### Scenario: Boundary Wall Uses Connected Endpoint
+#### Scenario: Boundary Wall Uses Inside-Left Endpoint
 - **WHEN** selected wall belongs to an open chain and has exactly one connected endpoint
-- **THEN** pivot endpoint SHALL be the connected endpoint
-- **THEN** pivot endpoint SHALL NOT switch to the free endpoint based on wall angle or chain orientation
+- **THEN** pivot endpoint SHALL be chosen by inside-facing left projection semantics
+- **THEN** pivot endpoint may be either connected or free endpoint depending on geometry
 
-#### Scenario: Open Non-Boundary Uses Stable Fallback
-- **WHEN** selected wall is open non-boundary and inside-left is derived from structure reference geometry
+#### Scenario: Open Wall Uses Stable Fallback
+- **WHEN** selected wall is open and inside-left is derived from structure reference geometry
 - **THEN** tie-breaking SHALL be deterministic
 - **THEN** repeated calls with unchanged geometry SHALL return the same endpoint
 

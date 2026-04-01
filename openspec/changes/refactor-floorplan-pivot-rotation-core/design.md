@@ -36,8 +36,8 @@ Constraints:
 2. Deterministic pivot contract with topology-aware rules
 - Decision: Use one reusable pivot selector with explicit branch priority:
   - Closed polygon: inside-left by winding.
-  - Boundary wall: always connected endpoint.
-  - Open non-boundary: stable geometry fallback with deterministic tie-break.
+  - Open wall (including boundary): inside-left by geometric projection when available.
+  - Open fallback: winding/deterministic tie-break when projection is degenerate.
 - Rationale: Enforces non-flipping endpoint guarantee while preserving expected boundary behavior.
 - Alternative considered: UI-only anchor computation with store fallback. Rejected due to drift risk.
 

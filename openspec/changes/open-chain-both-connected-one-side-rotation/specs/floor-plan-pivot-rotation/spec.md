@@ -1,10 +1,10 @@
 ## MODIFIED Requirements
 
 ### Requirement: Deterministic Inside-Left Projection Orientation
-For non-boundary pivot resolution based on interior reference projection, the endpoint projection basis SHALL use `left = (-insideY, insideX)`.
+For open-wall pivot resolution based on interior reference projection, the endpoint projection basis SHALL use `left = (-insideY, insideX)`.
 
 #### Scenario: Opposite-Endpoint Pivot Flip Is Prevented
-- **GIVEN** an open topology where selected wall has both endpoints connected and inside-left projection is used
+- **GIVEN** an open topology where selected wall uses inside-left projection (including boundary and both-connected cases)
 - **WHEN** pivot endpoint is resolved for repeated angle updates
 - **THEN** the selected pivot SHALL remain on the inside-left expected endpoint
 - **THEN** the opposite endpoint SHALL NOT be selected due to projection orientation inversion

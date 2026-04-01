@@ -62,9 +62,9 @@ For creating complex, non-rectangular room shapes with manual control.
 **Deterministic Pivot Selection (Click-Independent):**
 - Pivot endpoint is resolved by geometry rules, not by click proximity on the wall body
 - Rule priority for draw-mode anchor selection:
-  1. Boundary wall rule: connected endpoint wins
-  2. Inside-facing projection rule using structure reference
-  3. Winding fallback rule
+  1. Inside-facing projection rule using structure reference
+  2. Winding fallback rule
+- Boundary/open topology does not override this endpoint decision in the UI anchor selector
 - Inside-facing left projection basis in screen space:
   - $left = (-insideY, insideX)$
 
@@ -92,14 +92,15 @@ For creating complex, non-rectangular room shapes with manual control.
      - Connected end: Attached to another wall (within 1 unit tolerance)
      - Disconnected/free end: Not touching any other wall
    - **Pivot Point**: Uses the selected wall endpoint anchor (`start` or `end`)
-     - Anchor is chosen from deterministic geometry rules (not click side)
+     - Anchor is chosen from deterministic inside-left geometry rules (not click side)
+     - Depending on geometry, anchor may be either the connected endpoint or the free endpoint
      - The chosen anchor point remains fixed while rotating
    - **Behavior**: Entire connected chain rotates rigidly around the selected anchor endpoint
      - Traverses forward and backward through connected walls to identify full chain
      - Rotates all walls in the chain around the fixed selected anchor point
      - Maintains all wall connections and lengths
-     - Intuitive interaction: "grab" the free corner and rotate the attached structure
-   - **Use Case**: Perfect for adjusting angled room sections while keeping a specific endpoint visually fixed (pivot lock)
+     - Interaction outcome: selected endpoint acts as a fixed pivot while connected geometry rotates rigidly
+   - **Use Case**: Useful for adjusting boundary sections while keeping the inside-left chosen endpoint visually fixed
 
 3. **Open Both-Connected One-Side Rotation** (when selected wall has both ends connected and room is open):
    - **Detection**: Selected wall has both endpoints connected and topology is not closed
@@ -356,7 +357,7 @@ Enforced via `ROOM_CONSTRAINTS`:
 
 ### Rotation/View Helpers in FloorPlan
 
-- **`insideLeftAnchorTypeForWall()`**: Resolves deterministic anchor endpoint with boundary, projection, and winding priority
+- **`insideLeftAnchorTypeForWall()`**: Resolves deterministic anchor endpoint with projection and winding priority
 - **`selectedWallAnchorType`**: Tracks whether the selected endpoint anchor is `start` or `end`
 - **`lockDrawViewBoxToCurrentFrame()`**: Freezes draw viewBox before rotation edits
 - **`unlockDrawViewBox()`**: Restores auto-fit when editing context changes

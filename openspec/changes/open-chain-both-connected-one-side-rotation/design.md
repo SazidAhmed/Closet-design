@@ -45,7 +45,7 @@ Non-Goals:
 5. Inside-left projection orientation is explicit
 - Decision: endpoint projection uses `left = (-insideY, insideX)`.
 - Rationale: this matches inside-left semantics in current floor-plan screen space and prevents opposite-endpoint pivot selection.
-- Consequence: both-connected open cases (for example selected wall 2 or 3 in the 1-2-3-4 topology) consistently choose the expected green-marked pivot.
+- Consequence: open-wall cases (including boundary and both-connected; for example selected wall 1, 2, or 3 in the 1-2-3-4 topology) consistently choose the expected green-marked pivot.
 
 ## Invariants
 
@@ -67,5 +67,5 @@ Non-Goals:
 
 - Add unit tests for open both-connected selected wall with anchor `start` and `end`.
 - Add explicit invariant tests that downstream 90-degree corners remain unchanged in representative topology.
-- Verify UI anchor selection does not flip to the opposite endpoint for representative wall-2 and wall-3 cases.
+- Verify UI anchor selection does not flip to the opposite endpoint for representative wall-1 (boundary), wall-2, and wall-3 cases.
 - Run existing closed-room and boundary tests as regression.

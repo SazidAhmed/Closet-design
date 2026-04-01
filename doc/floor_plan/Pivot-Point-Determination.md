@@ -16,23 +16,12 @@ The anchor selected by the UI is passed into `setWallAngle(...)`, and store bran
 
 When a wall is selected in draw mode, `insideLeftAnchorTypeForWall(...)` in [FloorPlan.vue](../../src/features/closet/views/FloorPlan.vue) resolves anchor type with this priority:
 
-1. Boundary-wall rule (highest priority)
-2. Inside-facing geometric rule (projection)
-3. Winding fallback rule
+1. Inside-facing geometric rule (projection)
+2. Winding fallback rule
 
-### Rule 1: Boundary Wall Uses Connected Endpoint
+### Rule 1: Inside-Facing Left Endpoint
 
-If exactly one endpoint of the selected wall is connected to other walls, pivot is forced to the connected endpoint.
-
-- `startConnected !== endConnected`
-- pivot = `start` when start is connected
-- pivot = `end` when end is connected
-
-This prevents pivot jumps to the free endpoint and keeps chain rotation physically anchored at the joint.
-
-### Rule 2: Inside-Facing Left Endpoint
-
-When both endpoints are connected or both are free:
+For open walls (including boundary walls):
 
 1. Compute selected wall midpoint.
 2. Build an inside reference from other walls (`structureReferencePointExcludingWall`).
@@ -44,7 +33,7 @@ When both endpoints are connected or both are free:
 
 This implements: "stand on the wall, face inside, choose the endpoint on your left."
 
-### Rule 3: Winding Fallback
+### Rule 2: Winding Fallback
 
 If the inside reference is degenerate, fallback uses signed area of normalized wall vertices:
 
@@ -60,7 +49,7 @@ For closed rooms, `setWallAngle(...)` calls `rotateClosedRoom(...)` in [useRoomS
 `insideLeftPivot(...)` uses polygon winding from shoelace area:
 
 $$
-	ext{signedArea} = \frac{1}{2} \sum_{i=0}^{n-1}(x_i y_{i+1} - x_{i+1} y_i)
+signedArea = \frac{1}{2} \sum_{i=0}^{n-1}(x_i y_{i+1} - x_{i+1} y_i)
 $$
 
 Then:
@@ -76,7 +65,8 @@ Then:
 
 1. Closed room -> `rotateClosedRoom(delta, wallId)`
 2. Boundary wall -> `rotateBoundaryChain(delta, wallId, anchor)`
-3. Other open-chain -> per-wall rotate/translate logic
+3. Open wall with both endpoints connected -> `rotateOpenBothConnectedOneSide(delta, wallId, anchor)`
+4. Other open-chain -> per-wall rotate/translate logic
 
 For boundary chains, `rotateBoundaryChain(...)` rotates the connected chain rigidly around the provided anchor endpoint.
 
@@ -125,9 +115,8 @@ Used in `rotatePointAroundPivot(...)` in [useRoomStore.ts](../../src/stores/useR
 ## Summary
 
 1. Pivot endpoint is deterministic and click-independent.
-2. Boundary walls pivot on the connected endpoint.
-3. Non-boundary walls use inside-facing left endpoint from geometry projection.
-4. Closed rooms use store-side winding rule via `insideLeftPivot(...)`.
-5. View lock prevents visual pivot drift during rotation.
+2. Open walls (including boundary walls) use inside-facing left endpoint from geometry projection.
+3. Closed rooms use store-side winding rule via `insideLeftPivot(...)`.
+4. View lock prevents visual pivot drift during rotation.
 
 
