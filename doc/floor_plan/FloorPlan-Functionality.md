@@ -73,7 +73,7 @@ For creating complex, non-rectangular room shapes with manual control.
 - Checks that the last wall's endpoint is within 1 unit of the first wall's start
 - Requires minimum 3 walls to be considered closed
 
-**Rigid Room Rotation** (Four-tier priority system):
+**Rigid/Local Rotation** (Four-tier priority system with boundary sub-branch):
 
 1. **Closed Room Rotation** (when `isClosed = true`):
    - **Pivot Point Calculation**: (`insideLeftPivot` function)
@@ -95,12 +95,15 @@ For creating complex, non-rectangular room shapes with manual control.
      - Anchor is chosen from deterministic inside-left geometry rules (not click side)
      - Depending on geometry, anchor may be either the connected endpoint or the free endpoint
      - The chosen anchor point remains fixed while rotating
-   - **Behavior**: Entire connected chain rotates rigidly around the selected anchor endpoint
-     - Traverses forward and backward through connected walls to identify full chain
-     - Rotates all walls in the chain around the fixed selected anchor point
-     - Maintains all wall connections and lengths
-     - Interaction outcome: selected endpoint acts as a fixed pivot while connected geometry rotates rigidly
-   - **Use Case**: Useful for adjusting boundary sections while keeping the inside-left chosen endpoint visually fixed
+   - **Behavior**: Boundary rotation now has two outcomes based on pivot endpoint connectivity
+     - **Pivot connected, opposite endpoint free**: rotate only the selected wall around the pivot endpoint (local hinge)
+       - Connected structure stays fixed
+       - Angle between the selected wall and connected neighbor changes
+       - Use case: adjust a terminal wall without rotating the rest of the layout
+     - **Pivot free, opposite endpoint connected**: rotate the connected chain rigidly around the selected endpoint
+       - Traverses forward/backward through connected walls to identify chain
+       - Rotates that chain around the fixed selected endpoint
+       - Preserves chain lengths and corner angles
 
 3. **Open Both-Connected One-Side Rotation** (when selected wall has both ends connected and room is open):
    - **Detection**: Selected wall has both endpoints connected and topology is not closed
@@ -324,7 +327,7 @@ Enforced via `ROOM_CONSTRAINTS`:
 3. Click to place vertices, snap to 45° angles
 4. Close polygon by clicking near first vertex
 5. Select walls to adjust angle/length individually
-6. Rotate entire room around selected wall's inside-left corner
+6. Rotate geometry by topology: closed room rotates rigidly; boundary walls may rotate locally or as a chain
 7. Add items as needed
 
 ### Workflow 3: Hybrid Approach
@@ -350,9 +353,10 @@ Enforced via `ROOM_CONSTRAINTS`:
 - **`pointsApproximatelyEqual()`**: Check if two points are connected (within 1 unit tolerance)
 - **`findWallConnectedToStart()`**: Find wall attached to a wall's start endpoint
 - **`findWallConnectedToEnd()`**: Find wall attached to a wall's end endpoint
+- **`wallEndpointConnectivity()`**: Reports whether selected wall start/end endpoints are connected to any wall
 - **`isBoundaryWall()`**: Detect boundary walls (exactly one connected endpoint)
 - **`isBothConnectedWall()`**: Detect selected walls connected at both endpoints
-- **`rotateBoundaryChain(deltaRad, wallId, anchor)`**: Execute rigid rotation of the connected chain around the selected endpoint anchor
+- **`rotateBoundaryChain(deltaRad, wallId, anchor)`**: Execute rigid rotation when boundary branch resolves to chain rotation
 - **`rotateOpenBothConnectedOneSide(deltaRad, wallId, anchor)`**: Execute one-side rigid rotation for open both-connected selected walls
 
 ### Rotation/View Helpers in FloorPlan
@@ -371,7 +375,7 @@ Enforced via `ROOM_CONSTRAINTS`:
 | Room Shape | Rectangular | Any polygon |
 | Wall Count | 4 fixed | 1+ variable |
 | Resize | Drag handles | Manual angle/length |
-| Rotation Modes | N/A | 4-tier: Closed room / Boundary wall / Open both-connected one-side / Open fallback |
+| Rotation Modes | N/A | 4-tier: Closed room / Boundary wall (local hinge or rigid chain) / Open both-connected one-side / Open fallback |
 | Snap | None | 45° grid snap |
 | Items | Yes | Yes |
 | Closet Wall | Default Wall 0 | Selectable any wall |

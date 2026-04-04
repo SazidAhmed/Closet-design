@@ -164,7 +164,7 @@ describe('open both-connected one-side rotation', () => {
 })
 
 describe('boundary rotation regression', () => {
-  it('boundary selected wall keeps rigid chain invariants', () => {
+  it('boundary selected wall rotates locally when pivot endpoint is connected', () => {
     const store = createStore()
     setOpenRepresentativeChain(store)
 
@@ -182,6 +182,43 @@ describe('boundary rotation regression', () => {
     expectVecClose(pivotAfter, pivotBefore)
     expectOpenConnectivity(after)
 
+    // Selected wall hinges around the connected pivot endpoint.
+    expect(Math.abs(normalizeAngle(after[0]!.angle - before[0]!.angle))).toBeGreaterThan(1e-3)
+    expect(Math.abs(after[0]!.length - before[0]!.length)).toBeLessThanOrEqual(EPS)
+
+    // The rest of the structure remains untouched.
+    for (let i = 1; i < after.length; i += 1) {
+      expectVecClose(after[i]!.position, before[i]!.position)
+      expect(Math.abs(normalizeAngle(after[i]!.angle - before[i]!.angle))).toBeLessThanOrEqual(EPS)
+      expect(Math.abs(after[i]!.length - before[i]!.length)).toBeLessThanOrEqual(EPS)
+    }
+
+    // Only the joint at the pivot side changes.
+    expect(Math.abs(normalizeAngle(afterTurns[0]! - beforeTurns[0]!))).toBeGreaterThan(1e-3)
+    for (let i = 1; i < afterTurns.length; i += 1) {
+      expect(Math.abs(normalizeAngle(afterTurns[i]! - beforeTurns[i]!))).toBeLessThanOrEqual(EPS)
+    }
+  })
+
+  it('boundary selected wall still rotates rigid chain when pivot endpoint is disconnected', () => {
+    const store = createStore()
+    setOpenRepresentativeChain(store)
+
+    const before = snapshotWalls(store.walls)
+    const selected = before[0]!
+    const pivotBefore = selected.position
+    const beforeTurns = openChainTurns(before)
+
+    store.setWallAngle(selected.id, selected.angle + degToRad(12), 'start')
+
+    const after = snapshotWalls(store.walls)
+    const pivotAfter = after[0]!.position
+    const afterTurns = openChainTurns(after)
+
+    expectVecClose(pivotAfter, pivotBefore)
+    expectOpenConnectivity(after)
+
+    // Pivot side disconnected => preserve rigid-chain invariants.
     after.forEach((wall, i) => {
       expect(Math.abs(wall.length - before[i]!.length)).toBeLessThanOrEqual(EPS)
     })

@@ -216,6 +216,41 @@ function isBothConnectedWall(walls: Room['walls'], wallIdx: number): boolean {
   return startConnected && endConnected
 }
 
+function wallEndpointConnectivity(walls: Room['walls'], wallIdx: number): {
+  startConnected: boolean
+  endConnected: boolean
+} {
+  const wall = walls[wallIdx]!
+  const start: Vec2 = [wall.position[0], wall.position[1]]
+  const end = wallEndPoint(wall)
+  let startConnected = false
+  let endConnected = false
+
+  for (let i = 0; i < walls.length; i += 1) {
+    if (i === wallIdx) continue
+    const other = walls[i]!
+    const otherStart: Vec2 = [other.position[0], other.position[1]]
+    const otherEnd = wallEndPoint(other)
+
+    if (
+      !startConnected &&
+      (pointsApproximatelyEqual(start, otherStart) || pointsApproximatelyEqual(start, otherEnd))
+    ) {
+      startConnected = true
+    }
+    if (
+      !endConnected &&
+      (pointsApproximatelyEqual(end, otherStart) || pointsApproximatelyEqual(end, otherEnd))
+    ) {
+      endConnected = true
+    }
+
+    if (startConnected && endConnected) break
+  }
+
+  return { startConnected, endConnected }
+}
+
 export const useRoomStore = defineStore('room', {
   state: (): Room & { closetOffsetX: number; closetOffsetY: number; closetOffsetZ: number } => ({
     ...createDefaultRoom(),
@@ -429,35 +464,51 @@ export const useRoomStore = defineStore('room', {
 
     /** Rotate a wall to the provided angle in radians.
      *  For a closed polygon, rotates the ENTIRE room rigidly.
-     *  For a boundary wall (one end disconnected), rotates the entire connected chain.
+     *  For boundary walls where pivot endpoint is connected and opposite end is free,
+     *  rotates only the selected wall around the pivot endpoint.
+     *  For other boundary walls, rotates the connected chain rigidly.
      *  For an open both-connected wall, rotates one side as a rigid chain.
      *  For all other open cases, rotates locally and translates adjacent walls. */
     setWallAngle(wallId: string, angleRad: number, anchor: 'start' | 'end' = 'start') {
       const idx = this.walls.findIndex((w) => w.id === wallId)
       if (idx < 0 || !Number.isFinite(angleRad)) return
+      const wall = this.walls[idx]!
+      const nextAngle = normalizeAngle(angleRad)
+      const deltaRad = nextAngle - wall.angle
 
       // ── Closed-room branch: rigid rotation of the whole polygon ────────────
       if (this.roomIsClosed) {
-        const wall = this.walls[idx]!
-        const nextAngle = normalizeAngle(angleRad)
-        const deltaRad = nextAngle - wall.angle
         this.rotateClosedRoom(deltaRad, wallId)
+        return
+      }
+
+      const { startConnected, endConnected } = wallEndpointConnectivity(this.walls, idx)
+      const pivotConnected = anchor === 'start' ? startConnected : endConnected
+      const oppositeConnected = anchor === 'start' ? endConnected : startConnected
+
+      // If the selected pivot endpoint is connected but the opposite end is free,
+      // hinge only the selected wall around that pivot (do not rotate the structure).
+      if (pivotConnected && !oppositeConnected) {
+        if (anchor === 'start') {
+          wall.angle = nextAngle
+        } else {
+          const pivot = wallEndPoint(wall)
+          wall.position = [
+            pivot[0] - Math.cos(nextAngle) * wall.length,
+            pivot[1] - Math.sin(nextAngle) * wall.length,
+          ]
+          wall.angle = nextAngle
+        }
         return
       }
 
       // ── Boundary-wall branch: rigid rotation of connected chain ──────────────
       if (isBoundaryWall(this.walls, idx)) {
-        const wall = this.walls[idx]!
-        const nextAngle = normalizeAngle(angleRad)
-        const deltaRad = nextAngle - wall.angle
         this.rotateBoundaryChain(deltaRad, wallId, anchor)
         return
       }
 
       if (isBothConnectedWall(this.walls, idx)) {
-        const wall = this.walls[idx]!
-        const nextAngle = normalizeAngle(angleRad)
-        const deltaRad = nextAngle - wall.angle
         this.rotateOpenBothConnectedOneSide(deltaRad, wallId, anchor)
         return
       }
@@ -477,14 +528,12 @@ export const useRoomStore = defineStore('room', {
         w.position = [w.position[0] + dx, w.position[1] + dy]
       }
 
-      const wall = this.walls[idx]!
       const oldStart: Vec2 = [wall.position[0], wall.position[1]]
       const oldEnd: Vec2 = [
         oldStart[0] + Math.cos(wall.angle) * wall.length,
         oldStart[1] + Math.sin(wall.angle) * wall.length,
       ]
 
-      const nextAngle = normalizeAngle(angleRad)
       let newStart: Vec2 = [oldStart[0], oldStart[1]]
       let newEnd: Vec2 = [oldEnd[0], oldEnd[1]]
 

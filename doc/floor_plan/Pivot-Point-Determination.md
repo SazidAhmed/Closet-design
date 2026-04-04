@@ -64,11 +64,15 @@ Then:
 `setWallAngle(wallId, angleRad, anchor)` in [useRoomStore.ts](../../src/stores/useRoomStore.ts) branches as follows:
 
 1. Closed room -> `rotateClosedRoom(delta, wallId)`
-2. Boundary wall -> `rotateBoundaryChain(delta, wallId, anchor)`
-3. Open wall with both endpoints connected -> `rotateOpenBothConnectedOneSide(delta, wallId, anchor)`
-4. Other open-chain -> per-wall rotate/translate logic
+2. Boundary wall with **pivot endpoint connected** and opposite endpoint free -> rotate **selected wall only** around pivot endpoint
+3. Other boundary wall case -> `rotateBoundaryChain(delta, wallId, anchor)`
+4. Open wall with both endpoints connected -> `rotateOpenBothConnectedOneSide(delta, wallId, anchor)`
+5. Other open-chain -> per-wall rotate/translate logic
 
-For boundary chains, `rotateBoundaryChain(...)` rotates the connected chain rigidly around the provided anchor endpoint.
+Boundary connectivity is resolved per endpoint (`startConnected`, `endConnected`) and compared against the selected anchor.
+
+- If selected anchor endpoint is connected, only the selected wall hinges around that pivot.
+- If selected anchor endpoint is not connected, boundary behavior remains rigid-chain via `rotateBoundaryChain(...)`.
 
 ---
 
@@ -116,7 +120,8 @@ Used in `rotatePointAroundPivot(...)` in [useRoomStore.ts](../../src/stores/useR
 
 1. Pivot endpoint is deterministic and click-independent.
 2. Open walls (including boundary walls) use inside-facing left endpoint from geometry projection.
-3. Closed rooms use store-side winding rule via `insideLeftPivot(...)`.
-4. View lock prevents visual pivot drift during rotation.
+3. Boundary walls now branch by pivot-endpoint connectivity: local hinge when pivot is connected, rigid-chain otherwise.
+4. Closed rooms use store-side winding rule via `insideLeftPivot(...)`.
+5. View lock prevents visual pivot drift during rotation.
 
 
