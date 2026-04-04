@@ -84,6 +84,34 @@ function setConcaveWall2Representative(store: ReturnType<typeof useRoomStore>) {
   store.setRoomFromWalls(walls)
 }
 
+function setOpenWall4BoundaryRepresentative(store: ReturnType<typeof useRoomStore>) {
+  const vertices: Vec2[] = [
+    [0, 0],
+    [140, 0],
+    [140, 100],
+    [0, 100],
+    [0, 40],
+  ]
+
+  const walls: Wall[] = vertices.slice(0, -1).map((start, i) => {
+    const end = vertices[i + 1]!
+    const dx = end[0] - start[0]
+    const dy = end[1] - start[1]
+    return {
+      id: `ui_open_${i + 1}`,
+      position: [start[0], start[1]],
+      length: Math.hypot(dx, dy),
+      angle: Math.atan2(dy, dx),
+      hasCloset: i === 0,
+      thickness: 6,
+      label: String(i + 1),
+      visible: true,
+    }
+  })
+
+  store.setRoomFromWalls(walls)
+}
+
 function findButtonByText(wrapper: ReturnType<typeof mount>, text: string) {
   return wrapper
     .findAll('button')
@@ -200,6 +228,76 @@ describe('FloorPlan wall selection + angle UI integration', () => {
 
     expectVecClose(pivotAfter, pivotBefore)
     expectVecClose(notchAfter, pivotAfter)
+
+    wrapper.unmount()
+  })
+
+  it('Add Wall starts from selected wall non-connected endpoint', async () => {
+    setActivePinia(createPinia())
+    const roomStore = useRoomStore()
+
+    const wrapper = mount(FloorPlan, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          TopToolbar: true,
+          FooterBar: true,
+        },
+      },
+    })
+
+    const drawModeButton = findButtonByText(wrapper, 'Draw Walls')
+    expect(drawModeButton).toBeTruthy()
+    await drawModeButton!.trigger('click')
+
+    const startDrawingButton = findButtonByText(wrapper, 'Start Drawing')
+    expect(startDrawingButton).toBeTruthy()
+    await startDrawingButton!.trigger('click')
+
+    setOpenWall4BoundaryRepresentative(roomStore)
+    await nextTick()
+
+    const before = snapshotWalls(roomStore.walls)
+    expect(before.length).toBe(4)
+
+    // Stop active drawing so Add Wall action is available.
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+
+    const wallPolygons = wrapper.findAll('polygon.wall-segment')
+    expect(wallPolygons.length).toBe(4)
+
+    // Select wall 4: its non-connected endpoint is its END point.
+    await wallPolygons[3]!.trigger('click')
+
+    const addWallButton = findButtonByText(wrapper, 'Add Wall')
+    expect(addWallButton).toBeTruthy()
+    await addWallButton!.trigger('click')
+
+    const svg = wrapper.find('svg.draw-canvas')
+    expect(svg.exists()).toBe(true)
+    const svgElement = svg.element as unknown as {
+      createSVGPoint?: () => { x: number; y: number; matrixTransform: (m: unknown) => { x: number; y: number } }
+      getScreenCTM?: () => unknown
+    }
+    svgElement.createSVGPoint = () => ({
+      x: 0,
+      y: 0,
+      matrixTransform: () => ({ x: 0, y: 0 }),
+    })
+    svgElement.getScreenCTM = () => null
+
+    await svg.trigger('click', { clientX: 0, clientY: 0 })
+    await nextTick()
+
+    const after = snapshotWalls(roomStore.walls)
+    expect(after.length).toBe(5)
+
+    const wall4Before = before[3]!
+    const expectedStart = wallEndPoint(wall4Before)
+    const newWall = after[4]!
+
+    expectVecClose(newWall.position, expectedStart)
 
     wrapper.unmount()
   })

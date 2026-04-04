@@ -4,6 +4,10 @@
 
 export type Vec2 = [number, number]
 
+export const CM_PER_INCH = 2.54
+export const DEFAULT_WALL_HEIGHT_IN = 96
+export const DEFAULT_WALL_HEIGHT_CM = Math.round(DEFAULT_WALL_HEIGHT_IN * CM_PER_INCH)
+
 /** A single wall segment in the room. */
 export type Wall = {
   id: string
@@ -110,9 +114,13 @@ export function createDefaultRoomColors(): RoomColors {
 
 /**
  * Create a default rectangular room (4 walls).
- * Default is 8ft × 8ft = 243.84cm × 243.84cm (≈244cm).
+ * Default wall height is 96" (≈244cm).
  */
-export function createDefaultRoom(widthCm = 244, depthCm = 244, heightCm = 244): Room {
+export function createDefaultRoom(
+  widthCm = 244,
+  depthCm = 244,
+  heightCm = DEFAULT_WALL_HEIGHT_CM,
+): Room {
   const hw = widthCm / 2
   const hd = depthCm / 2
 

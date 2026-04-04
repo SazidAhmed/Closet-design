@@ -175,28 +175,37 @@ onUnmounted(() => {
 
 // ───── Change Room Height dialog ───────────────────────────────────────────
 const showHeightDialog = ref(false);
-const heightInput = ref(244);
+const CM_PER_INCH = 2.54;
+const heightInput = ref(96);
+
+function cmToInches(cm: number): number {
+  return Math.round(cm / CM_PER_INCH);
+}
+
+function inchesToCm(inches: number): number {
+  return inches * CM_PER_INCH;
+}
+
+function formatInches(cm: number): string {
+  return `${cmToInches(cm)}"`;
+}
 
 function openHeightDialog() {
-  heightInput.value = roomStore.height;
+  heightInput.value = cmToInches(roomStore.height);
   showHeightDialog.value = true;
 }
 
 function applyHeight() {
+  const minIn = cmToInches(ROOM_CONSTRAINTS.height.min);
+  const maxIn = cmToInches(ROOM_CONSTRAINTS.height.max);
+  const clampedIn = Math.max(minIn, Math.min(maxIn, Math.round(heightInput.value)));
   const clamped = Math.max(
     ROOM_CONSTRAINTS.height.min,
-    Math.min(ROOM_CONSTRAINTS.height.max, Math.round(heightInput.value)),
+    Math.min(ROOM_CONSTRAINTS.height.max, inchesToCm(clampedIn)),
   );
   roomStore.setHeight(clamped);
+  heightInput.value = cmToInches(clamped);
   showHeightDialog.value = false;
-}
-
-/** Convert cm to feet-inches string */
-function cmToImperial(cm: number): string {
-  const totalIn = cm / 2.54;
-  const ft = Math.floor(totalIn / 12);
-  const inches = Math.round(totalIn % 12);
-  return `${ft}' ${inches}"`;
 }
 
 // ───── Architecture item catalog ───────────────────────────────────────────
@@ -496,9 +505,9 @@ function degToRad(deg: number): number {
 }
 
 function onDrawHeightInput(e: Event) {
-  const value = Number((e.target as HTMLInputElement).value);
-  if (!Number.isFinite(value)) return;
-  roomStore.setHeight(clampDrawHeight(value));
+  const valueIn = Number((e.target as HTMLInputElement).value);
+  if (!Number.isFinite(valueIn)) return;
+  roomStore.setHeight(clampDrawHeight(inchesToCm(valueIn)));
 }
 
 function onDrawThicknessInput(e: Event) {
@@ -546,6 +555,44 @@ function wallEndPoint(wall: {
     wall.position[0] + Math.cos(wall.angle) * wall.length,
     wall.position[1] + Math.sin(wall.angle) * wall.length,
   ];
+}
+
+function isConnectedVertex(vertex: [number, number]): boolean {
+  let incidentCount = 0;
+
+  for (const wall of drawWalls.value) {
+    const start: [number, number] = [wall.position[0], wall.position[1]];
+    const end = wallEndPoint(wall);
+
+    if (Math.hypot(vertex[0] - start[0], vertex[1] - start[1]) <= 1) {
+      incidentCount += 1;
+    }
+    if (Math.hypot(vertex[0] - end[0], vertex[1] - end[1]) <= 1) {
+      incidentCount += 1;
+    }
+
+    if (incidentCount >= 2) return true;
+  }
+
+  return false;
+}
+
+function continuationStartVertexForWall(wall: {
+  position: [number, number];
+  angle: number;
+  length: number;
+}): [number, number] {
+  const start: [number, number] = [wall.position[0], wall.position[1]];
+  const end = wallEndPoint(wall);
+  const startConnected = isConnectedVertex(start);
+  const endConnected = isConnectedVertex(end);
+
+  // Prefer the non-connected endpoint so Add Wall extends from a chain end.
+  if (startConnected && !endConnected) return end;
+  if (!startConnected && endConnected) return start;
+
+  // If both ends share the same connectivity state, keep a deterministic fallback.
+  return end;
 }
 
 /** Compute all vertices from the wall chain */
@@ -823,16 +870,12 @@ function continueDrawing() {
     return;
   }
 
-  if (selectedWall.value && selectedWallAnchor.value) {
+  if (selectedWall.value) {
+    const continuationStart = continuationStartVertexForWall(selectedWall.value);
     pendingStartVertex.value = [
-      snapToGrid(selectedWallAnchor.value[0]),
-      snapToGrid(selectedWallAnchor.value[1]),
+      snapToGrid(continuationStart[0]),
+      snapToGrid(continuationStart[1]),
     ];
-    mousePos.x = pendingStartVertex.value[0];
-    mousePos.y = pendingStartVertex.value[1];
-  } else if (selectedWall.value) {
-    const end = wallEndPoint(selectedWall.value);
-    pendingStartVertex.value = [snapToGrid(end[0]), snapToGrid(end[1])];
     mousePos.x = pendingStartVertex.value[0];
     mousePos.y = pendingStartVertex.value[1];
   } else if (chainEndVertex.value) {
@@ -1122,10 +1165,7 @@ function wallInsideAreaPoints(
 
 /** Format length for display */
 function formatLength(cm: number): string {
-  const totalIn = cm / 2.54;
-  const ft = Math.floor(totalIn / 12);
-  const inches = Math.round(totalIn % 12);
-  return `${ft}' ${inches}\"`;
+  return formatInches(cm);
 }
 
 /** Dimension line offset perpendicular to the wall */
@@ -1199,9 +1239,9 @@ function dimLinePoints(wall: {
                 <input
                   class="prop-input"
                   type="number"
-                  :value="roomStore.height"
-                  :min="ROOM_CONSTRAINTS.height.min"
-                  :max="ROOM_CONSTRAINTS.height.max"
+                  :value="cmToInches(roomStore.height)"
+                  :min="cmToInches(ROOM_CONSTRAINTS.height.min)"
+                  :max="cmToInches(ROOM_CONSTRAINTS.height.max)"
                   @input="onDrawHeightInput"
                 />
               </div>
@@ -1312,11 +1352,13 @@ function dimLinePoints(wall: {
                 <input
                   class="prop-input"
                   type="number"
-                  :value="selectedWall.length"
+                  :value="cmToInches(selectedWall.length)"
                   @input="
                     (e: Event) =>
                       roomStore.updateWallProps(selectedWall!.id, {
-                        length: Number((e.target as HTMLInputElement).value),
+                        length: inchesToCm(
+                          Number((e.target as HTMLInputElement).value),
+                        ),
                       })
                   "
                 />
@@ -1327,11 +1369,11 @@ function dimLinePoints(wall: {
                 <input
                   class="prop-input"
                   type="number"
-                  :value="roomStore.height"
+                  :value="cmToInches(roomStore.height)"
                   @input="
                     (e: Event) =>
                       roomStore.setHeight(
-                        Number((e.target as HTMLInputElement).value),
+                        inchesToCm(Number((e.target as HTMLInputElement).value)),
                       )
                   "
                 />
@@ -1420,7 +1462,7 @@ function dimLinePoints(wall: {
             <h3 class="sidebar-heading">Add Architecture</h3>
 
             <button class="sidebar-action-btn" @click="openHeightDialog">
-              Change Room Height ({{ cmToImperial(roomStore.height) }})
+              Change Room Height ({{ formatInches(roomStore.height) }})
             </button>
 
             <h4 class="sidebar-subheading">Add Door</h4>
@@ -1554,8 +1596,7 @@ function dimLinePoints(wall: {
                 font-size="12"
                 font-weight="600"
               >
-                {{ Math.round(roomW / 2.54 / 12) }}'
-                {{ Math.round((roomW / 2.54) % 12) }}"
+                {{ formatLength(roomW) }}
               </text>
             </g>
 
@@ -1580,8 +1621,7 @@ function dimLinePoints(wall: {
                 font-weight="600"
                 transform="rotate(0)"
               >
-                {{ Math.round(roomD / 2.54 / 12) }}'
-                {{ Math.round((roomD / 2.54) % 12) }}"
+                {{ formatLength(roomD) }}
               </text>
             </g>
 
@@ -1867,7 +1907,7 @@ function dimLinePoints(wall: {
               >
                 <circle
                   r="10"
-                  :fill="wall.hasCloset ? '#22c55e' : '#f59e0b'"
+                  fill="#f59e0b"
                   stroke="#0f172a"
                   stroke-width="1.5"
                 />
@@ -1910,10 +1950,11 @@ function dimLinePoints(wall: {
             <circle
               v-for="(v, i) in wallVertices"
               :key="'v-' + i"
+              class="vertex-dot"
               :cx="v[0]"
               :cy="v[1]"
               :r="i === 0 && isNearFirstVertex ? 8 : 4"
-              :fill="i === 0 ? '#22c55e' : '#fbbf24'"
+              :fill="isConnectedVertex(v) ? '#fbbf24' : '#22c55e'"
               stroke="#0f172a"
               stroke-width="1.5"
               :class="{ 'close-snap': i === 0 && isNearFirstVertex }"
@@ -2116,23 +2157,20 @@ function dimLinePoints(wall: {
           <h3 class="dialog-title">Change Room Height</h3>
           <p class="dialog-desc">
             Set the ceiling height for your room ({{
-              ROOM_CONSTRAINTS.height.min
-            }}–{{ ROOM_CONSTRAINTS.height.max }} cm).
+              cmToInches(ROOM_CONSTRAINTS.height.min)
+            }}–{{ cmToInches(ROOM_CONSTRAINTS.height.max) }} in).
           </p>
 
           <div class="dialog-input-row">
             <input
               v-model.number="heightInput"
               type="number"
-              :min="ROOM_CONSTRAINTS.height.min"
-              :max="ROOM_CONSTRAINTS.height.max"
+              :min="cmToInches(ROOM_CONSTRAINTS.height.min)"
+              :max="cmToInches(ROOM_CONSTRAINTS.height.max)"
               class="dialog-input"
               @keydown.enter="applyHeight"
             />
-            <span class="dialog-unit">cm</span>
-            <span class="dialog-imperial"
-              >({{ cmToImperial(heightInput) }})</span
-            >
+            <span class="dialog-unit">in</span>
           </div>
 
           <div class="dialog-actions">

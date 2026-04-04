@@ -31,7 +31,7 @@ For rapid room setup with simple rectangular spaces.
 
 #### Visual Elements:
 - Floor color and wall strokes based on room store colors
-- Dimension annotations (feet/inches format) above and right edges
+- Dimension annotations (inches-only format) above and right edges
 - Resize handles with cursor feedback (nwse-resize, nesw-resize, etc.)
 
 ---
@@ -49,6 +49,7 @@ For creating complex, non-rectangular room shapes with manual control.
 **Drawing Workflow:**
 1. **Start Fresh Draw**: Initializes empty wall chain, enables vertex placement
 2. **Add Wall**: Continues from last wall endpoint (skip initial segment setup)
+  - If a wall is selected, continuation starts from that wall's non-connected endpoint (green point)
 3. **Click to Place**: Each click creates a new wall segment from previous endpoint
    - First click after start sets `pendingStartVertex` as explicit origin
    - Subsequent clicks add walls via `addWallVertex()`
@@ -163,7 +164,7 @@ For creating complex, non-rectangular room shapes with manual control.
 - Inside-side visualization can be toggled with **Show Inside** in the Draw Walls controls
 - Live dimension annotation showing current segment length
 - Snap circle highlights near first vertex (expands when within close threshold)
-- Vertices as dots: green for first vertex, yellow for others
+- Vertices as dots: green for non-connected points, yellow for connected points
 
 #### Keyboard Interaction:
 - **Escape Key**: Stop drawing mode and clear pending start vertex
@@ -242,9 +243,9 @@ screenToSvg(svg, screenX, screenY):
 - Heights in cm
 - Thicknesses in cm/pixels (SVG context)
 
-#### Display Units: Feet/Inches
-- `cmToImperial(cm)`: Converts to "X' Y\"" format
-- `formatLength(cm)`: Used in dimension annotations
+#### Display Units: Inches
+- `cmToInches(cm)`: Converts cm to inch values for Floor Plan inputs
+- `formatLength(cm)`: Used in dimension annotations (inches-only)
 - Conversion: 1 inch = 2.54 cm
 
 ---

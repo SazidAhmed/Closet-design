@@ -5,7 +5,7 @@
 import type { Room } from './types/room'
 import type { Tower } from './types/tower'
 import type { CabinetDimensions } from './schema'
-import { createDefaultRoom } from './types/room'
+import { createDefaultRoom, DEFAULT_WALL_HEIGHT_CM } from './types/room'
 import { createDefaultTower } from './types/tower'
 
 export type ClosetTypeName = 'reach_in' | 'walk_in' | 'custom'
@@ -33,8 +33,8 @@ export const CLOSET_TYPES: ClosetTypeOption[] = [
     description: 'A standard closet accessed from the front, typically 2-8 feet wide. Great for bedrooms, hallways, and entryways.',
     roomWidth: 183,    // ~6 ft
     roomDepth: 61,     // ~2 ft
-    roomHeight: 244,   // ~8 ft
-    createRoom: () => createDefaultRoom(183, 61, 244),
+    roomHeight: DEFAULT_WALL_HEIGHT_CM,   // 96 in
+    createRoom: () => createDefaultRoom(183, 61, DEFAULT_WALL_HEIGHT_CM),
     createCabinet: () => ({ width: 183, height: 213, depth: 61, thickness: 2 }),
     createTowers: () => [
       createDefaultTower(91.5, 61, 213, 1),
@@ -47,8 +47,8 @@ export const CLOSET_TYPES: ClosetTypeOption[] = [
     description: 'A spacious room-sized closet you can walk into. Configure towers on multiple walls with full customization.',
     roomWidth: 244,    // ~8 ft
     roomDepth: 244,    // ~8 ft
-    roomHeight: 244,   // ~8 ft
-    createRoom: () => createDefaultRoom(244, 244, 244),
+    roomHeight: DEFAULT_WALL_HEIGHT_CM,   // 96 in
+    createRoom: () => createDefaultRoom(244, 244, DEFAULT_WALL_HEIGHT_CM),
     createCabinet: () => ({ width: 244, height: 213, depth: 61, thickness: 2 }),
     createTowers: () => [
       createDefaultTower(61, 61, 213, 1),
@@ -63,8 +63,8 @@ export const CLOSET_TYPES: ClosetTypeOption[] = [
     description: 'Start with a blank room and design everything from scratch. Full control over room shape, walls, and closet placement.',
     roomWidth: 244,
     roomDepth: 244,
-    roomHeight: 244,
-    createRoom: () => createDefaultRoom(244, 244, 244),
+    roomHeight: DEFAULT_WALL_HEIGHT_CM,
+    createRoom: () => createDefaultRoom(244, 244, DEFAULT_WALL_HEIGHT_CM),
     createCabinet: () => ({ width: 120, height: 213, depth: 61, thickness: 2 }),
     createTowers: () => [
       createDefaultTower(120, 61, 213, 1),
