@@ -64,6 +64,10 @@ For creating complex, non-rectangular room shapes with manual control.
 - Rule priority for draw-mode anchor selection:
   1. Inside-facing projection rule using structure reference
   2. Winding fallback rule
+- Anchor stability during angle edits:
+  - Endpoint type (`start` or `end`) is locked when the wall is selected
+  - Endpoint type is not recomputed on every incremental angle update
+  - Prevents intermittent pivot-side flips in open/boundary rotations (for example, wall-2 switching to the opposite endpoint mid-edit)
 - Boundary/open topology does not override this endpoint decision in the UI anchor selector
 - Inside-facing left projection basis in screen space:
   - $left = (-insideY, insideX)$
@@ -121,6 +125,7 @@ For creating complex, non-rectangular room shapes with manual control.
 - **Angle Control**:
   - Input field for direct angle entry (degrees converted to radians)
   - ±1° increment buttons for fine rotation
+  - Uses the selected wall's locked anchor endpoint type for the full edit interaction
   - Label changes to "Rotate Room" when closed (vs. "Angle" when open)
 
 #### Wall Properties (When Selected):
@@ -152,6 +157,9 @@ For creating complex, non-rectangular room shapes with manual control.
 
 **Preview & Snap Feedback:**
 - Preview line from last vertex to cursor (blue dashed)
+- Inside-side preview area (shadow band) shows the room-inside side for the pending segment
+- Inside side is defined by drawing direction: right-hand side of wall direction in screen space
+- Inside-side visualization can be toggled with **Show Inside** in the Draw Walls controls
 - Live dimension annotation showing current segment length
 - Snap circle highlights near first vertex (expands when within close threshold)
 - Vertices as dots: green for first vertex, yellow for others
@@ -310,6 +318,12 @@ Enforced via `ROOM_CONSTRAINTS`:
    - Orange/Purple/Cyan rectangles = item categories
 5. **Selection Highlights**: Yellow fill for selected items, bold stroke for selected walls
 6. **Cursor Feedback**: Resize cursors, grab cursor for items, pointer cursor for buttons
+7. **Inside-Side Indicator**:
+  - Shadow-style inside area rendered from the wall toward the room-inside side (no green edge line)
+  - Area is shown while drawing (including pending preview segment)
+  - **Show Inside** toggle enables/disables this visual guide
+  - Side flips automatically when wall direction is reversed
+  - Preview segment uses the same direction rule before placement
 
 ---
 
@@ -347,6 +361,7 @@ Enforced via `ROOM_CONSTRAINTS`:
 - **`wallEndPoint()`**: Calculate endpoint from position + angle * length
 - **`normalizeAngle()`**: Map angles to canonical [-π, π] range
 - **`roomPlanBounds()`**: Calculate AABB (axis-aligned bounding box) for viewport fitting
+- **`wallInsideGuideAreaPoints()`**: Build the inside shadow-band polygon from wall direction and thickness
 
 ### Boundary Wall Rotation Functions
 

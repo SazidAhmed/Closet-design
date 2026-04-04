@@ -10,6 +10,8 @@ Current behavior has two layers:
 
 The anchor selected by the UI is passed into `setWallAngle(...)`, and store branches decide how much geometry rotates.
 
+Note: the draw-canvas inside-side marker is a visual guide based on wall drawing direction (right-hand side in screen space). It is rendered as a shadow-style inside area (with a Show Inside toggle) and does not override deterministic pivot endpoint selection.
+
 ---
 
 ## Deterministic Pivot Rules
@@ -81,9 +83,15 @@ Boundary connectivity is resolved per endpoint (`startConnected`, `endConnected`
 Wall click position no longer determines pivot endpoint.
 
 - `selectWall(...)` in [FloorPlan.vue](../../src/features/closet/views/FloorPlan.vue) computes anchor from deterministic geometry rules.
-- `setSelectedWallAngleDeg(...)` recomputes anchor before each angle update and passes that anchor to store.
+- `setSelectedWallAngleDeg(...)` keeps the selected endpoint type stable during the angle edit and passes that fixed anchor type to store.
 
 So clicking near one end versus the other end of the same wall should not change pivot choice.
+
+Intermittent flip fix:
+
+- During repeated angle updates (typing or ±1°), the endpoint type is no longer recomputed per step.
+- Only the anchor coordinates are refreshed from updated geometry while preserving the same endpoint type.
+- This prevents occasional pivot jumps to the opposite endpoint in open/boundary shapes.
 
 ---
 

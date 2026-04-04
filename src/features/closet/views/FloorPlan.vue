@@ -14,6 +14,9 @@ import {
 } from "../domain/materials/catalog";
 import { ROOM_CONSTRAINTS } from "../domain/constraints";
 import { createDefaultRoom } from "../domain/types/room";
+import {
+  wallInsideGuideAreaPoints,
+} from "../domain/geometry/insideWallSide";
 import { useHistoryStore } from "../../../stores/useHistoryStore";
 
 const roomStore = useRoomStore();
@@ -471,6 +474,7 @@ const pendingStartVertex = ref<[number, number] | null>(null);
 const CLOSE_THRESHOLD = 15; // SVG units — snap distance to first vertex
 const GRID_SIZE = 10; // SVG grid snap size
 const drawWallThicknessInput = ref(6);
+const showInsideSideIndicator = ref(true);
 
 function clampDrawHeight(v: number): number {
   return Math.max(
@@ -638,52 +642,6 @@ function structureReferencePointExcludingWall(wallId: string): [number, number] 
   return averagePoint(points);
 }
 
-function pointsApproximatelyEqual(
-  a: [number, number],
-  b: [number, number],
-  tolerance = 1,
-): boolean {
-  return Math.hypot(a[0] - b[0], a[1] - b[1]) <= tolerance;
-}
-
-function wallEndpointConnectivity(wallId: string): {
-  startConnected: boolean;
-  endConnected: boolean;
-} {
-  const wall = drawWalls.value.find((w) => w.id === wallId);
-  if (!wall) {
-    return { startConnected: false, endConnected: false };
-  }
-
-  const start: [number, number] = [wall.position[0], wall.position[1]];
-  const end = wallEndPoint(wall);
-  let startConnected = false;
-  let endConnected = false;
-
-  for (const other of drawWalls.value) {
-    if (other.id === wallId) continue;
-    const otherStart: [number, number] = [other.position[0], other.position[1]];
-    const otherEnd = wallEndPoint(other);
-
-    if (
-      pointsApproximatelyEqual(start, otherStart) ||
-      pointsApproximatelyEqual(start, otherEnd)
-    ) {
-      startConnected = true;
-    }
-    if (
-      pointsApproximatelyEqual(end, otherStart) ||
-      pointsApproximatelyEqual(end, otherEnd)
-    ) {
-      endConnected = true;
-    }
-
-    if (startConnected && endConnected) break;
-  }
-
-  return { startConnected, endConnected };
-}
-
 function insideLeftAnchorTypeForWall(wall: {
   id: string;
   position: [number, number];
@@ -763,6 +721,7 @@ const previewWall = computed<{
   position: [number, number];
   angle: number;
   length: number;
+  thickness: number;
 } | null>(() => {
   if (!isDrawing.value || !lastVertex.value) return null;
   const [sx, sy] = lastVertex.value;
@@ -776,6 +735,7 @@ const previewWall = computed<{
     position: [sx, sy],
     angle: Math.atan2(dy, dx),
     length,
+    thickness: drawWallThicknessInput.value,
   };
 });
 
@@ -1131,8 +1091,10 @@ function setSelectedWallAngleDeg(angleDeg: number) {
     lockDrawViewBoxToCurrentFrame();
   }
 
-  const anchorType = insideLeftAnchorTypeForWall(selectedWall.value);
-  selectedWallAnchorType.value = anchorType;
+  // Anchor endpoint is resolved when selecting a wall and kept stable while
+  // editing angle. Recomputing it every step can flip pivot endpoints mid-edit
+  // in open topologies.
+  const anchorType = selectedWallAnchorType.value;
   selectedWallAnchor.value =
     anchorType === "start"
       ? [selectedWall.value.position[0], selectedWall.value.position[1]]
@@ -1143,6 +1105,16 @@ function setSelectedWallAngleDeg(angleDeg: number) {
     degToRad(angleDeg),
     anchorType,
   );
+
+  // Keep displayed anchor coordinates in sync with updated geometry while
+  // preserving the same endpoint type throughout the edit interaction.
+  const updatedWall = drawWalls.value.find((w) => w.id === selectedWall.value!.id);
+  if (updatedWall) {
+    selectedWallAnchor.value =
+      anchorType === "start"
+        ? [updatedWall.position[0], updatedWall.position[1]]
+        : wallEndPoint(updatedWall);
+  }
 }
 
 function onSelectedWallAngleInput(e: Event) {
@@ -1186,6 +1158,20 @@ function wallPolygonPoints(wall: {
   const p3 = [end[0] - cos, end[1] - sin];
   const p4 = [end[0] + cos, end[1] + sin];
   return `${p1[0]},${p1[1]} ${p2[0]},${p2[1]} ${p3[0]},${p3[1]} ${p4[0]},${p4[1]}`;
+}
+
+function wallInsideAreaPoints(
+  wall: {
+    position: [number, number];
+    angle: number;
+    length: number;
+    thickness: number;
+  },
+  preview = false,
+) {
+  const edgeInset = Math.min(0.8, Math.max(0.1, wall.thickness * 0.25));
+  const guideDepth = preview ? 22 : 18;
+  return wallInsideGuideAreaPoints(wall, "right", edgeInset, guideDepth);
 }
 
 /** Format length for display */
@@ -1283,6 +1269,15 @@ function dimLinePoints(wall: {
                   min="1"
                   max="30"
                   @input="onDrawThicknessInput"
+                />
+              </div>
+
+              <div class="prop-row indicator-toggle-row">
+                <label class="prop-label">Show Inside</label>
+                <input
+                  v-model="showInsideSideIndicator"
+                  type="checkbox"
+                  class="indicator-toggle"
                 />
               </div>
             </div>
@@ -1889,6 +1884,13 @@ function dimLinePoints(wall: {
 
             <!-- Drawn wall segments -->
             <g v-for="wall in drawWalls" :key="wall.id">
+              <polygon
+                v-if="wall.visible && showInsideSideIndicator && isDrawing"
+                :points="wallInsideAreaPoints(wall)"
+                class="inside-side-area"
+                pointer-events="none"
+              />
+
               <!-- Thick wall polygon -->
               <polygon
                 v-if="wall.visible"
@@ -2009,6 +2011,13 @@ function dimLinePoints(wall: {
             >
               {{ formatLength(previewWall.length) }}
             </text>
+
+            <polygon
+              v-if="previewWall && showInsideSideIndicator"
+              :points="wallInsideAreaPoints(previewWall, true)"
+              class="inside-side-area preview"
+              pointer-events="none"
+            />
 
             <!-- Preview snap circle at cursor when near first vertex -->
             <circle
@@ -2541,6 +2550,17 @@ function dimLinePoints(wall: {
   gap: 8px;
 }
 
+.indicator-toggle-row {
+  padding-top: 2px;
+}
+
+.indicator-toggle {
+  width: 16px;
+  height: 16px;
+  accent-color: #22c55e;
+  cursor: pointer;
+}
+
 .prop-label {
   font-size: 11px;
   font-weight: 600;
@@ -2616,6 +2636,16 @@ function dimLinePoints(wall: {
 .wall-segment:hover {
   fill: #e8c88a;
   stroke: #f59e0b;
+}
+
+.inside-side-area {
+  fill: rgba(2, 6, 23, 0.24);
+  stroke: none;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.22));
+}
+
+.inside-side-area.preview {
+  fill: rgba(2, 6, 23, 0.3);
 }
 
 .close-snap {
