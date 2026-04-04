@@ -132,8 +132,8 @@ For creating complex, non-rectangular room shapes with manual control.
 
 #### Wall Properties (When Selected):
 - **Label**: Custom wall identifier (e.g., "1", "Front Wall")
-- **Length**: Wall segment length (cm)
-- **Height**: Room ceiling height (applies to all walls)
+- **Length**: Wall segment length (inches in UI; stored in cm internally)
+- **Height**: Room ceiling height (inches in UI; stored in cm internally)
 - **Thickness**: Wall visual thickness (1-30 units)
 - **Rotation**: Angle in degrees (±1° control + direct input)
 - **Visibility**: Toggle wall rendering on/off
@@ -144,7 +144,7 @@ For creating complex, non-rectangular room shapes with manual control.
 - Auto-numbered sequentially as walls are added (Wall 1, Wall 2, etc.)
 - Labels update automatically when walls are deleted
 - First wall automatically marked as closet wall if none exists
-- Green highlight on closet wall label (yellow for others)
+- Wall-number badges are consistently yellow for all walls
 
 #### Canvas & Viewport Management:
 
@@ -315,8 +315,7 @@ Enforced via `ROOM_CONSTRAINTS`:
 2. **Snap Indicators**: Expanding circle near first vertex when in close range
 3. **Live Dimension**: Blue dashed line + dimension text following cursor during draw
 4. **Color Coding**: 
-   - Green circle = closet wall
-   - Yellow circle = regular wall
+  - Yellow circle = wall number badge (all walls)
    - Orange/Purple/Cyan rectangles = item categories
 5. **Selection Highlights**: Yellow fill for selected items, bold stroke for selected walls
 6. **Cursor Feedback**: Resize cursors, grab cursor for items, pointer cursor for buttons

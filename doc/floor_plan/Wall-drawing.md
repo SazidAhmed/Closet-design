@@ -98,7 +98,7 @@ Important view-level states:
 - `isDrawing`: active drawing state
 - `isClosed`: room marked complete
 - `selectedWallId`: selected segment id
-- `selectedWallAnchor`: nearest endpoint from clicked wall (used for Add Wall start)
+- `selectedWallAnchor`: selected wall anchor used for edit context (angle/pivot)
 - `pendingStartVertex`: explicit start point for next segment
 - `mousePos`: snapped cursor position
 
@@ -118,9 +118,10 @@ Note: No zero-length placeholder segment is created.
 
 1. User selects a wall.
 2. User clicks Add Wall.
-3. System records nearest endpoint of the clicked wall as `selectedWallAnchor`.
-4. `pendingStartVertex` is seeded with this anchor.
-5. First click places a segment starting from that anchor.
+3. System resolves the selected wall continuation endpoint.
+4. If exactly one endpoint is non-connected (green), `pendingStartVertex` is seeded from that non-connected endpoint.
+5. If both endpoints share the same connectivity state, continuation falls back deterministically to wall end.
+6. First click places a segment starting from `pendingStartVertex`.
 
 Fallback behavior if no wall selected:
 
@@ -237,8 +238,9 @@ Problem:
 
 Fix:
 
-- Captured nearest endpoint from selected wall click.
-- Used anchor as pending start for Add Wall.
+- Resolved selected-wall continuation from endpoint connectivity.
+- Preferred non-connected endpoint (green) for Add Wall start.
+- Kept deterministic fallback when both endpoints have same connectivity.
 
 ## 8.8 Escape key removed walls instead of finishing
 
@@ -268,7 +270,7 @@ Added or updated behavior in `useRoomStore`:
 
 1. `addWallVertex(x, y, thickness, firstStart?)`
 	- Accepts optional explicit start point.
-	- Supports continuation from selected wall endpoint.
+	- Supports continuation from selected wall resolved start endpoint.
 	- Guards against tiny segments.
 
 2. `closeRoom(thickness?)`
@@ -288,7 +290,7 @@ Added or updated behavior in `useRoomStore`:
 	- Start Drawing -> click anchor -> click next point to create first segment.
 
 3. Continue flow:
-	- Select wall -> Add Wall -> first click creates segment from selected wall endpoint.
+	- Select wall -> Add Wall -> first click creates segment from selected wall non-connected endpoint (or deterministic fallback when needed).
 
 4. Finish flow:
 	- Click near first point to close polygon, or press Escape to finish without closing.
@@ -311,7 +313,7 @@ No TypeScript or build-blocking errors remained after each accepted change.
 
 Current limitations:
 
-1. Continuation anchors to nearest endpoint of selected wall, not arbitrary point along wall length.
+1. Continuation is endpoint-based (non-connected preferred), not arbitrary point along wall length.
 2. Removing walls does not yet enforce polygon topology constraints.
 3. Self-intersections are not prevented.
 
@@ -353,7 +355,7 @@ A correct implementation must satisfy all of these:
 	- Add Wall (continue).
 3. First click in fresh drawing sets anchor only; no wall created yet.
 4. First real segment must be label 1.
-5. Add Wall must start from selected wall anchor (nearest clicked endpoint).
+5. Add Wall must start from selected wall non-connected endpoint when available.
 6. Escape must finish drawing mode, not undo/delete geometry.
 7. Remove Wall removes only selected segment and preserves remaining geometry.
 8. After remove, Add Wall remains available when walls still exist.
@@ -443,7 +445,7 @@ When a wall is selected:
 
 Mouse:
 
-1. `selectWall` captures wall id and nearest endpoint anchor.
+1. `selectWall` captures wall id and edit anchor context.
 2. Draw-canvas click:
 	- if not in drawing mode: ignore
 	- if pending start exists: first click creates segment from that start
@@ -463,7 +465,7 @@ Always test these scenarios in a new app:
 1. Enter draw mode: no pre-rendered default walls unless explicitly started.
 2. First segment label starts at 1.
 3. Remove one wall from closed shape, then Add Wall still visible.
-4. Select wall 2, Add Wall, verify first new segment starts at wall 2 anchor.
+4. Select a boundary wall, Add Wall, verify first new segment starts at selected wall non-connected endpoint.
 5. Preview line origin matches pending start, not chain start.
 6. Escape does not delete walls.
 7. Canvas click in idle draw mode does not start or reset drawing.
