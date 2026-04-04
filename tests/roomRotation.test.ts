@@ -149,6 +149,68 @@ function setCounterClockwiseRectangle(store: ReturnType<typeof useRoomStore>) {
   store.setRoomFromWalls(walls)
 }
 
+function setConcaveWall2Representative(store: ReturnType<typeof useRoomStore>) {
+  // Representative topology from wall-2 pivot bug reports.
+  // The selected wall is index 1, and its END point is the inner notch corner.
+  const vertices: Vec2[] = [
+    [0, -60],
+    [140, -80],
+    [120, -200],
+    [320, -200],
+    [320, -360],
+    [0, -360],
+  ]
+
+  const walls: Wall[] = vertices.map((start, i) => {
+    const end = vertices[(i + 1) % vertices.length]!
+    const dx = end[0] - start[0]
+    const dy = end[1] - start[1]
+    return {
+      id: `concave_${i + 1}`,
+      position: [start[0], start[1]],
+      length: Math.hypot(dx, dy),
+      angle: Math.atan2(dy, dx),
+      hasCloset: i === 0,
+      thickness: 6,
+      label: String(i + 1),
+      visible: true,
+    }
+  })
+
+  store.setRoomFromWalls(walls)
+}
+
+function setConcaveWall2RepresentativeReversed(store: ReturnType<typeof useRoomStore>) {
+  // Same representative concave topology with opposite winding.
+  // The selected wall is index 1, and its START point is the inner notch corner.
+  const vertices: Vec2[] = [
+    [320, -200],
+    [120, -200],
+    [140, -80],
+    [0, -60],
+    [0, -360],
+    [320, -360],
+  ]
+
+  const walls: Wall[] = vertices.map((start, i) => {
+    const end = vertices[(i + 1) % vertices.length]!
+    const dx = end[0] - start[0]
+    const dy = end[1] - start[1]
+    return {
+      id: `concave_rev_${i + 1}`,
+      position: [start[0], start[1]],
+      length: Math.hypot(dx, dy),
+      angle: Math.atan2(dy, dx),
+      hasCloset: i === 0,
+      thickness: 6,
+      label: String(i + 1),
+      visible: true,
+    }
+  })
+
+  store.setRoomFromWalls(walls)
+}
+
 describe('closed room rotation pivot', () => {
   it('clockwise order: selected bottom wall keeps inside-left pivot fixed', () => {
     const store = createStore()
@@ -225,6 +287,64 @@ describe('closed room rotation pivot', () => {
     after.forEach((wall, i) => {
       expect(Math.abs(wall.length - baselineLengths[i]!)).toBeLessThanOrEqual(EPS)
     })
+  })
+
+  it('concave wall-2 topology keeps inner-notch pivot fixed', () => {
+    const store = createStore()
+    setConcaveWall2Representative(store)
+
+    const before = snapshotWalls(store.walls)
+    expect(polygonSignedArea(verticesFromWalls(before))).toBeLessThan(0)
+
+    const idx = 1
+    const wall2Before = before[idx]!
+    const notchBefore = wallEndPoint(wall2Before)
+    const pivotBefore = insideLeftPivot(before, idx)
+
+    // In this representative shape, wall 2 must pivot around its inner notch endpoint.
+    expectVecClose(pivotBefore, notchBefore)
+
+    for (let i = 0; i < 20; i += 1) {
+      const selected = store.walls[idx]!
+      store.setWallAngle(selected.id, selected.angle + degToRad(4), 'start')
+    }
+
+    const after = snapshotWalls(store.walls)
+    const wall2After = after[idx]!
+    const pivotAfter = insideLeftPivot(after, idx)
+
+    expectVecClose(pivotAfter, pivotBefore)
+    expectVecClose(wallEndPoint(wall2After), pivotAfter)
+    expectRigidInvariants(before, after)
+  })
+
+  it('concave wall-2 reversed winding keeps inner-notch pivot fixed', () => {
+    const store = createStore()
+    setConcaveWall2RepresentativeReversed(store)
+
+    const before = snapshotWalls(store.walls)
+    expect(polygonSignedArea(verticesFromWalls(before))).toBeGreaterThan(0)
+
+    const idx = 1
+    const wall2Before = before[idx]!
+    const notchBefore: Vec2 = [wall2Before.position[0], wall2Before.position[1]]
+    const pivotBefore = insideLeftPivot(before, idx)
+
+    // Reversed winding should still keep wall-2 pivot on the same inner notch corner.
+    expectVecClose(pivotBefore, notchBefore)
+
+    for (let i = 0; i < 20; i += 1) {
+      const selected = store.walls[idx]!
+      store.setWallAngle(selected.id, selected.angle - degToRad(4), 'end')
+    }
+
+    const after = snapshotWalls(store.walls)
+    const wall2After = after[idx]!
+    const pivotAfter = insideLeftPivot(after, idx)
+
+    expectVecClose(pivotAfter, pivotBefore)
+    expectVecClose(wall2After.position, pivotAfter)
+    expectRigidInvariants(before, after)
   })
 })
 

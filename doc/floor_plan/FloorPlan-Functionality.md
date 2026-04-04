@@ -61,16 +61,18 @@ For creating complex, non-rectangular room shapes with manual control.
 
 **Deterministic Pivot Selection (Click-Independent):**
 - Pivot endpoint is resolved by geometry rules, not by click proximity on the wall body
-- Rule priority for draw-mode anchor selection:
-  1. Inside-facing projection rule using structure reference
-  2. Winding fallback rule
+- Anchor selection uses one interior-side rule for placed walls:
+  1. Build polygon vertices from current wall chain (`normalizedVerticesForInterior`)
+  2. Sample points on both wall sides at the wall midpoint (`+normal` and `-normal`)
+  3. Determine which sampled side lies inside the polygon (`pointInPolygon2D`)
+  4. Map interior side to anchor endpoint: inside on right => `start`, inside on left => `end`
+  5. If side test is degenerate (both/none inside), fallback to winding sign
+- This same interior-side decision is also used for store closed-room pivot calculation (`closedWallInteriorSide`), keeping view and store aligned
 - Anchor stability during angle edits:
   - Endpoint type (`start` or `end`) is locked when the wall is selected
   - Endpoint type is not recomputed on every incremental angle update
   - Prevents intermittent pivot-side flips in open/boundary rotations (for example, wall-2 switching to the opposite endpoint mid-edit)
 - Boundary/open topology does not override this endpoint decision in the UI anchor selector
-- Inside-facing left projection basis in screen space:
-  - $left = (-insideY, insideX)$
 
 **Room Closure Detection:**
 - `roomIsClosed` getter checks if all walls form a continuous polygon
@@ -81,10 +83,9 @@ For creating complex, non-rectangular room shapes with manual control.
 
 1. **Closed Room Rotation** (when `isClosed = true`):
    - **Pivot Point Calculation**: (`insideLeftPivot` function)
-     - Identifies the "inside-left" corner of selected wall
-     - Uses polygon signed area (shoelace formula) to determine winding order
-     - Positive area (clockwise in floor-plan space) → left = wall START
-     - Negative area (counterclockwise) → left = wall END
+  - Identifies interior wall side via midpoint side-sampling against room polygon (`closedWallInteriorSide`)
+  - Maps interior side to inside-left endpoint (`right` side => wall `START`, `left` side => wall `END`)
+  - Uses winding sign fallback only when side-sampling is degenerate
    - **Behavior**: Entire room rotates rigidly around the selected wall's inside-left pivot
      - Rotates all vertices around fixed pivot point
      - Rebuilds all walls from consecutive rotated vertices
@@ -157,8 +158,8 @@ For creating complex, non-rectangular room shapes with manual control.
 
 **Preview & Snap Feedback:**
 - Preview line from last vertex to cursor (blue dashed)
-- Inside-side preview area (shadow band) shows the room-inside side for the pending segment
-- Inside side is defined by drawing direction: right-hand side of wall direction in screen space
+- Inside-side preview area (shadow band) uses right-hand drawing direction for the pending segment (before polygon context exists)
+- For placed walls, inside-side area uses polygon interior-side sampling so the shown inside matches pivot logic
 - Inside-side visualization can be toggled with **Show Inside** in the Draw Walls controls
 - Live dimension annotation showing current segment length
 - Snap circle highlights near first vertex (expands when within close threshold)
@@ -322,8 +323,8 @@ Enforced via `ROOM_CONSTRAINTS`:
   - Shadow-style inside area rendered from the wall toward the room-inside side (no green edge line)
   - Area is shown while drawing (including pending preview segment)
   - **Show Inside** toggle enables/disables this visual guide
-  - Side flips automatically when wall direction is reversed
-  - Preview segment uses the same direction rule before placement
+  - For placed walls, interior side is detected from polygon side-sampling (same rule used for pivot)
+  - Preview segment uses right-hand direction before placement
 
 ---
 
@@ -356,12 +357,14 @@ Enforced via `ROOM_CONSTRAINTS`:
 
 - **`snapped45Segment()`**: Project endpoint to nearest 45° lattice
 - **`polygonSignedArea()`**: Shoelace formula for winding order detection
-- **`insideLeftPivot()`**: Calculate inside-facing left corner for rotation pivot
+- **`insideLeftPivot()`**: Calculate inside-facing left corner for closed-room rotation pivot using interior side sampling with winding fallback
 - **`rotatePointAroundPivot()`**: Rigid rotation around fixed point (cos/sin optimization)
 - **`wallEndPoint()`**: Calculate endpoint from position + angle * length
 - **`normalizeAngle()`**: Map angles to canonical [-π, π] range
 - **`roomPlanBounds()`**: Calculate AABB (axis-aligned bounding box) for viewport fitting
 - **`wallInsideGuideAreaPoints()`**: Build the inside shadow-band polygon from wall direction and thickness
+- **`pointInPolygon2D()` / `pointInPolygon()`**: Determine whether side-sample points lie inside the current polygon
+- **`interiorSideForWall()` / `closedWallInteriorSide()`**: Resolve which side of a wall is interior
 
 ### Boundary Wall Rotation Functions
 
@@ -376,10 +379,18 @@ Enforced via `ROOM_CONSTRAINTS`:
 
 ### Rotation/View Helpers in FloorPlan
 
-- **`insideLeftAnchorTypeForWall()`**: Resolves deterministic anchor endpoint with projection and winding priority
+- **`insideLeftAnchorTypeForWall()`**: Resolves deterministic anchor endpoint from polygon interior-side sampling with winding fallback
 - **`selectedWallAnchorType`**: Tracks whether the selected endpoint anchor is `start` or `end`
 - **`lockDrawViewBoxToCurrentFrame()`**: Freezes draw viewBox before rotation edits
 - **`unlockDrawViewBox()`**: Restores auto-fit when editing context changes
+
+### Regression Tests
+
+- **`tests/roomRotation.test.ts`**:
+  - Concave wall-2 inner-notch pivot stability (closed room)
+  - Reversed-winding concave wall-2 inner-notch pivot stability (closed room)
+- **`tests/floorPlan.pivot.integration.test.ts`**:
+  - UI interaction regression for wall selection + repeated `Rotate +1°` updates preserving wall-2 pivot endpoint
 
 ---
 

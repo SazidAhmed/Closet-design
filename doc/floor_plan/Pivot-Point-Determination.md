@@ -10,37 +10,23 @@ Current behavior has two layers:
 
 The anchor selected by the UI is passed into `setWallAngle(...)`, and store branches decide how much geometry rotates.
 
-Note: the draw-canvas inside-side marker is a visual guide based on wall drawing direction (right-hand side in screen space). It is rendered as a shadow-style inside area (with a Show Inside toggle) and does not override deterministic pivot endpoint selection.
+Note: for placed walls, the draw-canvas inside-side marker now uses the same interior-side rule as pivot selection. This keeps the shown shadow side and selected pivot endpoint aligned. (Preview segments still use right-hand drawing direction before placement.)
 
 ---
 
 ## Deterministic Pivot Rules
 
-When a wall is selected in draw mode, `insideLeftAnchorTypeForWall(...)` in [FloorPlan.vue](../../src/features/closet/views/FloorPlan.vue) resolves anchor type with this priority:
+When a wall is selected in draw mode, `insideLeftAnchorTypeForWall(...)` in [FloorPlan.vue](../../src/features/closet/views/FloorPlan.vue) resolves anchor type from one interior-side rule:
 
-1. Inside-facing geometric rule (projection)
-2. Winding fallback rule
+1. Build normalized polygon vertices from current walls.
+2. At selected wall midpoint, sample both sides using wall normal (`+normal` and `-normal`).
+3. Test both sample points with point-in-polygon.
+4. The side that is inside determines anchor endpoint:
+	- inside on right side -> `start`
+	- inside on left side -> `end`
+5. If side tests are ambiguous (both/none inside), fallback to winding sign.
 
-### Rule 1: Inside-Facing Left Endpoint
-
-For open walls (including boundary walls):
-
-1. Compute selected wall midpoint.
-2. Build an inside reference from other walls (`structureReferencePointExcludingWall`).
-3. Form inside vector from midpoint to that reference.
-4. Compute left-of-facing vector in screen space:
-	- $left = (-insideY, insideX)$
-5. Project start and end offsets onto `left`.
-6. Endpoint with larger projection is chosen as pivot endpoint.
-
-This implements: "stand on the wall, face inside, choose the endpoint on your left."
-
-### Rule 2: Winding Fallback
-
-If the inside reference is degenerate, fallback uses signed area of normalized wall vertices:
-
-- `signedArea >= 0` -> `start`
-- `signedArea < 0` -> `end`
+This implements the same practical rule users see in canvas: the shadow-marked side is treated as inside, and inside-left endpoint comes from that side.
 
 ---
 
@@ -48,16 +34,14 @@ If the inside reference is degenerate, fallback uses signed area of normalized w
 
 For closed rooms, `setWallAngle(...)` calls `rotateClosedRoom(...)` in [useRoomStore.ts](../../src/stores/useRoomStore.ts), which ignores UI click location and computes pivot using `insideLeftPivot(...)`.
 
-`insideLeftPivot(...)` uses polygon winding from shoelace area:
+`insideLeftPivot(...)` now uses `closedWallInteriorSide(...)`:
 
-$$
-signedArea = \frac{1}{2} \sum_{i=0}^{n-1}(x_i y_{i+1} - x_{i+1} y_i)
-$$
+1. Sample both sides of selected wall at midpoint.
+2. Determine which side is interior via point-in-polygon.
+3. Map interior side to pivot endpoint (`right` -> `START`, `left` -> `END`).
+4. Use winding fallback only for degenerate side tests.
 
-Then:
-
-- `signedArea >= 0` -> selected wall `START`
-- `signedArea < 0` -> selected wall `END`
+This keeps store pivot calculation aligned with what is visually shown as inside in the floor-plan canvas.
 
 ---
 
@@ -83,6 +67,7 @@ Boundary connectivity is resolved per endpoint (`startConnected`, `endConnected`
 Wall click position no longer determines pivot endpoint.
 
 - `selectWall(...)` in [FloorPlan.vue](../../src/features/closet/views/FloorPlan.vue) computes anchor from deterministic geometry rules.
+- Inside-side area click and wall-body click both route through the same wall selection path.
 - `setSelectedWallAngleDeg(...)` keeps the selected endpoint type stable during the angle edit and passes that fixed anchor type to store.
 
 So clicking near one end versus the other end of the same wall should not change pivot choice.
@@ -127,9 +112,22 @@ Used in `rotatePointAroundPivot(...)` in [useRoomStore.ts](../../src/stores/useR
 ## Summary
 
 1. Pivot endpoint is deterministic and click-independent.
-2. Open walls (including boundary walls) use inside-facing left endpoint from geometry projection.
+2. Pivot endpoint now follows the polygon-interior side rule used by the inside shadow area for placed walls.
 3. Boundary walls now branch by pivot-endpoint connectivity: local hinge when pivot is connected, rigid-chain otherwise.
-4. Closed rooms use store-side winding rule via `insideLeftPivot(...)`.
-5. View lock prevents visual pivot drift during rotation.
+4. Closed rooms use store-side interior-side sampling via `insideLeftPivot(...)`, with winding fallback only for degenerate tests.
+5. Closed-room anchor decisions in the view stay aligned with store pivot math.
+6. View lock prevents visual pivot drift during rotation.
+
+---
+
+## Regression Coverage
+
+- Store-level closed-rotation regression tests:
+	- `tests/roomRotation.test.ts`
+	- Concave wall-2 representative topology keeps inner-notch pivot fixed.
+	- Reversed-winding concave wall-2 topology keeps the same inner-notch pivot fixed.
+- UI-level interaction regression test:
+	- `tests/floorPlan.pivot.integration.test.ts`
+	- Mounts FloorPlan, selects wall 2, applies repeated `Rotate +1°`, and asserts pivot endpoint stability.
 
 

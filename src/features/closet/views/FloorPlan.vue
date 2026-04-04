@@ -588,27 +588,6 @@ function polygonSignedArea2D(vertices: [number, number][]): number {
   return sum / 2;
 }
 
-function polygonCentroid2D(
-  vertices: [number, number][],
-): [number, number] | null {
-  if (vertices.length === 0) return null;
-  if (vertices.length < 3) return averagePoint(vertices);
-
-  const area = polygonSignedArea2D(vertices);
-  if (Math.abs(area) < 1e-6) return averagePoint(vertices);
-
-  let cx = 0;
-  let cy = 0;
-  for (let i = 0; i < vertices.length; i += 1) {
-    const [x1, y1] = vertices[i]!;
-    const [x2, y2] = vertices[(i + 1) % vertices.length]!;
-    const cross = x1 * y2 - x2 * y1;
-    cx += (x1 + x2) * cross;
-    cy += (y1 + y2) * cross;
-  }
-  return [cx / (6 * area), cy / (6 * area)];
-}
-
 function normalizedVerticesForInterior(): [number, number][] {
   const verts = [...wallVertices.value];
   if (verts.length < 2) return verts;
@@ -621,25 +600,56 @@ function normalizedVerticesForInterior(): [number, number][] {
   return verts;
 }
 
-function averagePoint(points: [number, number][]): [number, number] | null {
-  if (points.length === 0) return null;
-  let sx = 0;
-  let sy = 0;
-  for (const [x, y] of points) {
-    sx += x;
-    sy += y;
+function pointInPolygon2D(
+  point: [number, number],
+  polygon: [number, number][],
+): boolean {
+  if (polygon.length < 3) return false;
+  const [px, py] = point;
+  let inside = false;
+
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
+    const [xi, yi] = polygon[i]!;
+    const [xj, yj] = polygon[j]!;
+
+    const intersects =
+      yi > py !== yj > py &&
+      px < ((xj - xi) * (py - yi)) / ((yj - yi) || Number.EPSILON) + xi;
+    if (intersects) inside = !inside;
   }
-  return [sx / points.length, sy / points.length];
+
+  return inside;
 }
 
-function structureReferencePointExcludingWall(wallId: string): [number, number] | null {
-  const points: [number, number][] = [];
-  for (const wall of drawWalls.value) {
-    if (wall.id === wallId) continue;
-    points.push([wall.position[0], wall.position[1]]);
-    points.push(wallEndPoint(wall));
+function interiorSideForWall(wall: {
+  position: [number, number];
+  angle: number;
+  length: number;
+  thickness?: number;
+}): "right" | "left" {
+  const vertices = normalizedVerticesForInterior();
+  if (vertices.length >= 3) {
+    const start: [number, number] = [wall.position[0], wall.position[1]];
+    const end = wallEndPoint(wall);
+    const midX = (start[0] + end[0]) / 2;
+    const midY = (start[1] + end[1]) / 2;
+
+    const sampleOffset = Math.max(4, (wall.thickness ?? 6) * 1.5);
+    const sideX = Math.cos(wall.angle + Math.PI / 2) * sampleOffset;
+    const sideY = Math.sin(wall.angle + Math.PI / 2) * sampleOffset;
+
+    const rightInside = pointInPolygon2D([midX + sideX, midY + sideY], vertices);
+    const leftInside = pointInPolygon2D([midX - sideX, midY - sideY], vertices);
+
+    if (rightInside !== leftInside) {
+      return rightInside ? "right" : "left";
+    }
+
+    const signedArea = polygonSignedArea2D(vertices);
+    return signedArea >= 0 ? "right" : "left";
   }
-  return averagePoint(points);
+
+  return "right";
 }
 
 function insideLeftAnchorTypeForWall(wall: {
@@ -648,73 +658,8 @@ function insideLeftAnchorTypeForWall(wall: {
   angle: number;
   length: number;
 }): "start" | "end" {
-  if (isClosed.value) {
-    const vertices = normalizedVerticesForInterior();
-    const n = vertices.length;
-    const wallIdx = drawWalls.value.findIndex((w) => w.id === wall.id);
-    if (wallIdx >= 0 && n >= 3) {
-      const wallStart = vertices[wallIdx]!;
-      const wallEnd = vertices[(wallIdx + 1) % n]!;
-      const midX = (wallStart[0] + wallEnd[0]) / 2;
-      const midY = (wallStart[1] + wallEnd[1]) / 2;
-      const interior = polygonCentroid2D(vertices);
-
-      if (interior) {
-        const insideX = interior[0] - midX;
-        const insideY = interior[1] - midY;
-        const insideLen = Math.hypot(insideX, insideY);
-
-        if (insideLen >= 1e-6) {
-          // Match store semantics exactly for closed rooms.
-          const leftX = -insideY;
-          const leftY = insideX;
-          const startProj =
-            (wallStart[0] - midX) * leftX + (wallStart[1] - midY) * leftY;
-          const endProj =
-            (wallEnd[0] - midX) * leftX + (wallEnd[1] - midY) * leftY;
-
-          if (Math.abs(startProj - endProj) >= 1e-6) {
-            return startProj >= endProj ? "start" : "end";
-          }
-        }
-      }
-
-      const signedArea = polygonSignedArea2D(vertices);
-      return signedArea >= 0 ? "start" : "end";
-    }
-  }
-
-  const start: [number, number] = [wall.position[0], wall.position[1]];
-  const end = wallEndPoint(wall);
-  const midX = (start[0] + end[0]) / 2;
-  const midY = (start[1] + end[1]) / 2;
-
-  // Use the rest of the structure as an "inside" reference so endpoint choice
-  // remains stable even when the wall chain is open or partially disconnected.
-  const ref = structureReferencePointExcludingWall(wall.id);
-  if (ref) {
-    const insideX = ref[0] - midX;
-    const insideY = ref[1] - midY;
-    const insideLen = Math.hypot(insideX, insideY);
-
-    if (insideLen >= 1e-6) {
-      // In screen space (y grows downward), left-of-facing uses counterclockwise
-      // rotation of the inside vector for deterministic inside-left endpoint picks.
-      const leftX = -insideY;
-      const leftY = insideX;
-
-      const startProj = (start[0] - midX) * leftX + (start[1] - midY) * leftY;
-      const endProj = (end[0] - midX) * leftX + (end[1] - midY) * leftY;
-
-      if (Math.abs(startProj - endProj) >= 1e-6) {
-        return startProj >= endProj ? "start" : "end";
-      }
-    }
-  }
-
-  // Fallback: preserve the closed-room winding rule used by store pivot math.
-  const signedArea = polygonSignedArea2D(normalizedVerticesForInterior());
-  return signedArea >= 0 ? "start" : "end";
+  const side = interiorSideForWall(wall);
+  return side === "right" ? "start" : "end";
 }
 
 const previewWall = computed<{
@@ -1171,7 +1116,8 @@ function wallInsideAreaPoints(
 ) {
   const edgeInset = Math.min(0.8, Math.max(0.1, wall.thickness * 0.25));
   const guideDepth = preview ? 22 : 18;
-  return wallInsideGuideAreaPoints(wall, "right", edgeInset, guideDepth);
+  const side = preview ? "right" : interiorSideForWall(wall);
+  return wallInsideGuideAreaPoints(wall, side, edgeInset, guideDepth);
 }
 
 /** Format length for display */
@@ -1888,7 +1834,7 @@ function dimLinePoints(wall: {
                 v-if="wall.visible && showInsideSideIndicator && isDrawing"
                 :points="wallInsideAreaPoints(wall)"
                 class="inside-side-area"
-                pointer-events="none"
+                @click.stop="selectWall(wall.id, $event)"
               />
 
               <!-- Thick wall polygon -->
@@ -2641,6 +2587,7 @@ function dimLinePoints(wall: {
 .inside-side-area {
   fill: rgba(2, 6, 23, 0.24);
   stroke: none;
+  cursor: pointer;
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.22));
 }
 

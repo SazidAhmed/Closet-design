@@ -140,21 +140,55 @@ function rotatePointAroundPivot(point: Vec2, pivot: Vec2, cosD: number, sinD: nu
   ]
 }
 
+function pointInPolygon(point: Vec2, polygon: Vec2[]): boolean {
+  if (polygon.length < 3) return false
+  const [px, py] = point
+  let inside = false
+
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
+    const [xi, yi] = polygon[i]!
+    const [xj, yj] = polygon[j]!
+    const intersects =
+      yi > py !== yj > py &&
+      px < ((xj - xi) * (py - yi)) / ((yj - yi) || Number.EPSILON) + xi
+    if (intersects) inside = !inside
+  }
+
+  return inside
+}
+
+function closedWallInteriorSide(vertices: Vec2[], wallIndex: number): 'right' | 'left' {
+  const n = vertices.length
+  const start = vertices[wallIndex]!
+  const end = vertices[(wallIndex + 1) % n]!
+  const dx = end[0] - start[0]
+  const dy = end[1] - start[1]
+  const angle = Math.atan2(dy, dx)
+  const midX = (start[0] + end[0]) / 2
+  const midY = (start[1] + end[1]) / 2
+
+  const sampleOffset = 8
+  const sideX = Math.cos(angle + Math.PI / 2) * sampleOffset
+  const sideY = Math.sin(angle + Math.PI / 2) * sampleOffset
+
+  const rightInside = pointInPolygon([midX + sideX, midY + sideY], vertices)
+  const leftInside = pointInPolygon([midX - sideX, midY - sideY], vertices)
+
+  if (rightInside !== leftInside) {
+    return rightInside ? 'right' : 'left'
+  }
+
+  const signedArea = polygonSignedArea(vertices)
+  return signedArea >= 0 ? 'right' : 'left'
+}
+
 function insideLeftPivot(vertices: Vec2[], wallIndex: number): Vec2 {
   const n = vertices.length
-  const signedArea = polygonSignedArea(vertices)
   const wallStart = vertices[wallIndex]!
   const wallEnd = vertices[(wallIndex + 1) % n]!
 
-  // Inside is derived from winding:
-  // - positive signed area => clockwise wall order in this floor-plan space
-  // - negative signed area => counterclockwise wall order
-  //
-  // "Left endpoint from inside" means: stand on the wall and face into the room.
-  // Under that viewpoint in this screen-space coordinate system:
-  // - clockwise order => left endpoint is wall START
-  // - counterclockwise order => left endpoint is wall END
-  return signedArea >= 0
+  const side = closedWallInteriorSide(vertices, wallIndex)
+  return side === 'right'
     ? [wallStart[0], wallStart[1]]
     : [wallEnd[0], wallEnd[1]]
 }
