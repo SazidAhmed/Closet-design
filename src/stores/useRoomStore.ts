@@ -688,16 +688,49 @@ export const useRoomStore = defineStore('room', {
     },
 
     /**
-     * Resize a rectangular room — keeps opposite walls paired.
-     * walls[0] & walls[2] = width, walls[1] & walls[3] = depth.
+     * Resize the room in plan space by scaling current geometry from center.
+     * Width/depth are target bounds of the current wall layout.
      */
     resizeRoom(width: number, depth: number) {
       const w = clampWall(width)
       const d = clampWall(depth)
-      if (this.walls[0]) this.walls[0].length = w
-      if (this.walls[2]) this.walls[2].length = w
-      if (this.walls[1]) this.walls[1].length = d
-      if (this.walls[3]) this.walls[3].length = d
+      if (this.walls.length === 0) return
+
+      const bounds = roomPlanBounds(this.walls)
+      const sourceW = Math.max(1, bounds.width)
+      const sourceD = Math.max(1, bounds.depth)
+
+      const scaleX = w / sourceW
+      const scaleY = d / sourceD
+      const cx = bounds.centerX
+      const cy = bounds.centerY
+
+      for (const wall of this.walls) {
+        const start: Vec2 = [wall.position[0], wall.position[1]]
+        const end = wallEndPoint(wall)
+
+        const scaledStart: Vec2 = [
+          cx + (start[0] - cx) * scaleX,
+          cy + (start[1] - cy) * scaleY,
+        ]
+        const scaledEnd: Vec2 = [
+          cx + (end[0] - cx) * scaleX,
+          cy + (end[1] - cy) * scaleY,
+        ]
+
+        const dx = scaledEnd[0] - scaledStart[0]
+        const dy = scaledEnd[1] - scaledStart[1]
+        const nextLength = Math.hypot(dx, dy)
+        if (nextLength < 1) continue
+
+        wall.position = [scaledStart[0], scaledStart[1]]
+        wall.length = nextLength
+        wall.angle = normalizeAngle(Math.atan2(dy, dx))
+      }
+
+      if (this.walls.length === 4 && this.shape === 'rectangular') {
+        this.shape = 'rectangular'
+      }
     },
 
     // ─── Draw Walls actions ──────────────────────────────────────────

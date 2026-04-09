@@ -13,7 +13,11 @@ import {
   DOOR_MATERIALS,
 } from "../domain/materials/catalog";
 import { ROOM_CONSTRAINTS } from "../domain/constraints";
-import { createDefaultRoom } from "../domain/types/room";
+import {
+  DEFAULT_QUICK_ROOM_PRESET_ID,
+  QUICK_ROOM_PRESETS,
+  createQuickRoomFromPreset,
+} from "../domain/quickRoomPresets";
 import {
   wallInsideGuideAreaPoints,
 } from "../domain/geometry/insideWallSide";
@@ -24,10 +28,59 @@ const closet = useClosetStore();
 const appStore = useAppStore();
 const historyStore = useHistoryStore();
 
-/** Width of the room (wall 0) */
-const roomW = computed(() => roomStore.walls[0]?.length ?? 244);
-/** Depth of the room (wall 1) */
-const roomD = computed(() => roomStore.walls[1]?.length ?? 244);
+const quickPresetId = ref<string>(DEFAULT_QUICK_ROOM_PRESET_ID);
+
+function applyQuickPreset(presetId: string) {
+  const nextRoom = createQuickRoomFromPreset(presetId, roomStore.height);
+  const currentColors = { ...roomStore.colors };
+
+  roomStore.setRoom({
+    ...nextRoom,
+    colors: currentColors,
+    height: roomStore.height,
+  });
+
+  roomStore.closetOffsetX = 0;
+  roomStore.closetOffsetY = 0;
+  roomStore.closetOffsetZ = 0;
+  selectedItemId.value = null;
+
+  quickPresetId.value = presetId;
+}
+
+const quickBounds = computed(() => roomStore.planBounds);
+
+/** Width of the room plan bounds */
+const roomW = computed(() => quickBounds.value.width ?? 244);
+/** Depth of the room plan bounds */
+const roomD = computed(() => quickBounds.value.depth ?? 244);
+
+const canQuickResize = computed(() => roomStore.walls.length > 0);
+const isRectangularQuick = computed(
+  () => roomStore.shape === "rectangular" && roomStore.walls.length === 4,
+);
+
+const quickResizeCorners = computed<[number, number][]>(() => {
+  if (!canQuickResize.value) return [];
+  const { minX, maxX, minY, maxY } = quickBounds.value;
+  return [
+    [minX, minY],
+    [maxX, minY],
+    [maxX, maxY],
+    [minX, maxY],
+  ];
+});
+
+const quickRoomVertices = computed<[number, number][]>(() => {
+  if (roomStore.walls.length === 0) return [];
+  const vertices: [number, number][] = roomStore.walls.map((wall) => [
+    wall.position[0],
+    wall.position[1],
+  ]);
+  const last = roomStore.walls[roomStore.walls.length - 1]!;
+  vertices.push(wallEndPoint(last));
+  return vertices;
+});
 
 /** Darken the wall color slightly for the 2D wall stroke */
 function darkenHex(hex: string, amount = 40): string {
@@ -43,15 +96,18 @@ const wallStroke = computed(() => darkenHex(roomStore.colors.wallColor, 50));
 // ───── Dynamic viewBox ─────────────────────────────────────────────────────
 const viewPad = 80; // padding around room in SVG units
 const svgViewBox = computed(() => {
-  const w = roomW.value + viewPad * 2;
-  const h = roomD.value + viewPad * 2;
-  return `${-w / 2} ${-h / 2} ${w} ${h}`;
+  const w = quickBounds.value.width + viewPad * 2;
+  const h = quickBounds.value.depth + viewPad * 2;
+  return `${quickBounds.value.centerX - w / 2} ${quickBounds.value.centerY - h / 2} ${w} ${h}`;
 });
 
 // ───── Drag-to-resize ──────────────────────────────────────────────────────
 const svgRef = ref<SVGSVGElement | null>(null);
 
 type DragAxis = "width" | "depth" | "both";
+type QuickResizeAxisLock = "auto" | "width" | "depth";
+
+const quickResizeAxisLock = ref<QuickResizeAxisLock>("auto");
 
 const drag = reactive<{
   active: boolean;
@@ -93,11 +149,8 @@ const cornerCursors = [
   "nwse-resize",
   "nesw-resize",
 ];
-// Mid-wall cursors (Top, Right, Bottom, Left)
-const midCursors = ["ns-resize", "ew-resize", "ns-resize", "ew-resize"];
-
 function startCornerDrag(idx: number, e: PointerEvent) {
-  if (!svgRef.value) return;
+  if (!svgRef.value || !canQuickResize.value) return;
   e.preventDefault();
   (e.target as Element)?.setPointerCapture?.(e.pointerId);
   drag.active = true;
@@ -109,22 +162,8 @@ function startCornerDrag(idx: number, e: PointerEvent) {
   drag.startD = roomD.value;
 }
 
-function startMidDrag(idx: number, e: PointerEvent) {
-  if (!svgRef.value) return;
-  e.preventDefault();
-  (e.target as Element)?.setPointerCapture?.(e.pointerId);
-  drag.active = true;
-  // Top(0)/Bottom(2) = depth, Right(1)/Left(3) = width
-  drag.axis = idx === 0 || idx === 2 ? "depth" : "width";
-  drag.cornerIdx = idx;
-  drag.startMouseX = e.clientX;
-  drag.startMouseY = e.clientY;
-  drag.startW = roomW.value;
-  drag.startD = roomD.value;
-}
-
 function onPointerMove(e: PointerEvent) {
-  if (!drag.active || !svgRef.value) return;
+  if (!drag.active || !svgRef.value || !canQuickResize.value) return;
 
   const startSvg = screenToSvg(
     svgRef.value,
@@ -142,17 +181,40 @@ function onPointerMove(e: PointerEvent) {
   let newW = drag.startW;
   let newD = drag.startD;
 
-  if (drag.axis === "both") {
-    const signX = drag.cornerIdx === 0 || drag.cornerIdx === 3 ? -1 : 1;
-    const signY = drag.cornerIdx === 0 || drag.cornerIdx === 1 ? -1 : 1;
-    newW = drag.startW + dx * signX * 2; // ×2 because room is centered
-    newD = drag.startD + dy * signY * 2;
-  } else if (drag.axis === "width") {
-    const signX = drag.cornerIdx === 3 ? -1 : 1;
-    newW = drag.startW + dx * signX * 2;
+  const resolvedAxis: DragAxis =
+    quickResizeAxisLock.value === "auto"
+      ? drag.axis
+      : quickResizeAxisLock.value;
+
+  const signXForHandle = (() => {
+    if (
+      quickResizeAxisLock.value !== "auto" &&
+      (drag.cornerIdx === 0 || drag.cornerIdx === 2)
+    ) {
+      // Top/Bottom midpoint in locked mode: use direct horizontal drag direction.
+      return 1;
+    }
+    return drag.cornerIdx === 0 || drag.cornerIdx === 3 ? -1 : 1;
+  })();
+
+  const signYForHandle = (() => {
+    if (
+      quickResizeAxisLock.value !== "auto" &&
+      (drag.cornerIdx === 1 || drag.cornerIdx === 3)
+    ) {
+      // Left/Right midpoint in locked mode: use direct vertical drag direction.
+      return 1;
+    }
+    return drag.cornerIdx === 0 || drag.cornerIdx === 1 ? -1 : 1;
+  })();
+
+  if (resolvedAxis === "both") {
+    newW = drag.startW + dx * signXForHandle * 2; // ×2 because room is centered
+    newD = drag.startD + dy * signYForHandle * 2;
+  } else if (resolvedAxis === "width") {
+    newW = drag.startW + dx * signXForHandle * 2;
   } else {
-    const signY = drag.cornerIdx === 0 ? -1 : 1;
-    newD = drag.startD + dy * signY * 2;
+    newD = drag.startD + dy * signYForHandle * 2;
   }
 
   roomStore.resizeRoom(newW, newD);
@@ -344,12 +406,10 @@ const itemDrag = reactive<{
   active: boolean;
   itemId: string;
   wallId: string;
-  wallIdx: number;
 }>({
   active: false,
   itemId: "",
   wallId: "",
-  wallIdx: 0,
 });
 
 function selectItem(itemId: string, e: PointerEvent) {
@@ -361,34 +421,30 @@ function startItemDrag(itemId: string, wallId: string, e: PointerEvent) {
   e.stopPropagation();
   e.preventDefault();
   selectedItemId.value = itemId;
-  const wallIdx = roomStore.walls.findIndex((w) => w.id === wallId);
-  if (wallIdx < 0) return;
+  const wall = roomStore.walls.find((entry) => entry.id === wallId);
+  if (!wall) return;
   (e.target as Element)?.setPointerCapture?.(e.pointerId);
   itemDrag.active = true;
   itemDrag.itemId = itemId;
   itemDrag.wallId = wallId;
-  itemDrag.wallIdx = wallIdx;
 }
 
 function onItemPointerMove(e: PointerEvent) {
   if (!itemDrag.active || !svgRef.value) return;
-  const pt = screenToSvg(svgRef.value, e.clientX, e.clientY);
-  const wIdx = itemDrag.wallIdx;
+  const wall = roomStore.walls.find((entry) => entry.id === itemDrag.wallId);
+  if (!wall) return;
 
-  let pos = 0.5;
-  if (wIdx === 0) {
-    // Bottom wall — horizontal, x from -roomW/2 to +roomW/2
-    pos = (pt.x + roomW.value / 2) / roomW.value;
-  } else if (wIdx === 2) {
-    // Top wall — horizontal (reversed direction)
-    pos = (roomW.value / 2 - pt.x) / roomW.value;
-  } else if (wIdx === 1) {
-    // Right wall — vertical, y from -roomD/2 to +roomD/2
-    pos = (pt.y + roomD.value / 2) / roomD.value;
-  } else if (wIdx === 3) {
-    // Left wall — vertical (reversed direction)
-    pos = (roomD.value / 2 - pt.y) / roomD.value;
-  }
+  const pt = screenToSvg(svgRef.value, e.clientX, e.clientY);
+  const start = wall.position;
+  const end = wallEndPoint(wall);
+  const dx = end[0] - start[0];
+  const dy = end[1] - start[1];
+  const lengthSq = dx * dx + dy * dy;
+  if (lengthSq < 1) return;
+
+  let pos =
+    ((pt.x - start[0]) * dx + (pt.y - start[1]) * dy) /
+    lengthSq;
 
   // Clamp between 0.05 and 0.95 to keep items on the wall
   pos = Math.max(0.05, Math.min(0.95, pos));
@@ -426,25 +482,21 @@ function itemSvgPos(item: {
   wallId: string | null;
   positionAlongWall: number;
 }): { x: number; y: number } {
-  const wIdx = roomStore.walls.findIndex((w) => w.id === item.wallId);
-  const wHalf = roomW.value / 2;
-  const dHalf = roomD.value / 2;
-
-  if (wIdx === 0) {
-    // Bottom wall (y = -dHalf)
-    return { x: -wHalf + item.positionAlongWall * roomW.value, y: -dHalf };
-  } else if (wIdx === 1) {
-    // Right wall (x = +wHalf)
-    return { x: wHalf, y: -dHalf + item.positionAlongWall * roomD.value };
-  } else if (wIdx === 2) {
-    // Top wall (y = +dHalf)
-    return { x: wHalf - item.positionAlongWall * roomW.value, y: dHalf };
-  } else if (wIdx === 3) {
-    // Left wall (x = -wHalf)
-    return { x: -wHalf, y: dHalf - item.positionAlongWall * roomD.value };
+  if (!item.wallId) {
+    return { x: quickBounds.value.centerX, y: quickBounds.value.centerY };
   }
-  // Free-standing — center of room
-  return { x: 0, y: 0 };
+
+  const wall = roomStore.walls.find((entry) => entry.id === item.wallId);
+  if (!wall) {
+    return { x: quickBounds.value.centerX, y: quickBounds.value.centerY };
+  }
+
+  const end = wallEndPoint(wall);
+  const t = Math.max(0, Math.min(1, item.positionAlongWall));
+  return {
+    x: wall.position[0] + (end[0] - wall.position[0]) * t,
+    y: wall.position[1] + (end[1] - wall.position[1]) * t,
+  };
 }
 
 /** Pick a color for the item category */
@@ -463,8 +515,9 @@ function itemColor(category: PlacedItemCategory): string {
 
 /** Is the item on a vertical wall? (needs 90° rotation in SVG) */
 function isVerticalWall(wallId: string | null): boolean {
-  const wIdx = roomStore.walls.findIndex((w) => w.id === wallId);
-  return wIdx === 1 || wIdx === 3;
+  const wall = roomStore.walls.find((entry) => entry.id === wallId);
+  if (!wall) return false;
+  return Math.abs(Math.sin(wall.angle)) > Math.abs(Math.cos(wall.angle));
 }
 
 // ───── Draw Walls mode ─────────────────────────────────────────────────────
@@ -838,12 +891,7 @@ function enterQuickMode() {
   floorPlanMode.value = "quick";
   hasStartedDrawSession.value = false;
   unlockDrawViewBox();
-  // Reset to default rectangular room
-  const defaultRoom = createDefaultRoom();
-  roomStore.setRoom(defaultRoom);
-  roomStore.closetOffsetX = 0;
-  roomStore.closetOffsetY = 0;
-  roomStore.closetOffsetZ = 0;
+  applyQuickPreset(quickPresetId.value);
   selectedWallId.value = null;
   selectedWallAnchor.value = null;
   selectedWallAnchorType.value = "start";
@@ -1461,6 +1509,45 @@ function dimLinePoints(wall: {
           <template v-else>
             <h3 class="sidebar-heading">Add Architecture</h3>
 
+            <h4 class="sidebar-subheading">Quick Presets</h4>
+            <div class="preset-list">
+              <button
+                v-for="preset in QUICK_ROOM_PRESETS"
+                :key="preset.id"
+                class="preset-card"
+                :class="{ active: quickPresetId === preset.id }"
+                @click="applyQuickPreset(preset.id)"
+              >
+                <span class="preset-title">{{ preset.label }}</span>
+                <span class="preset-desc">{{ preset.description }}</span>
+              </button>
+            </div>
+
+            <h4 class="sidebar-subheading">Resize Lock</h4>
+            <div class="resize-lock-group">
+              <button
+                class="lock-btn"
+                :class="{ active: quickResizeAxisLock === 'auto' }"
+                @click="quickResizeAxisLock = 'auto'"
+              >
+                Free
+              </button>
+              <button
+                class="lock-btn"
+                :class="{ active: quickResizeAxisLock === 'width' }"
+                @click="quickResizeAxisLock = 'width'"
+              >
+                Width
+              </button>
+              <button
+                class="lock-btn"
+                :class="{ active: quickResizeAxisLock === 'depth' }"
+                @click="quickResizeAxisLock = 'depth'"
+              >
+                Depth
+              </button>
+            </div>
+
             <button class="sidebar-action-btn" @click="openHeightDialog">
               Change Room Height ({{ formatInches(roomStore.height) }})
             </button>
@@ -1519,151 +1606,128 @@ function dimLinePoints(wall: {
             xmlns="http://www.w3.org/2000/svg"
             @click="selectedItemId = null"
           >
-            <!-- Room background -->
-            <rect
-              :x="-roomW / 2"
-              :y="-roomD / 2"
-              :width="roomW"
-              :height="roomD"
-              :fill="roomStore.colors.floorColor"
-              :stroke="wallStroke"
-              stroke-width="3"
-              rx="2"
-            />
+            <!-- Walls as segments from room geometry -->
+            <template v-for="(wall, idx) in roomStore.walls" :key="wall.id">
+              <line
+                :x1="wall.position[0]"
+                :y1="wall.position[1]"
+                :x2="wallEndPoint(wall)[0]"
+                :y2="wallEndPoint(wall)[1]"
+                :stroke="wallStroke"
+                :stroke-width="Math.max(4, wall.thickness)"
+                stroke-linecap="round"
+              />
 
-            <!-- Walls as thick lines -->
-            <template v-for="(wall, i) in roomStore.walls" :key="wall.id">
-              <!-- Top wall -->
-              <line
-                v-if="i === 0"
-                :x1="-(wall.length / 2)"
-                :y1="-roomD / 2"
-                :x2="wall.length / 2"
-                :y2="-roomD / 2"
-                :stroke="wallStroke"
-                stroke-width="6"
-              />
-              <!-- Right wall -->
-              <line
-                v-if="i === 1"
-                :x1="roomW / 2"
-                :y1="-(wall.length / 2)"
-                :x2="roomW / 2"
-                :y2="wall.length / 2"
-                :stroke="wallStroke"
-                stroke-width="6"
-              />
-              <!-- Bottom wall -->
-              <line
-                v-if="i === 2"
-                :x1="-(wall.length / 2)"
-                :y1="roomD / 2"
-                :x2="wall.length / 2"
-                :y2="roomD / 2"
-                :stroke="wallStroke"
-                stroke-width="6"
-              />
-              <!-- Left wall -->
-              <line
-                v-if="i === 3"
-                :x1="-roomW / 2"
-                :y1="-(wall.length / 2)"
-                :x2="-roomW / 2"
-                :y2="wall.length / 2"
-                :stroke="wallStroke"
-                stroke-width="6"
-              />
+              <g
+                class="quick-wall-badge"
+                :transform="`translate(${wallMidpoint(wall)[0]}, ${wallMidpoint(wall)[1]})`"
+              >
+                <circle
+                  r="10"
+                  fill="#f59e0b"
+                  stroke="#0f172a"
+                  stroke-width="1.5"
+                />
+                <text
+                  text-anchor="middle"
+                  dominant-baseline="central"
+                  fill="#0f172a"
+                  font-size="9"
+                  font-weight="700"
+                >
+                  {{ wall.label || idx + 1 }}
+                </text>
+              </g>
+
+              <template v-if="!isRectangularQuick">
+                <line
+                  :x1="dimLinePoints(wall).x1"
+                  :y1="dimLinePoints(wall).y1"
+                  :x2="dimLinePoints(wall).x2"
+                  :y2="dimLinePoints(wall).y2"
+                  stroke="#94a3b8"
+                  stroke-width="0.9"
+                  marker-start="url(#arrowL)"
+                  marker-end="url(#arrowR)"
+                />
+                <text
+                  :x="dimLinePoints(wall).tx"
+                  :y="dimLinePoints(wall).ty"
+                  text-anchor="middle"
+                  fill="#e2e8f0"
+                  font-size="10"
+                  font-weight="600"
+                >
+                  {{ formatLength(wall.length) }}
+                </text>
+              </template>
             </template>
 
-            <!-- Dimension labels -->
-            <!-- Top dimension -->
-            <g>
-              <line
-                :x1="-roomW / 2"
-                :y1="-roomD / 2 - 25"
-                :x2="roomW / 2"
-                :y2="-roomD / 2 - 25"
-                stroke="#94a3b8"
-                stroke-width="1"
-                marker-start="url(#arrowL)"
-                marker-end="url(#arrowR)"
+            <template v-if="canQuickResize">
+              <!-- Top dimension -->
+              <g v-if="isRectangularQuick">
+                <line
+                  :x1="quickBounds.minX"
+                  :y1="quickBounds.minY - 25"
+                  :x2="quickBounds.maxX"
+                  :y2="quickBounds.minY - 25"
+                  stroke="#94a3b8"
+                  stroke-width="1"
+                  marker-start="url(#arrowL)"
+                  marker-end="url(#arrowR)"
+                />
+                <text
+                  :x="quickBounds.centerX"
+                  :y="quickBounds.minY - 30"
+                  text-anchor="middle"
+                  fill="#e2e8f0"
+                  font-size="12"
+                  font-weight="600"
+                >
+                  {{ formatLength(roomW) }}
+                </text>
+              </g>
+
+              <!-- Right dimension -->
+              <g v-if="isRectangularQuick">
+                <line
+                  :x1="quickBounds.maxX + 25"
+                  :y1="quickBounds.minY"
+                  :x2="quickBounds.maxX + 25"
+                  :y2="quickBounds.maxY"
+                  stroke="#94a3b8"
+                  stroke-width="1"
+                  marker-start="url(#arrowU)"
+                  marker-end="url(#arrowD)"
+                />
+                <text
+                  :x="quickBounds.maxX + 35"
+                  :y="quickBounds.centerY + 4"
+                  text-anchor="start"
+                  fill="#e2e8f0"
+                  font-size="12"
+                  font-weight="600"
+                >
+                  {{ formatLength(roomD) }}
+                </text>
+              </g>
+
+              <!-- Resize handles (corners) -->
+              <circle
+                v-for="(pos, idx) in quickResizeCorners"
+                :key="idx"
+                :cx="pos[0]"
+                :cy="pos[1]"
+                r="5"
+                fill="#fbbf24"
+                stroke="#0f172a"
+                stroke-width="2"
+                class="resize-handle"
+                :style="{ cursor: cornerCursors[idx] }"
+                @pointerdown="startCornerDrag(idx, $event)"
               />
-              <text
-                x="0"
-                :y="-roomD / 2 - 30"
-                text-anchor="middle"
-                fill="#e2e8f0"
-                font-size="12"
-                font-weight="600"
-              >
-                {{ formatLength(roomW) }}
-              </text>
-            </g>
 
-            <!-- Right dimension -->
-            <g>
-              <line
-                :x1="roomW / 2 + 25"
-                :y1="-roomD / 2"
-                :x2="roomW / 2 + 25"
-                :y2="roomD / 2"
-                stroke="#94a3b8"
-                stroke-width="1"
-                marker-start="url(#arrowU)"
-                marker-end="url(#arrowD)"
-              />
-              <text
-                :x="roomW / 2 + 35"
-                y="4"
-                text-anchor="start"
-                fill="#e2e8f0"
-                font-size="12"
-                font-weight="600"
-                transform="rotate(0)"
-              >
-                {{ formatLength(roomD) }}
-              </text>
-            </g>
-
-            <!-- Resize handles (corners) -->
-            <circle
-              v-for="(pos, idx) in [
-                [-roomW / 2, -roomD / 2],
-                [roomW / 2, -roomD / 2],
-                [roomW / 2, roomD / 2],
-                [-roomW / 2, roomD / 2],
-              ]"
-              :key="idx"
-              :cx="pos[0]"
-              :cy="pos[1]"
-              r="5"
-              fill="#fbbf24"
-              stroke="#0f172a"
-              stroke-width="2"
-              class="resize-handle"
-              :style="{ cursor: cornerCursors[idx] }"
-              @pointerdown="startCornerDrag(idx, $event)"
-            />
-
-            <!-- Mid-wall resize handles -->
-            <circle
-              v-for="(pos, idx) in [
-                [0, -roomD / 2],
-                [roomW / 2, 0],
-                [0, roomD / 2],
-                [-roomW / 2, 0],
-              ]"
-              :key="'mid-' + idx"
-              :cx="pos[0]"
-              :cy="pos[1]"
-              r="4"
-              fill="#60a5fa"
-              stroke="#0f172a"
-              stroke-width="2"
-              class="resize-handle"
-              :style="{ cursor: midCursors[idx] }"
-              @pointerdown="startMidDrag(idx, $event)"
-            />
+            </template>
 
             <!-- Arrow marker definitions -->
             <defs>
@@ -2023,7 +2087,11 @@ function dimLinePoints(wall: {
 
         <!-- Hint overlay -->
         <div class="canvas-hint" v-if="floorPlanMode === 'quick'">
-          Drag corners or mid-points to resize the room
+          {{
+            canQuickResize
+              ? `Drag corners or mid-points to resize (${quickResizeAxisLock})`
+              : "Select a quick preset to change the room layout"
+          }}
         </div>
         <div class="canvas-hint" v-else-if="isDrawing">
           Click to place vertices · Click near first point to close · Esc to
@@ -2267,6 +2335,77 @@ function dimLinePoints(wall: {
   border-color: rgba(251, 191, 36, 0.35);
 }
 
+.preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.preset-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.38);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.preset-card:hover {
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(51, 65, 85, 0.72);
+}
+
+.preset-card.active {
+  border-color: rgba(251, 191, 36, 0.6);
+  background: rgba(251, 191, 36, 0.14);
+}
+
+.preset-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.preset-desc {
+  font-size: 10px;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
+.resize-lock-group {
+  display: flex;
+  gap: 6px;
+}
+
+.lock-btn {
+  flex: 1;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.46);
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 7px 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.lock-btn:hover {
+  border-color: rgba(251, 191, 36, 0.38);
+  color: #f1f5f9;
+}
+
+.lock-btn.active {
+  border-color: rgba(251, 191, 36, 0.7);
+  background: rgba(251, 191, 36, 0.18);
+  color: #fbbf24;
+}
+
 /* Item grid */
 .item-grid {
   display: grid;
@@ -2304,6 +2443,10 @@ function dimLinePoints(wall: {
   color: #94a3b8;
   text-align: center;
   line-height: 1.2;
+}
+
+.quick-wall-badge {
+  pointer-events: none;
 }
 
 /* Canvas area */

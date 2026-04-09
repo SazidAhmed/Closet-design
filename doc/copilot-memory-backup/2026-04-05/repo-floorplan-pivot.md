@@ -1,0 +1,12 @@
+- Pivot endpoint selection is deterministic and click-independent.
+- For placed walls, interior side is resolved by midpoint side sampling against the polygon (point-in-polygon), with winding fallback for degenerate cases.
+- FloorPlan anchor selection and store closed-room pivot use the same interior-side rule to keep UI and rotation math aligned.
+- During angle edits, selected endpoint type (start/end) is locked for the interaction to prevent intermittent pivot flips.
+- Inside-side shadow area click and wall body click both select the wall via the same path.
+- Boundary/open rotation behavior depends on endpoint connectivity and selected anchor.
+- Add Wall continuation prefers the selected wall non-connected endpoint; if connectivity is equal on both ends, fallback is deterministic.
+- Vertex color semantics: connected endpoint = yellow, non-connected endpoint = green.
+- Wall number badges are yellow for all walls.
+- Floor Plan dimensions are inches-only in UI; internal geometry remains cm.
+- Footer CM toggle has been removed from the main control strip.
+- Explicit defaults: wall height is 96 inches (stored as cm constant).
