@@ -71,17 +71,6 @@ const quickResizeCorners = computed<[number, number][]>(() => {
   ];
 });
 
-const quickRoomVertices = computed<[number, number][]>(() => {
-  if (roomStore.walls.length === 0) return [];
-  const vertices: [number, number][] = roomStore.walls.map((wall) => [
-    wall.position[0],
-    wall.position[1],
-  ]);
-  const last = roomStore.walls[roomStore.walls.length - 1]!;
-  vertices.push(wallEndPoint(last));
-  return vertices;
-});
-
 /** Darken the wall color slightly for the 2D wall stroke */
 function darkenHex(hex: string, amount = 40): string {
   const c = hex.replace("#", "");
@@ -271,7 +260,11 @@ function applyHeight() {
 }
 
 // ───── Architecture item catalog ───────────────────────────────────────────
-import type { PlacedItemType, PlacedItemCategory } from "../domain/types/room";
+import type {
+  PlacedItemType,
+  PlacedItemCategory,
+  PlacedItem,
+} from "../domain/types/room";
 
 type ItemDef = {
   type: PlacedItemType;
@@ -310,30 +303,6 @@ const DOOR_ITEMS: ItemDef[] = [
     width: 122,
     height: 213,
     icon: "🚪",
-  },
-];
-
-const ARCH_ITEMS: ItemDef[] = [
-  {
-    type: "rect_column",
-    category: "architecture",
-    width: 30,
-    height: 244,
-    icon: "🏛️",
-  },
-  {
-    type: "round_column",
-    category: "architecture",
-    width: 30,
-    height: 244,
-    icon: "🏛️",
-  },
-  {
-    type: "interior_wall",
-    category: "architecture",
-    width: 10,
-    height: 244,
-    icon: "🏛️",
   },
 ];
 
@@ -388,7 +357,10 @@ function itemLabel(type: PlacedItemType): string {
 
 /** Place an architecture item on wall 0 (bottom) at center */
 function addArchItem(def: ItemDef) {
-  const wallId = roomStore.walls[0]?.id ?? null;
+  const wallId =
+    roomStore.walls.find((wall) => wall.id === selectedWallId.value)?.id ??
+    roomStore.walls[0]?.id ??
+    null;
   roomStore.addItem({
     type: def.type,
     category: def.category,
@@ -462,6 +434,35 @@ function deleteSelectedItem() {
   }
 }
 
+const selectedDoorWindowItem = computed<PlacedItem | null>(() => {
+  if (!selectedItemId.value) return null;
+  const item = roomStore.items.find((entry) => entry.id === selectedItemId.value);
+  if (!item) return null;
+  if (item.category === "door" || item.type === "window") return item;
+  return null;
+});
+
+function onSelectedItemSizeInput(
+  dimension: "width" | "height",
+  e: Event,
+) {
+  if (!selectedDoorWindowItem.value) return;
+  const valueIn = Number((e.target as HTMLInputElement).value);
+  if (!Number.isFinite(valueIn)) return;
+  const nextCm = inchesToCm(Math.max(1, valueIn));
+
+  if (dimension === "width") {
+    roomStore.updateItemProps(selectedDoorWindowItem.value.id, {
+      width: nextCm,
+    });
+    return;
+  }
+
+  roomStore.updateItemProps(selectedDoorWindowItem.value.id, {
+    height: nextCm,
+  });
+}
+
 // Register item drag listeners
 onMounted(() => {
   document.addEventListener("pointermove", onItemPointerMove);
@@ -518,6 +519,17 @@ function isVerticalWall(wallId: string | null): boolean {
   const wall = roomStore.walls.find((entry) => entry.id === wallId);
   if (!wall) return false;
   return Math.abs(Math.sin(wall.angle)) > Math.abs(Math.cos(wall.angle));
+}
+
+function isDoorOrWindowItem(item: Pick<PlacedItem, "category" | "type">): boolean {
+  return item.category === "door" || item.type === "window";
+}
+
+function itemMeasurementLabel(
+  item: Pick<PlacedItem, "category" | "type" | "width" | "height">,
+): string {
+  if (!isDoorOrWindowItem(item)) return "";
+  return `${cmToInches(item.width)}\" x ${cmToInches(item.height)}\"`;
 }
 
 // ───── Draw Walls mode ─────────────────────────────────────────────────────
@@ -1552,43 +1564,50 @@ function dimLinePoints(wall: {
               Change Room Height ({{ formatInches(roomStore.height) }})
             </button>
 
-            <h4 class="sidebar-subheading">Add Door</h4>
+            <h4 class="sidebar-subheading">Add Options</h4>
             <div class="item-grid">
               <button
                 class="item-card"
-                v-for="def in DOOR_ITEMS"
-                :key="def.type"
-                @click="addArchItem(def)"
+                @click="addArchItem(DOOR_ITEMS[0]!)"
               >
-                <div class="item-icon">{{ def.icon }}</div>
-                <span class="item-label">{{ itemLabel(def.type) }}</span>
+                <div class="item-icon">🚪</div>
+                <span class="item-label">Add Door</span>
+              </button>
+              <button
+                class="item-card"
+                @click="addArchItem(DECO_ITEMS[0]!)"
+              >
+                <div class="item-icon">🪟</div>
+                <span class="item-label">Add Window</span>
               </button>
             </div>
 
-            <h4 class="sidebar-subheading">Add Architecture</h4>
-            <div class="item-grid">
-              <button
-                class="item-card"
-                v-for="def in ARCH_ITEMS"
-                :key="def.type"
-                @click="addArchItem(def)"
-              >
-                <div class="item-icon">{{ def.icon }}</div>
-                <span class="item-label">{{ itemLabel(def.type) }}</span>
-              </button>
-            </div>
+            <div v-if="selectedDoorWindowItem" class="wall-props">
+              <h4 class="sidebar-subheading">
+                Selected {{ itemLabel(selectedDoorWindowItem.type) }}
+              </h4>
 
-            <h4 class="sidebar-subheading">Add Wall Decorator</h4>
-            <div class="item-grid">
-              <button
-                class="item-card"
-                v-for="def in DECO_ITEMS"
-                :key="def.type"
-                @click="addArchItem(def)"
-              >
-                <div class="item-icon">{{ def.icon }}</div>
-                <span class="item-label">{{ itemLabel(def.type) }}</span>
-              </button>
+              <div class="prop-row">
+                <label class="prop-label">Width</label>
+                <input
+                  class="prop-input"
+                  type="number"
+                  min="1"
+                  :value="cmToInches(selectedDoorWindowItem.width)"
+                  @input="onSelectedItemSizeInput('width', $event)"
+                />
+              </div>
+
+              <div class="prop-row">
+                <label class="prop-label">Height</label>
+                <input
+                  class="prop-input"
+                  type="number"
+                  min="1"
+                  :value="cmToInches(selectedDoorWindowItem.height)"
+                  @input="onSelectedItemSizeInput('height', $event)"
+                />
+              </div>
             </div>
           </template>
         </div>
@@ -1604,7 +1623,7 @@ function dimLinePoints(wall: {
             :viewBox="svgViewBox"
             class="floorplan-svg"
             xmlns="http://www.w3.org/2000/svg"
-            @click="selectedItemId = null"
+            @click="selectedItemId = null; deselectWall()"
           >
             <!-- Walls as segments from room geometry -->
             <template v-for="(wall, idx) in roomStore.walls" :key="wall.id">
@@ -1613,14 +1632,17 @@ function dimLinePoints(wall: {
                 :y1="wall.position[1]"
                 :x2="wallEndPoint(wall)[0]"
                 :y2="wallEndPoint(wall)[1]"
-                :stroke="wallStroke"
-                :stroke-width="Math.max(4, wall.thickness)"
+                :stroke="selectedWallId === wall.id ? '#fbbf24' : wallStroke"
+                :stroke-width="selectedWallId === wall.id ? Math.max(6, wall.thickness + 1) : Math.max(4, wall.thickness)"
                 stroke-linecap="round"
+                class="wall-segment"
+                @click.stop="selectWall(wall.id, $event)"
               />
 
               <g
                 class="quick-wall-badge"
                 :transform="`translate(${wallMidpoint(wall)[0]}, ${wallMidpoint(wall)[1]})`"
+                @click.stop="selectWall(wall.id, $event)"
               >
                 <circle
                   r="10"
@@ -1826,6 +1848,17 @@ function dimLinePoints(wall: {
                 font-weight="600"
               >
                 {{ itemLabel(item.type) }}
+              </text>
+              <text
+                v-if="isDoorOrWindowItem(item)"
+                x="0"
+                :y="selectedItemId === item.id ? -19 : 25"
+                text-anchor="middle"
+                fill="#cbd5e1"
+                font-size="7"
+                font-weight="600"
+              >
+                {{ itemMeasurementLabel(item) }}
               </text>
               <!-- Delete button (only when selected) -->
               <g

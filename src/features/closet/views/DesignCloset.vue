@@ -2,7 +2,6 @@
 import { computed, ref, watch, onMounted } from "vue";
 import { TresCanvas } from "@tresjs/core";
 import { OrbitControls } from "@tresjs/cientos";
-import Cabinet3D from "../../../components/Cabinet3D.vue";
 import Room3D from "../../../components/Room3D.vue";
 import CameraRig from "../../../components/CameraRig.vue";
 import TopToolbar from "../../../components/TopToolbar.vue";
@@ -28,7 +27,6 @@ import { AUTO_CREATE_PRESETS } from "../domain/closetTypes";
 import { Plus, Trash2 } from "lucide-vue-next";
 import type { Accessory } from "../domain/types/tower";
 import DesignSlotsDialog from "../../../components/DesignSlotsDialog.vue";
-import PositionMeasures3D from "../../../components/PositionMeasures3D.vue";
 
 const closet = useClosetStore();
 const appStore = useAppStore();
@@ -52,9 +50,12 @@ function swatchStyle(colorHex: string, textureUrl?: string) {
 
 onMounted(() => {
   appStore.setStep("design");
-  if (closet.towers.length > 0 && !selection.selectedTowerId) {
-    selection.selectTower(closet.towers[0]?.id ?? "");
+
+  // Keep design viewport focused on room context and wall openings.
+  if (closet.towers.length > 0) {
+    closet.setTowers([]);
   }
+  selection.selectTower(null);
 });
 
 // ── Tab state ─────────────────────────────────────────────────────────────
@@ -516,8 +517,6 @@ const depthLabel = computed(() => {
           <TresDirectionalLight :position="[200, 300, 200]" :intensity="1.2" />
 
           <Room3D />
-          <Cabinet3D />
-          <PositionMeasures3D />
         </TresCanvas>
 
         <div class="viewport-hint">{{ viewportHint }}</div>

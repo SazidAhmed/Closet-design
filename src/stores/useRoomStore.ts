@@ -11,6 +11,11 @@ function clampWall(v: number): number {
   return Math.max(ROOM_CONSTRAINTS.wallLength.min, Math.min(ROOM_CONSTRAINTS.wallLength.max, Math.round(v)))
 }
 
+function clampItemSize(v: number): number {
+  if (!Number.isFinite(v)) return 1
+  return Math.max(1, Math.round(v))
+}
+
 function snapped45Segment(start: Vec2, target: Vec2): { angle: number; length: number; end: Vec2 } | null {
   const dx = target[0] - start[0]
   const dy = target[1] - start[1]
@@ -633,6 +638,14 @@ export const useRoomStore = defineStore('room', {
     moveItem(itemId: string, positionAlongWall: number) {
       const item = this.items.find((i) => i.id === itemId)
       if (item) item.positionAlongWall = positionAlongWall
+    },
+
+    /** Update editable properties of a placed item. */
+    updateItemProps(itemId: string, props: Partial<Pick<PlacedItem, 'width' | 'height'>>) {
+      const item = this.items.find((i) => i.id === itemId)
+      if (!item) return
+      if (props.width !== undefined) item.width = clampItemSize(props.width)
+      if (props.height !== undefined) item.height = clampItemSize(props.height)
     },
 
     /** Update room colors. */
