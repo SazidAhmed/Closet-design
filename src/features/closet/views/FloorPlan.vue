@@ -2,16 +2,8 @@
 import TopToolbar from "../../../components/TopToolbar.vue";
 import FooterBar from "../../../components/FooterBar.vue";
 import { useRoomStore } from "../../../stores/useRoomStore";
-import { useClosetStore } from "../../../stores/useClosetStore";
 import { useAppStore } from "../../../stores/useAppStore";
 import { onMounted, onUnmounted, computed, ref, reactive, watch } from "vue";
-import {
-  FLOOR_MATERIALS,
-  WALL_COLORS,
-  TRIM_COLORS,
-  HANDLE_STYLES,
-  DOOR_MATERIALS,
-} from "../domain/materials/catalog";
 import { ROOM_CONSTRAINTS } from "../domain/constraints";
 import {
   DEFAULT_QUICK_ROOM_PRESET_ID,
@@ -24,7 +16,6 @@ import {
 import { useHistoryStore } from "../../../stores/useHistoryStore";
 
 const roomStore = useRoomStore();
-const closet = useClosetStore();
 const appStore = useAppStore();
 const historyStore = useHistoryStore();
 
@@ -1135,30 +1126,19 @@ function dimLinePoints(wall: {
             </button>
           </div>
 
-          <div class="draw-input-grid">
-            <div class="prop-row">
-              <label class="prop-label">Wall Height</label>
-              <input
-                class="prop-input"
-                type="number"
-                :value="cmToInches(roomStore.height)"
-                :min="cmToInches(ROOM_CONSTRAINTS.height.min)"
-                :max="cmToInches(ROOM_CONSTRAINTS.height.max)"
-                @input="onDrawHeightInput"
-              />
-            </div>
+          <h4 class="sidebar-subheading">Draw Wall</h4>
 
-            <div class="prop-row">
-              <label class="prop-label">Wall Thickness</label>
-              <input
-                class="prop-input"
-                type="number"
-                :value="drawWallThicknessInput"
-                min="1"
-                max="30"
-                @input="onDrawThicknessInput"
-              />
-            </div>
+          <div v-if="!isClosed" class="draw-controls">
+            <p class="draw-hint" v-if="!isDrawing">
+              Click <span class="draw-hint-accent">Start Drawing</span> to begin placing walls.
+            </p>
+
+            <button
+              class="sidebar-action-btn draw-btn"
+              @click="startFreshDraw"
+            >
+              Start Drawing
+            </button>
 
             <div class="prop-row indicator-toggle-row">
               <label class="prop-label">Show Inside</label>
@@ -1168,23 +1148,6 @@ function dimLinePoints(wall: {
                 class="indicator-toggle"
               />
             </div>
-          </div>
-
-          <div v-if="!isClosed" class="draw-controls">
-            <button
-              class="sidebar-action-btn draw-btn"
-              @click="startFreshDraw"
-            >
-              Start Drawing
-            </button>
-
-            <button
-              v-if="!isDrawing && drawWalls.length > 0"
-              class="sidebar-action-btn draw-btn"
-              @click="continueDrawing"
-            >
-              Add Wall
-            </button>
 
             <button
               v-if="isDrawing && (roomStore.walls.length > 0 || pendingStartVertex)"
@@ -1197,13 +1160,6 @@ function dimLinePoints(wall: {
               Click on the canvas to place wall vertices.<br />
               Click near the <strong>first point</strong> to close the room.<br />
               Press <kbd>Esc</kbd> to finish drawing.
-            </p>
-            <p class="draw-hint" v-else-if="drawWalls.length > 0">
-              Click <strong>Add Wall</strong> to continue from the last wall endpoint, or
-              <strong>Start Drawing</strong> to clear and redraw.
-            </p>
-            <p class="draw-hint" v-else>
-              Click "Start Drawing" to begin placing walls.
             </p>
           </div>
 
@@ -1223,174 +1179,6 @@ function dimLinePoints(wall: {
             >
               Clear and Redraw
             </button>
-          </div>
-
-          <div v-if="selectedWall" class="wall-props">
-            <h4 class="sidebar-subheading">Wall {{ selectedWall.label }}</h4>
-
-            <div class="prop-row">
-              <label class="prop-label">Label</label>
-              <input
-                class="prop-input"
-                :value="selectedWall.label"
-                @input="
-                  (e: Event) =>
-                    roomStore.updateWallProps(selectedWall!.id, {
-                      label: (e.target as HTMLInputElement).value,
-                    })
-                "
-              />
-            </div>
-
-            <div class="prop-row">
-              <label class="prop-label">Length</label>
-              <input
-                class="prop-input"
-                type="number"
-                :value="cmToInches(selectedWall.length)"
-                @input="
-                  (e: Event) =>
-                    roomStore.updateWallProps(selectedWall!.id, {
-                      length: inchesToCm(Number((e.target as HTMLInputElement).value)),
-                    })
-                "
-              />
-            </div>
-
-            <div class="prop-row">
-              <label class="prop-label">Height</label>
-              <input
-                class="prop-input"
-                type="number"
-                :value="cmToInches(roomStore.height)"
-                @input="
-                  (e: Event) =>
-                    roomStore.setHeight(
-                      inchesToCm(Number((e.target as HTMLInputElement).value)),
-                    )
-                "
-              />
-            </div>
-
-            <div class="prop-row">
-              <label class="prop-label">Thickness</label>
-              <input
-                class="prop-input"
-                type="number"
-                :value="selectedWall.thickness"
-                @input="
-                  (e: Event) =>
-                    roomStore.updateWallProps(selectedWall!.id, {
-                      thickness: Number((e.target as HTMLInputElement).value),
-                    })
-                "
-              />
-            </div>
-
-            <div class="prop-row">
-              <label class="prop-label">{{ isClosed ? "Rotate Room" : "Angle" }}</label>
-              <div class="angle-controls">
-                <button
-                  type="button"
-                  class="angle-btn"
-                  @click="rotateSelectedWall(-1)"
-                  title="Rotate -1°"
-                >
-                  -1°
-                </button>
-                <input
-                  class="prop-input angle-input"
-                  type="number"
-                  step="1"
-                  :value="selectedWallAngleDeg"
-                  @input="onSelectedWallAngleInput"
-                />
-                <button
-                  type="button"
-                  class="angle-btn"
-                  @click="rotateSelectedWall(1)"
-                  title="Rotate +1°"
-                >
-                  +1°
-                </button>
-              </div>
-            </div>
-
-            <div class="prop-row">
-              <label class="prop-label">Visible</label>
-              <input
-                type="checkbox"
-                :checked="selectedWall.visible"
-                @change="
-                  (e: Event) =>
-                    roomStore.updateWallProps(selectedWall!.id, {
-                      visible: (e.target as HTMLInputElement).checked,
-                    })
-                "
-              />
-            </div>
-
-            <button
-              type="button"
-              class="sidebar-action-btn draw-btn"
-              @click="roomStore.setClosetWall(selectedWall.id)"
-            >
-              Use As Closet Wall
-            </button>
-
-            <button
-              type="button"
-              class="sidebar-action-btn delete-wall-btn"
-              @click.stop.prevent="removeSelectedWall"
-            >
-              Remove Wall
-            </button>
-          </div>
-
-          <h4 class="sidebar-subheading">Add Options</h4>
-          <div class="item-grid">
-            <button
-              class="item-card"
-              @click="addArchItem(DOOR_ITEMS[0]!)"
-            >
-              <div class="item-icon">🚪</div>
-              <span class="item-label">Add Door</span>
-            </button>
-            <button
-              class="item-card"
-              @click="addArchItem(DECO_ITEMS[0]!)"
-            >
-              <div class="item-icon">🪟</div>
-              <span class="item-label">Add Window</span>
-            </button>
-          </div>
-
-          <div v-if="selectedDoorWindowItem" class="wall-props">
-            <h4 class="sidebar-subheading">
-              Selected {{ itemLabel(selectedDoorWindowItem.type) }}
-            </h4>
-
-            <div class="prop-row">
-              <label class="prop-label">Width</label>
-              <input
-                class="prop-input"
-                type="number"
-                min="1"
-                :value="cmToInches(selectedDoorWindowItem.width)"
-                @input="onSelectedItemSizeInput('width', $event)"
-              />
-            </div>
-
-            <div class="prop-row">
-              <label class="prop-label">Height</label>
-              <input
-                class="prop-input"
-                type="number"
-                min="1"
-                :value="cmToInches(selectedDoorWindowItem.height)"
-                @input="onSelectedItemSizeInput('height', $event)"
-              />
-            </div>
           </div>
         </div>
       </aside>
@@ -1707,116 +1495,226 @@ function dimLinePoints(wall: {
         </div>
       </main>
 
-      <!-- Right Sidebar: Room Options -->
       <aside class="sidebar sidebar-right">
         <div class="sidebar-section">
-          <h3 class="sidebar-heading">Room Options</h3>
+          <h3 class="sidebar-heading">Wall Options</h3>
 
-          <div class="option-group">
-            <label class="option-label">Floor Finish</label>
-            <div class="swatch-row">
-              <button
-                v-for="mat in FLOOR_MATERIALS"
-                :key="mat.id"
-                class="swatch-btn"
-                :class="{ active: roomStore.colors.floorFinishId === mat.id }"
-                :style="{ background: mat.colorHex }"
-                :title="mat.label"
-                @click="
-                  roomStore.setColors({
-                    floorFinishId: mat.id,
-                    floorColor: mat.colorHex,
-                  })
-                "
+          <div class="draw-input-grid">
+            <div class="prop-row">
+              <label class="prop-label">Wall Height</label>
+              <input
+                class="prop-input"
+                type="number"
+                :value="cmToInches(roomStore.height)"
+                :min="cmToInches(ROOM_CONSTRAINTS.height.min)"
+                :max="cmToInches(ROOM_CONSTRAINTS.height.max)"
+                @input="onDrawHeightInput"
+              />
+            </div>
+
+            <div class="prop-row">
+              <label class="prop-label">Wall Thickness</label>
+              <input
+                class="prop-input"
+                type="number"
+                :value="drawWallThicknessInput"
+                min="1"
+                max="30"
+                @input="onDrawThicknessInput"
               />
             </div>
           </div>
 
-          <div class="option-group">
-            <label class="option-label">Wall Color</label>
-            <div class="swatch-row">
-              <button
-                v-for="swatch in WALL_COLORS"
-                :key="swatch.id"
-                class="swatch-btn"
-                :class="{
-                  active: roomStore.colors.wallColor === swatch.colorHex,
-                }"
-                :style="{ background: swatch.colorHex }"
-                :title="swatch.label"
-                @click="roomStore.setColors({ wallColor: swatch.colorHex })"
-              />
-            </div>
-          </div>
+          <div v-if="selectedWall" class="wall-props">
+            <h4 class="sidebar-subheading">Wall {{ selectedWall.label }}</h4>
 
-          <div class="option-group">
-            <label class="option-label">Trim Color</label>
-            <div class="swatch-row">
-              <button
-                v-for="swatch in TRIM_COLORS"
-                :key="swatch.id"
-                class="swatch-btn"
-                :class="{
-                  active: roomStore.colors.trimColor === swatch.colorHex,
-                }"
-                :style="{ background: swatch.colorHex }"
-                :title="swatch.label"
-                @click="roomStore.setColors({ trimColor: swatch.colorHex })"
-              />
-            </div>
-          </div>
-
-          <h4 class="sidebar-subheading">Architectural Door Options</h4>
-
-          <div class="option-group">
-            <label class="option-label">Door Handle</label>
-            <div class="swatch-row">
-              <button
-                v-for="handle in HANDLE_STYLES"
-                :key="handle.id"
-                class="swatch-btn swatch-labeled"
-                :class="{
-                  active: closet.doorOptions.handleFinish === handle.id,
-                }"
-                :style="{
-                  background:
-                    handle.colorHex === 'transparent'
-                      ? '#1e293b'
-                      : handle.colorHex,
-                }"
-                :title="handle.label"
-                @click="closet.setDoorOptions({ handleFinish: handle.id })"
+              <p
+                v-if="!isDrawing && drawWalls.length > 0"
+                class="draw-hint"
               >
-                <span
-                  v-if="handle.id === 'handle-none'"
-                  class="swatch-none-label"
-                  >✕</span
-                >
+                Click <strong>Add Wall</strong> to continue from the selected wall endpoint.
+              </p>
+
+              <button
+                v-if="!isDrawing && drawWalls.length > 0"
+                type="button"
+                class="sidebar-action-btn draw-btn"
+                @click="continueDrawing"
+              >
+                Add Wall
               </button>
+
+            <div class="prop-row">
+              <label class="prop-label">Label</label>
+              <input
+                class="prop-input"
+                :value="selectedWall.label"
+                @input="
+                  (e: Event) =>
+                    roomStore.updateWallProps(selectedWall!.id, {
+                      label: (e.target as HTMLInputElement).value,
+                    })
+                "
+              />
             </div>
+
+            <div class="prop-row">
+              <label class="prop-label">Length</label>
+              <input
+                class="prop-input"
+                type="number"
+                :value="cmToInches(selectedWall.length)"
+                @input="
+                  (e: Event) =>
+                    roomStore.updateWallProps(selectedWall!.id, {
+                      length: inchesToCm(Number((e.target as HTMLInputElement).value)),
+                    })
+                "
+              />
+            </div>
+
+            <div class="prop-row">
+              <label class="prop-label">Height</label>
+              <input
+                class="prop-input"
+                type="number"
+                :value="cmToInches(roomStore.height)"
+                @input="
+                  (e: Event) =>
+                    roomStore.setHeight(
+                      inchesToCm(Number((e.target as HTMLInputElement).value)),
+                    )
+                "
+              />
+            </div>
+
+            <div class="prop-row">
+              <label class="prop-label">Thickness</label>
+              <input
+                class="prop-input"
+                type="number"
+                :value="selectedWall.thickness"
+                @input="
+                  (e: Event) =>
+                    roomStore.updateWallProps(selectedWall!.id, {
+                      thickness: Number((e.target as HTMLInputElement).value),
+                    })
+                "
+              />
+            </div>
+
+            <div class="prop-row">
+              <label class="prop-label">{{ isClosed ? "Rotate Room" : "Angle" }}</label>
+              <div class="angle-controls">
+                <button
+                  type="button"
+                  class="angle-btn"
+                  @click="rotateSelectedWall(-1)"
+                  title="Rotate -1°"
+                >
+                  -1°
+                </button>
+                <input
+                  class="prop-input angle-input"
+                  type="number"
+                  step="1"
+                  :value="selectedWallAngleDeg"
+                  @input="onSelectedWallAngleInput"
+                />
+                <button
+                  type="button"
+                  class="angle-btn"
+                  @click="rotateSelectedWall(1)"
+                  title="Rotate +1°"
+                >
+                  +1°
+                </button>
+              </div>
+            </div>
+
+            <div class="prop-row">
+              <label class="prop-label">Visible</label>
+              <input
+                type="checkbox"
+                :checked="selectedWall.visible"
+                @change="
+                  (e: Event) =>
+                    roomStore.updateWallProps(selectedWall!.id, {
+                      visible: (e.target as HTMLInputElement).checked,
+                    })
+                "
+              />
+            </div>
+
+            <button
+              type="button"
+              class="sidebar-action-btn draw-btn"
+              @click="roomStore.setClosetWall(selectedWall.id)"
+            >
+              Use As Closet Wall
+            </button>
+
+            <button
+              type="button"
+              class="sidebar-action-btn delete-wall-btn"
+              @click.stop.prevent="removeSelectedWall"
+            >
+              Remove Wall
+            </button>
           </div>
 
-          <div class="option-group">
-            <label class="option-label">Door Finish</label>
-            <div class="swatch-row">
-              <button
-                v-for="mat in DOOR_MATERIALS"
-                :key="mat.id"
-                class="swatch-btn"
-                :class="{ active: closet.doorOptions.doorFinishId === mat.id }"
-                :style="{ background: mat.colorHex }"
-                :title="mat.label"
-                @click="
-                  closet.setDoorOptions({
-                    doorFinishId: mat.id,
-                    doorColor: mat.colorHex,
-                  })
-                "
+          <p v-else class="sidebar-empty-text">
+            Select a wall to edit wall properties.
+          </p>
+
+          <h4 class="sidebar-subheading">Add Options</h4>
+          <div class="item-grid">
+            <button
+              class="item-card"
+              @click="addArchItem(DOOR_ITEMS[0]!)"
+            >
+              <div class="item-icon">🚪</div>
+              <span class="item-label">Add Door</span>
+            </button>
+            <button
+              class="item-card"
+              @click="addArchItem(DECO_ITEMS[0]!)"
+            >
+              <div class="item-icon">🪟</div>
+              <span class="item-label">Add Window</span>
+            </button>
+          </div>
+
+          <div v-if="selectedDoorWindowItem" class="wall-props">
+            <h4 class="sidebar-subheading">
+              Selected {{ itemLabel(selectedDoorWindowItem.type) }}
+            </h4>
+
+            <div class="prop-row">
+              <label class="prop-label">Width</label>
+              <input
+                class="prop-input"
+                type="number"
+                min="1"
+                :value="cmToInches(selectedDoorWindowItem.width)"
+                @input="onSelectedItemSizeInput('width', $event)"
+              />
+            </div>
+
+            <div class="prop-row">
+              <label class="prop-label">Height</label>
+              <input
+                class="prop-input"
+                type="number"
+                min="1"
+                :value="cmToInches(selectedDoorWindowItem.height)"
+                @input="onSelectedItemSizeInput('height', $event)"
               />
             </div>
           </div>
         </div>
       </aside>
+
     </div>
 
     <Teleport to="body">
@@ -2237,6 +2135,11 @@ function dimLinePoints(wall: {
   color: #22c55e;
 }
 
+.draw-hint-accent {
+  color: #22c55e;
+  font-weight: 700;
+}
+
 .draw-hint kbd {
   display: inline-block;
   padding: 1px 5px;
@@ -2251,6 +2154,13 @@ function dimLinePoints(wall: {
 .draw-complete {
   color: #22c55e;
   font-weight: 600;
+}
+
+.sidebar-empty-text {
+  margin: 0;
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.4;
 }
 
 /* Wall properties panel */
