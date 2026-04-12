@@ -1,27 +1,19 @@
 # Floor Plan Component - Functionality Documentation
 
 ## Overview
-The **FloorPlan.vue** component is a 2D interactive floor plan editor that allows users to design room layouts with custom or predefined shapes. It supports two distinct modes: **Quick Room** (simple rectangular rooms) and **Draw Walls** (freeform custom polygons).
+The **FloorPlan.vue** component is a unified 2D floor plan editor for custom or preset room layouts. Quick presets and Draw Walls controls now live in one sidebar and one canvas, so preset rooms are edited with the same wall tools as drawn rooms.
 
 ---
 
 ## Core Features
 
-### 1. **Quick Room Mode** (Default)
-For rapid room setup with simple rectangular spaces.
+### 1. **Quick Preset Setup**
+For rapid room setup using predefined layouts.
 
 #### Capabilities:
-- **Drag-to-Resize**: Corner and mid-wall resize handles
-  - 4 corner handles (diagonals) for resizing both width and depth simultaneously
-  - 4 mid-wall handles for resizing individual dimensions (width XOR depth)
-  - Real-time screen-to-SVG coordinate transformation with CTM (Current Transformation Matrix)
-  - Smart sign calculation based on which handle is grabbed (handles quadrants)
-
-- **Room Dimensions**: Width and depth with automatic clamping to constraints
-  - Centered room coordinate system ([-width/2, +width/2] × [-depth/2, +depth/2])
-  - Dynamic SVG viewBox with padding to keep room centered during resize
-
-- **Room Height Dialog**: Separate modal for setting ceiling height (not visible in 2D plan)
+- **Preset Selection**: Choose from square/open-U/open-L/top-bridge presets
+  - Selecting a preset applies full room geometry (walls + closet wall flag)
+  - If the current layout is non-empty, a confirmation dialog is shown before replacement
 
 - **Item Placement**: Architecture elements positioned on walls
   - 3 categories: Doors, Architecture (columns/walls), Wall Decorators (windows, vents, switches)
@@ -30,13 +22,12 @@ For rapid room setup with simple rectangular spaces.
   - Vertical walls (right/left) automatically rotate items 90°
 
 #### Visual Elements:
-- Floor color and wall strokes based on room store colors
-- Dimension annotations (inches-only format) above and right edges
-- Resize handles with cursor feedback (nwse-resize, nesw-resize, etc.)
+- Preset cards shown in the same left sidebar as drawing controls
+- Same draw-canvas visual system as custom walls (grid, thick wall polygons, dimension labels)
 
 ---
 
-### 2. **Draw Walls Mode** (Custom Polygons)
+### 2. **Wall Drawing And Editing**
 For creating complex, non-rectangular room shapes with manual control.
 
 #### Core Drawing System:
@@ -261,30 +252,18 @@ screenToSvg(svg, screenX, screenY):
 - **shape**: "rectangular" (4 walls) or "custom" (any polygon)
 
 ### Component State (Reactive):
-- **Mode**: "quick" or "draw"
 - **Drawing State**: isDrawing, isClosed, wallVertices, previewWall
 - **Selection State**: selectedWallId, selectedItemId, selectedWallAnchor
-- **Drag State**: active flag, start positions, axis constraints
 - **Mouse Position**: Real-time cursor location during interactions
 
 ---
 
 ## Event Handlers & Interactions
 
-### Drag Operations:
-- **Pointer Start**: Capture target element, record start position/dimensions
-- **Pointer Move**: Calculate delta in SVG space, apply sign corrections, update state
-- **Pointer Up**: Release capture, deactivate drag state
-
 ### Drawing Canvas:
 - **Click**: Place wall vertex, close room, or select items
 - **Move**: Update preview wall, snap feedback
 - **Escape**: Cancel drawing mode
-
-### Resize Handles:
-- 4 corner handles (stretch both axes simultaneously with sign adjustment)
-- 4 mid-wall handles (stretch single axis independently)
-- Cursor feedback shows appropriate resize direction (nwse-resize, ew-resize, etc.)
 
 ---
 
@@ -303,7 +282,7 @@ Enforced via `ROOM_CONSTRAINTS`:
 - **Computed Properties**: Heavily used for reactive viewport, vertices, preview walls
   - Prevents unnecessary re-renders of static geometry
 - **Viewport Locking**: Frozen viewBox prevents continuous recalculation post-closure
-- **Selective SVG Rendering**: Conditional v-if blocks for quick vs. draw mode
+- **Single SVG Rendering Path**: One draw canvas for presets and custom walls
 - **Polygon Rendering**: Uses `wallPolygonPoints()` to generate thick wall visuals with perpendicular offset
 - **Grid Pattern**: Reusable SVG pattern definition for draw canvas background
 
@@ -330,26 +309,20 @@ Enforced via `ROOM_CONSTRAINTS`:
 
 ## Supported Workflows
 
-### Workflow 1: Quick Room Setup
-1. Drag corners/edges to set room size
-2. Add doors, columns, windows from sidebar
-3. Drag items to positions on walls
-4. Export/save configuration
+### Workflow 1: Preset To Editable Layout
+1. Pick a quick preset from the left sidebar
+2. Confirm replacement if the current room already contains walls/items
+3. Continue with full wall editing (angle, length, thickness, rotate)
+4. Add doors/windows and drag them along walls
 
 ### Workflow 2: Custom Freeform Design
-1. Switch to Draw Walls mode
+1. Stay in the same unified editor
 2. Click "Start Drawing"
 3. Click to place vertices, snap to 45° angles
 4. Close polygon by clicking near first vertex
 5. Select walls to adjust angle/length individually
 6. Rotate geometry by topology: closed room rotates rigidly; boundary walls may rotate locally or as a chain
 7. Add items as needed
-
-### Workflow 3: Hybrid Approach
-1. Start with Quick Room
-2. Switch to Draw Walls to customize specific walls
-3. Continue editing walls with rotation/angle control
-4. Return to Quick Room for simple rectangular adjustments
 
 ---
 

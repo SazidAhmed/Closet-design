@@ -118,6 +118,15 @@ function findButtonByText(wrapper: ReturnType<typeof mount>, text: string) {
     .find((button) => button.text().includes(text))
 }
 
+async function beginDrawingSession(wrapper: ReturnType<typeof mount>) {
+  const startDrawingButton =
+    findButtonByText(wrapper, 'Start Drawing') ??
+    findButtonByText(wrapper, 'Clear and Redraw')
+
+  expect(startDrawingButton).toBeTruthy()
+  await startDrawingButton!.trigger('click')
+}
+
 describe('FloorPlan wall selection + angle UI integration', () => {
   afterEach(() => {
     document.body.innerHTML = ''
@@ -137,13 +146,7 @@ describe('FloorPlan wall selection + angle UI integration', () => {
       },
     })
 
-    const drawModeButton = findButtonByText(wrapper, 'Draw Walls')
-    expect(drawModeButton).toBeTruthy()
-    await drawModeButton!.trigger('click')
-
-    const startDrawingButton = findButtonByText(wrapper, 'Start Drawing')
-    expect(startDrawingButton).toBeTruthy()
-    await startDrawingButton!.trigger('click')
+    await beginDrawingSession(wrapper)
 
     // Inject representative closed concave topology after draw session is active.
     setConcaveWall2Representative(roomStore)
@@ -192,13 +195,7 @@ describe('FloorPlan wall selection + angle UI integration', () => {
       },
     })
 
-    const drawModeButton = findButtonByText(wrapper, 'Draw Walls')
-    expect(drawModeButton).toBeTruthy()
-    await drawModeButton!.trigger('click')
-
-    const startDrawingButton = findButtonByText(wrapper, 'Start Drawing')
-    expect(startDrawingButton).toBeTruthy()
-    await startDrawingButton!.trigger('click')
+    await beginDrawingSession(wrapper)
 
     setConcaveWall2Representative(roomStore)
     await nextTick()
@@ -246,13 +243,7 @@ describe('FloorPlan wall selection + angle UI integration', () => {
       },
     })
 
-    const drawModeButton = findButtonByText(wrapper, 'Draw Walls')
-    expect(drawModeButton).toBeTruthy()
-    await drawModeButton!.trigger('click')
-
-    const startDrawingButton = findButtonByText(wrapper, 'Start Drawing')
-    expect(startDrawingButton).toBeTruthy()
-    await startDrawingButton!.trigger('click')
+    await beginDrawingSession(wrapper)
 
     setOpenWall4BoundaryRepresentative(roomStore)
     await nextTick()

@@ -6,9 +6,8 @@
 ## Scope
 This document describes the implementation details of Quick Room presets in Floor Plan, including:
 - preset data model and room generation,
-- quick-mode rendering pipeline,
-- generic geometry resize algorithm,
-- axis-lock behavior,
+- unified sidebar/canvas behavior,
+- replacement confirmation flow,
 - visual rules currently active,
 - validation and extension guidance.
 
@@ -28,10 +27,9 @@ Key exports:
 ### 1.2 src/features/closet/views/FloorPlan.vue
 Purpose:
 - UI for preset selection.
-- Quick-mode SVG rendering from room geometry.
-- Drag/resize interaction.
-- Axis-lock controls.
-- Quick wall number badge rendering.
+- Unified Draw Walls SVG rendering for both presets and custom layouts.
+- Preset replacement confirmation modal for non-empty layouts.
+- Architecture item placement controls (door/window) in the same sidebar.
 
 ### 1.3 src/stores/useRoomStore.ts
 Purpose:
@@ -73,100 +71,33 @@ Wall generation algorithm (wallsFromPoints):
 ## 3. Preset Apply Flow
 
 Function:
-- applyQuickPreset(presetId) in FloorPlan.vue.
+- requestQuickPreset(presetId) + applyQuickPreset(presetId) in FloorPlan.vue.
 
 Behavior:
-1. Create room via createQuickRoomFromPreset(presetId, roomStore.height).
-2. Preserve current colors from roomStore.colors.
-3. Preserve current room height.
-4. Reset closet offsets:
+1. User selects a preset card in the unified sidebar.
+2. If the current layout has walls/items, show a custom confirmation modal.
+3. On confirmation, create room via createQuickRoomFromPreset(presetId, roomStore.height).
+4. Preserve current colors from roomStore.colors.
+5. Preserve current room height.
+6. Reset closet offsets:
 	- closetOffsetX = 0
 	- closetOffsetY = 0
 	- closetOffsetZ = 0
-5. Clear selected item in quick canvas.
-6. Set active quickPresetId for UI state.
+7. Clear selected item/wall state and keep Draw Walls editing available.
+8. Set active quickPresetId for UI state.
 
 Design choice:
 - Preset selection changes geometry only; cosmetic settings remain stable.
 
-## 4. Quick Mode Rendering Pipeline
+## 4. Unified Rendering And Editing Contract
 
-Quick mode now renders from wall geometry, not from fixed rectangular assumptions.
-
-Computed geometry inputs:
-- quickBounds = roomStore.planBounds
-- roomW = quickBounds.width
-- roomD = quickBounds.depth
-- svgViewBox centered on quickBounds.centerX / centerY with padding.
-
-Rendered quick elements:
-1. Wall segments from each wall start point to computed wall end point.
-2. Wall number badges at wall midpoint using wall.label.
-3. Dimension lines:
-	- rectangular quick rooms: global top/right dimensions,
-	- non-rectangular quick rooms: per-wall dimensions.
-4. Resize handles:
-	- corners and midpoints from quickBounds extents.
-
-Current visual rule:
-- No interior fill in quick mode (removed by request).
-
-## 5. Generic Resize Algorithm
-
-Location:
-- useRoomStore.ts -> resizeRoom(width, depth)
-
-Previous limitation:
-- Worked only for strict 4-wall rectangles.
+Presets no longer render in a separate quick canvas.
 
 Current behavior:
-- Scales any room wall chain around plan center.
-
-Algorithm:
-1. Clamp target width/depth via ROOM_CONSTRAINTS.wallLength.
-2. Compute current bounds from roomPlanBounds(this.walls).
-3. Compute scale factors:
-	- scaleX = targetWidth / sourceWidth
-	- scaleY = targetDepth / sourceDepth
-4. For each wall:
-	- start = wall.position
-	- end = wallEndPoint(wall)
-	- scale start/end around bounds center:
-	  - sx' = cx + (sx - cx) * scaleX
-	  - sy' = cy + (sy - cy) * scaleY
-	  - ex' = cx + (ex - cx) * scaleX
-	  - ey' = cy + (ey - cy) * scaleY
-	- rebuild wall:
-	  - position = scaledStart
-	  - length = hypot(ex' - sx', ey' - sy')
-	  - angle = normalizeAngle(atan2(ey' - sy', ex' - sx'))
-
-Notes:
-- This is anisotropic scaling; wall angles can change as expected.
-- Connectivity is preserved because both endpoints are transformed consistently.
-
-## 6. Resize Interaction and Axis Lock
-
-Location:
-- FloorPlan.vue quick drag handlers.
-
-State:
-- drag.active, drag.axis, drag.cornerIdx, startMouse, startW, startD.
-- quickResizeAxisLock: auto | width | depth.
-
-Modes:
-- auto: use handle semantic axis (corner=both, side=single axis).
-- width: apply horizontal scaling only.
-- depth: apply vertical scaling only.
-
-Drag to size conversion:
-- Convert pointer screen coordinates to SVG coordinates.
-- Compute dx, dy from drag start.
-- Resolve sign based on active handle and lock mode.
-- Produce target newW/newD and call roomStore.resizeRoom(newW, newD).
-
-UI control:
-- Quick sidebar includes lock buttons: Free, Width, Depth.
+1. Presets and drawing share the Draw Walls canvas and styling.
+2. Preset-generated walls can be selected/rotated/edited immediately.
+3. Doors/windows can be added and edited in the same sidebar after preset apply.
+4. Explicit drawing start rule remains unchanged (canvas clicks do not begin drawing unless Start Drawing/Add Wall activated).
 
 ## 7. Item Placement Updates for Arbitrary Geometry
 
@@ -199,12 +130,11 @@ Implementation:
 
 ## 9. Known Decisions and Current UX Rules
 
-- Quick presets are selectable and immediately applied.
+- Quick presets are selectable from the unified sidebar.
+- Non-empty layout replacement requires explicit confirmation.
 - Colors and height persist across preset changes.
-- All presets are resizable.
-- Axis lock is available during quick resizing.
-- Quick mode does not show interior floor fill.
-- Wall number badges are visible in quick mode.
+- Presets inherit the Draw Walls editing behavior and visuals.
+- Quick resize handles and axis-lock controls are removed.
 
 ## 10. Validation Performed
 

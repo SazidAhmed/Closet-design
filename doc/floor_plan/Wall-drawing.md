@@ -19,7 +19,7 @@ The implementation lives primarily in these modules:
 
 ## 2. Feature Goals
 
-The wall drawing mode was implemented to support custom room geometry beyond fixed rectangular rooms.
+The wall drawing system supports custom room geometry beyond fixed rectangular rooms and now operates in the same editor flow as quick presets.
 
 Core goals:
 
@@ -33,26 +33,22 @@ Core goals:
 
 ## 3. High Level UX
 
-The feature has two room setup modes:
-
-1. Quick Room
-2. Draw Walls
-
-In Draw Walls mode, users can:
+The feature uses one unified floor plan flow where users can:
 
 1. Set wall height and default wall thickness.
-2. Start fresh drawing.
-3. Continue drawing from existing walls.
-4. Select walls and edit properties.
-5. Remove a selected wall.
-6. Finish drawing with Escape.
+2. Start from a quick preset or from an empty redraw.
+3. Start fresh drawing.
+4. Continue drawing from existing walls.
+5. Select walls and edit properties.
+6. Remove a selected wall.
+7. Finish drawing with Escape.
 
 
 ## 4. Main Files and Responsibilities
 
 ## 4.1 `FloorPlan.vue`
 
-Owns draw mode UI and interaction orchestration:
+Owns wall-edit UI and interaction orchestration:
 
 - Draw mode state flags (`isDrawing`, `isClosed`, etc.)
 - SVG preview and indication line
@@ -93,7 +89,6 @@ The wall end point is derived from start + angle * length.
 
 Important view-level states:
 
-- `floorPlanMode`: quick | draw
 - `hasStartedDrawSession`: draw session visibility switch
 - `isDrawing`: active drawing state
 - `isClosed`: room marked complete

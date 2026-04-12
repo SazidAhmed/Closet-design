@@ -29,6 +29,37 @@ const appStore = useAppStore();
 const historyStore = useHistoryStore();
 
 const quickPresetId = ref<string>(DEFAULT_QUICK_ROOM_PRESET_ID);
+const showPresetReplaceDialog = ref(false);
+const pendingPresetId = ref<string | null>(null);
+
+function canReplaceLayoutWithoutConfirmation(): boolean {
+  return roomStore.walls.length === 0 && roomStore.items.length === 0;
+}
+
+function requestQuickPreset(presetId: string) {
+  if (presetId === quickPresetId.value) return;
+  if (canReplaceLayoutWithoutConfirmation()) {
+    applyQuickPreset(presetId);
+    return;
+  }
+
+  pendingPresetId.value = presetId;
+  showPresetReplaceDialog.value = true;
+}
+
+function cancelQuickPresetReplacement() {
+  pendingPresetId.value = null;
+  showPresetReplaceDialog.value = false;
+}
+
+function confirmQuickPresetReplacement() {
+  if (!pendingPresetId.value) {
+    cancelQuickPresetReplacement();
+    return;
+  }
+  applyQuickPreset(pendingPresetId.value);
+  cancelQuickPresetReplacement();
+}
 
 function applyQuickPreset(presetId: string) {
   const nextRoom = createQuickRoomFromPreset(presetId, roomStore.height);
@@ -44,77 +75,19 @@ function applyQuickPreset(presetId: string) {
   roomStore.closetOffsetY = 0;
   roomStore.closetOffsetZ = 0;
   selectedItemId.value = null;
+  hasStartedDrawSession.value = true;
+  isDrawing.value = false;
+  isClosed.value = roomStore.roomIsClosed;
+  pendingStartVertex.value = null;
+  deselectWall();
+  unlockDrawViewBox();
 
   quickPresetId.value = presetId;
 }
 
 const quickBounds = computed(() => roomStore.planBounds);
 
-/** Width of the room plan bounds */
-const roomW = computed(() => quickBounds.value.width ?? 244);
-/** Depth of the room plan bounds */
-const roomD = computed(() => quickBounds.value.depth ?? 244);
-
-const canQuickResize = computed(() => roomStore.walls.length > 0);
-const isRectangularQuick = computed(
-  () => roomStore.shape === "rectangular" && roomStore.walls.length === 4,
-);
-
-const quickResizeCorners = computed<[number, number][]>(() => {
-  if (!canQuickResize.value) return [];
-  const { minX, maxX, minY, maxY } = quickBounds.value;
-  return [
-    [minX, minY],
-    [maxX, minY],
-    [maxX, maxY],
-    [minX, maxY],
-  ];
-});
-
-/** Darken the wall color slightly for the 2D wall stroke */
-function darkenHex(hex: string, amount = 40): string {
-  const c = hex.replace("#", "");
-  const r = Math.max(0, parseInt(c.substring(0, 2), 16) - amount);
-  const g = Math.max(0, parseInt(c.substring(2, 4), 16) - amount);
-  const b = Math.max(0, parseInt(c.substring(4, 6), 16) - amount);
-  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
-}
-
-const wallStroke = computed(() => darkenHex(roomStore.colors.wallColor, 50));
-
-// ───── Dynamic viewBox ─────────────────────────────────────────────────────
-const viewPad = 80; // padding around room in SVG units
-const svgViewBox = computed(() => {
-  const w = quickBounds.value.width + viewPad * 2;
-  const h = quickBounds.value.depth + viewPad * 2;
-  return `${quickBounds.value.centerX - w / 2} ${quickBounds.value.centerY - h / 2} ${w} ${h}`;
-});
-
-// ───── Drag-to-resize ──────────────────────────────────────────────────────
 const svgRef = ref<SVGSVGElement | null>(null);
-
-type DragAxis = "width" | "depth" | "both";
-type QuickResizeAxisLock = "auto" | "width" | "depth";
-
-const quickResizeAxisLock = ref<QuickResizeAxisLock>("auto");
-
-const drag = reactive<{
-  active: boolean;
-  axis: DragAxis;
-  cornerIdx: number; // which corner (for sign calc)
-  startMouseX: number;
-  startMouseY: number;
-  startW: number;
-  startD: number;
-}>({
-  active: false,
-  axis: "both",
-  cornerIdx: 0,
-  startMouseX: 0,
-  startMouseY: 0,
-  startW: 244,
-  startD: 244,
-});
 
 /** Convert screen pixels to SVG units using the CTM */
 function screenToSvg(
@@ -131,103 +104,12 @@ function screenToSvg(
   return { x: svgPt.x, y: svgPt.y };
 }
 
-// Corner cursors (TL, TR, BR, BL)
-const cornerCursors = [
-  "nwse-resize",
-  "nesw-resize",
-  "nwse-resize",
-  "nesw-resize",
-];
-function startCornerDrag(idx: number, e: PointerEvent) {
-  if (!svgRef.value || !canQuickResize.value) return;
-  e.preventDefault();
-  (e.target as Element)?.setPointerCapture?.(e.pointerId);
-  drag.active = true;
-  drag.axis = "both";
-  drag.cornerIdx = idx;
-  drag.startMouseX = e.clientX;
-  drag.startMouseY = e.clientY;
-  drag.startW = roomW.value;
-  drag.startD = roomD.value;
-}
-
-function onPointerMove(e: PointerEvent) {
-  if (!drag.active || !svgRef.value || !canQuickResize.value) return;
-
-  const startSvg = screenToSvg(
-    svgRef.value,
-    drag.startMouseX,
-    drag.startMouseY,
-  );
-  const nowSvg = screenToSvg(svgRef.value, e.clientX, e.clientY);
-
-  const dx = nowSvg.x - startSvg.x;
-  const dy = nowSvg.y - startSvg.y;
-
-  // Determine sign based on which handle was grabbed
-  // Corners: 0=TL(-x,-y) 1=TR(+x,-y) 2=BR(+x,+y) 3=BL(-x,+y)
-  // Mid: 0=Top(y-) 1=Right(x+) 2=Bottom(y+) 3=Left(x-)
-  let newW = drag.startW;
-  let newD = drag.startD;
-
-  const resolvedAxis: DragAxis =
-    quickResizeAxisLock.value === "auto"
-      ? drag.axis
-      : quickResizeAxisLock.value;
-
-  const signXForHandle = (() => {
-    if (
-      quickResizeAxisLock.value !== "auto" &&
-      (drag.cornerIdx === 0 || drag.cornerIdx === 2)
-    ) {
-      // Top/Bottom midpoint in locked mode: use direct horizontal drag direction.
-      return 1;
-    }
-    return drag.cornerIdx === 0 || drag.cornerIdx === 3 ? -1 : 1;
-  })();
-
-  const signYForHandle = (() => {
-    if (
-      quickResizeAxisLock.value !== "auto" &&
-      (drag.cornerIdx === 1 || drag.cornerIdx === 3)
-    ) {
-      // Left/Right midpoint in locked mode: use direct vertical drag direction.
-      return 1;
-    }
-    return drag.cornerIdx === 0 || drag.cornerIdx === 1 ? -1 : 1;
-  })();
-
-  if (resolvedAxis === "both") {
-    newW = drag.startW + dx * signXForHandle * 2; // ×2 because room is centered
-    newD = drag.startD + dy * signYForHandle * 2;
-  } else if (resolvedAxis === "width") {
-    newW = drag.startW + dx * signXForHandle * 2;
-  } else {
-    newD = drag.startD + dy * signYForHandle * 2;
-  }
-
-  roomStore.resizeRoom(newW, newD);
-}
-
-function onPointerUp() {
-  drag.active = false;
-}
-
 onMounted(() => {
   appStore.setStep("floorplan");
-  document.addEventListener("pointermove", onPointerMove);
-  document.addEventListener("pointerup", onPointerUp);
-});
-
-onUnmounted(() => {
-  document.removeEventListener("pointermove", onPointerMove);
-  document.removeEventListener("pointerup", onPointerUp);
 });
 
 // ───── Change Room Height dialog ───────────────────────────────────────────
-const showHeightDialog = ref(false);
 const CM_PER_INCH = 2.54;
-const heightInput = ref(96);
 
 function cmToInches(cm: number): number {
   return Math.round(cm / CM_PER_INCH);
@@ -239,24 +121,6 @@ function inchesToCm(inches: number): number {
 
 function formatInches(cm: number): string {
   return `${cmToInches(cm)}"`;
-}
-
-function openHeightDialog() {
-  heightInput.value = cmToInches(roomStore.height);
-  showHeightDialog.value = true;
-}
-
-function applyHeight() {
-  const minIn = cmToInches(ROOM_CONSTRAINTS.height.min);
-  const maxIn = cmToInches(ROOM_CONSTRAINTS.height.max);
-  const clampedIn = Math.max(minIn, Math.min(maxIn, Math.round(heightInput.value)));
-  const clamped = Math.max(
-    ROOM_CONSTRAINTS.height.min,
-    Math.min(ROOM_CONSTRAINTS.height.max, inchesToCm(clampedIn)),
-  );
-  roomStore.setHeight(clamped);
-  heightInput.value = cmToInches(clamped);
-  showHeightDialog.value = false;
 }
 
 // ───── Architecture item catalog ───────────────────────────────────────────
@@ -533,13 +397,11 @@ function itemMeasurementLabel(
 }
 
 // ───── Draw Walls mode ─────────────────────────────────────────────────────
-type FloorPlanMode = "quick" | "draw";
-const floorPlanMode = ref<FloorPlanMode>("quick");
-const hasStartedDrawSession = ref(false);
+const hasStartedDrawSession = ref(true);
 
 // Draw state
 const isDrawing = ref(false);
-const isClosed = ref(false);
+const isClosed = ref(roomStore.roomIsClosed);
 const mousePos = reactive({ x: 0, y: 0 });
 const selectedWallId = ref<string | null>(null);
 const selectedWallAnchor = ref<[number, number] | null>(null);
@@ -885,30 +747,15 @@ watch(
   },
 );
 
-/** Start drawing mode */
-function enterDrawMode() {
-  floorPlanMode.value = "draw";
-  hasStartedDrawSession.value = false;
-  unlockDrawViewBox();
-  isClosed.value = false;
-  isDrawing.value = false;
-  selectedWallId.value = null;
-  selectedWallAnchor.value = null;
-  selectedWallAnchorType.value = "start";
-  pendingStartVertex.value = null;
-}
-
-/** Switch back to quick room mode */
-function enterQuickMode() {
-  floorPlanMode.value = "quick";
-  hasStartedDrawSession.value = false;
-  unlockDrawViewBox();
-  applyQuickPreset(quickPresetId.value);
-  selectedWallId.value = null;
-  selectedWallAnchor.value = null;
-  selectedWallAnchorType.value = "start";
-  pendingStartVertex.value = null;
-}
+watch(
+  () => roomStore.roomIsClosed,
+  (closed) => {
+    if (!isDrawing.value) {
+      isClosed.value = closed;
+    }
+  },
+  { immediate: true },
+);
 
 /** Start fresh drawing */
 function startFreshDraw() {
@@ -1041,7 +888,6 @@ function onDrawMouseMove(e: MouseEvent) {
 
 /** Handle Escape key — undo last wall segment */
 function onDrawKeyDown(e: KeyboardEvent) {
-  if (floorPlanMode.value !== "draw") return;
   if (e.key === "Escape") {
     if (isDrawing.value) {
       isDrawing.value = false;
@@ -1273,631 +1119,293 @@ function dimLinePoints(wall: {
       <!-- Left Sidebar: Add Architecture -->
       <aside class="sidebar sidebar-left">
         <div class="sidebar-section">
-          <!-- Mode Toggle -->
-          <div class="mode-toggle">
+          <h3 class="sidebar-heading">Layout Tools</h3>
+
+          <h4 class="sidebar-subheading">Quick Presets</h4>
+          <div class="preset-list">
             <button
-              class="mode-btn"
-              :class="{ active: floorPlanMode === 'quick' }"
-              @click="enterQuickMode"
+              v-for="preset in QUICK_ROOM_PRESETS"
+              :key="preset.id"
+              class="preset-card"
+              :class="{ active: quickPresetId === preset.id }"
+              @click="requestQuickPreset(preset.id)"
             >
-              Quick Room
-            </button>
-            <button
-              class="mode-btn"
-              :class="{ active: floorPlanMode === 'draw' }"
-              @click="enterDrawMode"
-            >
-              Draw Walls
+              <span class="preset-title">{{ preset.label }}</span>
+              <span class="preset-desc">{{ preset.description }}</span>
             </button>
           </div>
 
-          <!-- ========== DRAW WALLS SIDEBAR ========== -->
-          <template v-if="floorPlanMode === 'draw'">
-            <div class="draw-input-grid">
-              <div class="prop-row">
-                <label class="prop-label">Wall Height</label>
-                <input
-                  class="prop-input"
-                  type="number"
-                  :value="cmToInches(roomStore.height)"
-                  :min="cmToInches(ROOM_CONSTRAINTS.height.min)"
-                  :max="cmToInches(ROOM_CONSTRAINTS.height.max)"
-                  @input="onDrawHeightInput"
-                />
-              </div>
-
-              <div class="prop-row">
-                <label class="prop-label">Wall Thickness</label>
-                <input
-                  class="prop-input"
-                  type="number"
-                  :value="drawWallThicknessInput"
-                  min="1"
-                  max="30"
-                  @input="onDrawThicknessInput"
-                />
-              </div>
-
-              <div class="prop-row indicator-toggle-row">
-                <label class="prop-label">Show Inside</label>
-                <input
-                  v-model="showInsideSideIndicator"
-                  type="checkbox"
-                  class="indicator-toggle"
-                />
-              </div>
+          <div class="draw-input-grid">
+            <div class="prop-row">
+              <label class="prop-label">Wall Height</label>
+              <input
+                class="prop-input"
+                type="number"
+                :value="cmToInches(roomStore.height)"
+                :min="cmToInches(ROOM_CONSTRAINTS.height.min)"
+                :max="cmToInches(ROOM_CONSTRAINTS.height.max)"
+                @input="onDrawHeightInput"
+              />
             </div>
 
-            <!-- Drawing controls -->
-            <div v-if="!isClosed" class="draw-controls">
-              <button
-                class="sidebar-action-btn draw-btn"
-                @click="startFreshDraw"
-              >
-                🖊 Start Drawing
-              </button>
-
-              <button
-                v-if="!isDrawing && drawWalls.length > 0"
-                class="sidebar-action-btn draw-btn"
-                @click="continueDrawing"
-              >
-                ✏ Add Wall
-              </button>
-
-              <button
-                v-if="
-                  isDrawing &&
-                  (roomStore.walls.length > 0 || pendingStartVertex)
-                "
-                class="sidebar-action-btn undo-btn"
-                @click="undoDrawStep"
-              >
-                ↩ Undo Last Wall
-              </button>
-              <p class="draw-hint" v-if="isDrawing">
-                Click on the canvas to place wall vertices.<br />
-                Click near the <strong>first point</strong> to close the
-                room.<br />
-                Press <kbd>Esc</kbd> to finish drawing.
-              </p>
-              <p class="draw-hint" v-else-if="drawWalls.length > 0">
-                Click <strong>Add Wall</strong> to continue from the last wall
-                endpoint, or <strong>Start Drawing</strong> to clear and redraw.
-              </p>
-              <p class="draw-hint" v-else>
-                Click "Start Drawing" to begin placing walls.
-              </p>
+            <div class="prop-row">
+              <label class="prop-label">Wall Thickness</label>
+              <input
+                class="prop-input"
+                type="number"
+                :value="drawWallThicknessInput"
+                min="1"
+                max="30"
+                @input="onDrawThicknessInput"
+              />
             </div>
 
-            <!-- Room complete view -->
-            <div v-else class="draw-controls">
-              <p class="draw-hint draw-complete">
-                ✅ Room complete — {{ roomStore.walls.length }} walls
-              </p>
-              <button
-                class="sidebar-action-btn draw-btn"
-                @click="continueDrawing"
-              >
-                ✏ Add Wall
-              </button>
-              <button
-                class="sidebar-action-btn draw-btn"
-                @click="startFreshDraw"
-              >
-                🗑 Clear & Redraw
-              </button>
+            <div class="prop-row indicator-toggle-row">
+              <label class="prop-label">Show Inside</label>
+              <input
+                v-model="showInsideSideIndicator"
+                type="checkbox"
+                class="indicator-toggle"
+              />
             </div>
+          </div>
 
-            <!-- Selected wall properties -->
-            <div v-if="selectedWall" class="wall-props">
-              <h4 class="sidebar-subheading">Wall {{ selectedWall.label }}</h4>
-
-              <div class="prop-row">
-                <label class="prop-label">Label</label>
-                <input
-                  class="prop-input"
-                  :value="selectedWall.label"
-                  @input="
-                    (e: Event) =>
-                      roomStore.updateWallProps(selectedWall!.id, {
-                        label: (e.target as HTMLInputElement).value,
-                      })
-                  "
-                />
-              </div>
-
-              <div class="prop-row">
-                <label class="prop-label">Length</label>
-                <input
-                  class="prop-input"
-                  type="number"
-                  :value="cmToInches(selectedWall.length)"
-                  @input="
-                    (e: Event) =>
-                      roomStore.updateWallProps(selectedWall!.id, {
-                        length: inchesToCm(
-                          Number((e.target as HTMLInputElement).value),
-                        ),
-                      })
-                  "
-                />
-              </div>
-
-              <div class="prop-row">
-                <label class="prop-label">Height</label>
-                <input
-                  class="prop-input"
-                  type="number"
-                  :value="cmToInches(roomStore.height)"
-                  @input="
-                    (e: Event) =>
-                      roomStore.setHeight(
-                        inchesToCm(Number((e.target as HTMLInputElement).value)),
-                      )
-                  "
-                />
-              </div>
-
-              <div class="prop-row">
-                <label class="prop-label">Thickness</label>
-                <input
-                  class="prop-input"
-                  type="number"
-                  :value="selectedWall.thickness"
-                  @input="
-                    (e: Event) =>
-                      roomStore.updateWallProps(selectedWall!.id, {
-                        thickness: Number((e.target as HTMLInputElement).value),
-                      })
-                  "
-                />
-              </div>
-
-              <div class="prop-row">
-                <label class="prop-label">{{
-                  isClosed ? "Rotate Room" : "Angle"
-                }}</label>
-                <div class="angle-controls">
-                  <button
-                    type="button"
-                    class="angle-btn"
-                    @click="rotateSelectedWall(-1)"
-                    title="Rotate -1°"
-                  >
-                    -1°
-                  </button>
-                  <input
-                    class="prop-input angle-input"
-                    type="number"
-                    step="1"
-                    :value="selectedWallAngleDeg"
-                    @input="onSelectedWallAngleInput"
-                  />
-                  <button
-                    type="button"
-                    class="angle-btn"
-                    @click="rotateSelectedWall(1)"
-                    title="Rotate +1°"
-                  >
-                    +1°
-                  </button>
-                </div>
-              </div>
-
-              <div class="prop-row">
-                <label class="prop-label">Visible</label>
-                <input
-                  type="checkbox"
-                  :checked="selectedWall.visible"
-                  @change="
-                    (e: Event) =>
-                      roomStore.updateWallProps(selectedWall!.id, {
-                        visible: (e.target as HTMLInputElement).checked,
-                      })
-                  "
-                />
-              </div>
-
-              <button
-                type="button"
-                class="sidebar-action-btn draw-btn"
-                @click="roomStore.setClosetWall(selectedWall.id)"
-              >
-                Use As Closet Wall
-              </button>
-
-              <button
-                type="button"
-                class="sidebar-action-btn delete-wall-btn"
-                @click.stop.prevent="removeSelectedWall"
-              >
-                Remove Wall
-              </button>
-            </div>
-          </template>
-
-          <!-- ========== QUICK ROOM SIDEBAR (original) ========== -->
-          <template v-else>
-            <h3 class="sidebar-heading">Add Architecture</h3>
-
-            <h4 class="sidebar-subheading">Quick Presets</h4>
-            <div class="preset-list">
-              <button
-                v-for="preset in QUICK_ROOM_PRESETS"
-                :key="preset.id"
-                class="preset-card"
-                :class="{ active: quickPresetId === preset.id }"
-                @click="applyQuickPreset(preset.id)"
-              >
-                <span class="preset-title">{{ preset.label }}</span>
-                <span class="preset-desc">{{ preset.description }}</span>
-              </button>
-            </div>
-
-            <h4 class="sidebar-subheading">Resize Lock</h4>
-            <div class="resize-lock-group">
-              <button
-                class="lock-btn"
-                :class="{ active: quickResizeAxisLock === 'auto' }"
-                @click="quickResizeAxisLock = 'auto'"
-              >
-                Free
-              </button>
-              <button
-                class="lock-btn"
-                :class="{ active: quickResizeAxisLock === 'width' }"
-                @click="quickResizeAxisLock = 'width'"
-              >
-                Width
-              </button>
-              <button
-                class="lock-btn"
-                :class="{ active: quickResizeAxisLock === 'depth' }"
-                @click="quickResizeAxisLock = 'depth'"
-              >
-                Depth
-              </button>
-            </div>
-
-            <button class="sidebar-action-btn" @click="openHeightDialog">
-              Change Room Height ({{ formatInches(roomStore.height) }})
+          <div v-if="!isClosed" class="draw-controls">
+            <button
+              class="sidebar-action-btn draw-btn"
+              @click="startFreshDraw"
+            >
+              Start Drawing
             </button>
 
-            <h4 class="sidebar-subheading">Add Options</h4>
-            <div class="item-grid">
-              <button
-                class="item-card"
-                @click="addArchItem(DOOR_ITEMS[0]!)"
-              >
-                <div class="item-icon">🚪</div>
-                <span class="item-label">Add Door</span>
-              </button>
-              <button
-                class="item-card"
-                @click="addArchItem(DECO_ITEMS[0]!)"
-              >
-                <div class="item-icon">🪟</div>
-                <span class="item-label">Add Window</span>
-              </button>
+            <button
+              v-if="!isDrawing && drawWalls.length > 0"
+              class="sidebar-action-btn draw-btn"
+              @click="continueDrawing"
+            >
+              Add Wall
+            </button>
+
+            <button
+              v-if="isDrawing && (roomStore.walls.length > 0 || pendingStartVertex)"
+              class="sidebar-action-btn undo-btn"
+              @click="undoDrawStep"
+            >
+              Undo Last Wall
+            </button>
+            <p class="draw-hint" v-if="isDrawing">
+              Click on the canvas to place wall vertices.<br />
+              Click near the <strong>first point</strong> to close the room.<br />
+              Press <kbd>Esc</kbd> to finish drawing.
+            </p>
+            <p class="draw-hint" v-else-if="drawWalls.length > 0">
+              Click <strong>Add Wall</strong> to continue from the last wall endpoint, or
+              <strong>Start Drawing</strong> to clear and redraw.
+            </p>
+            <p class="draw-hint" v-else>
+              Click "Start Drawing" to begin placing walls.
+            </p>
+          </div>
+
+          <div v-else class="draw-controls">
+            <p class="draw-hint draw-complete">
+              Room complete - {{ roomStore.walls.length }} walls
+            </p>
+            <button
+              class="sidebar-action-btn draw-btn"
+              @click="continueDrawing"
+            >
+              Add Wall
+            </button>
+            <button
+              class="sidebar-action-btn draw-btn"
+              @click="startFreshDraw"
+            >
+              Clear and Redraw
+            </button>
+          </div>
+
+          <div v-if="selectedWall" class="wall-props">
+            <h4 class="sidebar-subheading">Wall {{ selectedWall.label }}</h4>
+
+            <div class="prop-row">
+              <label class="prop-label">Label</label>
+              <input
+                class="prop-input"
+                :value="selectedWall.label"
+                @input="
+                  (e: Event) =>
+                    roomStore.updateWallProps(selectedWall!.id, {
+                      label: (e.target as HTMLInputElement).value,
+                    })
+                "
+              />
             </div>
 
-            <div v-if="selectedDoorWindowItem" class="wall-props">
-              <h4 class="sidebar-subheading">
-                Selected {{ itemLabel(selectedDoorWindowItem.type) }}
-              </h4>
+            <div class="prop-row">
+              <label class="prop-label">Length</label>
+              <input
+                class="prop-input"
+                type="number"
+                :value="cmToInches(selectedWall.length)"
+                @input="
+                  (e: Event) =>
+                    roomStore.updateWallProps(selectedWall!.id, {
+                      length: inchesToCm(Number((e.target as HTMLInputElement).value)),
+                    })
+                "
+              />
+            </div>
 
-              <div class="prop-row">
-                <label class="prop-label">Width</label>
-                <input
-                  class="prop-input"
-                  type="number"
-                  min="1"
-                  :value="cmToInches(selectedDoorWindowItem.width)"
-                  @input="onSelectedItemSizeInput('width', $event)"
-                />
-              </div>
+            <div class="prop-row">
+              <label class="prop-label">Height</label>
+              <input
+                class="prop-input"
+                type="number"
+                :value="cmToInches(roomStore.height)"
+                @input="
+                  (e: Event) =>
+                    roomStore.setHeight(
+                      inchesToCm(Number((e.target as HTMLInputElement).value)),
+                    )
+                "
+              />
+            </div>
 
-              <div class="prop-row">
-                <label class="prop-label">Height</label>
+            <div class="prop-row">
+              <label class="prop-label">Thickness</label>
+              <input
+                class="prop-input"
+                type="number"
+                :value="selectedWall.thickness"
+                @input="
+                  (e: Event) =>
+                    roomStore.updateWallProps(selectedWall!.id, {
+                      thickness: Number((e.target as HTMLInputElement).value),
+                    })
+                "
+              />
+            </div>
+
+            <div class="prop-row">
+              <label class="prop-label">{{ isClosed ? "Rotate Room" : "Angle" }}</label>
+              <div class="angle-controls">
+                <button
+                  type="button"
+                  class="angle-btn"
+                  @click="rotateSelectedWall(-1)"
+                  title="Rotate -1°"
+                >
+                  -1°
+                </button>
                 <input
-                  class="prop-input"
+                  class="prop-input angle-input"
                   type="number"
-                  min="1"
-                  :value="cmToInches(selectedDoorWindowItem.height)"
-                  @input="onSelectedItemSizeInput('height', $event)"
+                  step="1"
+                  :value="selectedWallAngleDeg"
+                  @input="onSelectedWallAngleInput"
                 />
+                <button
+                  type="button"
+                  class="angle-btn"
+                  @click="rotateSelectedWall(1)"
+                  title="Rotate +1°"
+                >
+                  +1°
+                </button>
               </div>
             </div>
-          </template>
+
+            <div class="prop-row">
+              <label class="prop-label">Visible</label>
+              <input
+                type="checkbox"
+                :checked="selectedWall.visible"
+                @change="
+                  (e: Event) =>
+                    roomStore.updateWallProps(selectedWall!.id, {
+                      visible: (e.target as HTMLInputElement).checked,
+                    })
+                "
+              />
+            </div>
+
+            <button
+              type="button"
+              class="sidebar-action-btn draw-btn"
+              @click="roomStore.setClosetWall(selectedWall.id)"
+            >
+              Use As Closet Wall
+            </button>
+
+            <button
+              type="button"
+              class="sidebar-action-btn delete-wall-btn"
+              @click.stop.prevent="removeSelectedWall"
+            >
+              Remove Wall
+            </button>
+          </div>
+
+          <h4 class="sidebar-subheading">Add Options</h4>
+          <div class="item-grid">
+            <button
+              class="item-card"
+              @click="addArchItem(DOOR_ITEMS[0]!)"
+            >
+              <div class="item-icon">🚪</div>
+              <span class="item-label">Add Door</span>
+            </button>
+            <button
+              class="item-card"
+              @click="addArchItem(DECO_ITEMS[0]!)"
+            >
+              <div class="item-icon">🪟</div>
+              <span class="item-label">Add Window</span>
+            </button>
+          </div>
+
+          <div v-if="selectedDoorWindowItem" class="wall-props">
+            <h4 class="sidebar-subheading">
+              Selected {{ itemLabel(selectedDoorWindowItem.type) }}
+            </h4>
+
+            <div class="prop-row">
+              <label class="prop-label">Width</label>
+              <input
+                class="prop-input"
+                type="number"
+                min="1"
+                :value="cmToInches(selectedDoorWindowItem.width)"
+                @input="onSelectedItemSizeInput('width', $event)"
+              />
+            </div>
+
+            <div class="prop-row">
+              <label class="prop-label">Height</label>
+              <input
+                class="prop-input"
+                type="number"
+                min="1"
+                :value="cmToInches(selectedDoorWindowItem.height)"
+                @input="onSelectedItemSizeInput('height', $event)"
+              />
+            </div>
+          </div>
         </div>
       </aside>
 
       <!-- Center: 2D Floor Plan Canvas -->
       <main class="floorplan-canvas-area">
         <div class="canvas-container">
-          <!-- SVG Floor Plan -->
           <svg
-            v-if="floorPlanMode === 'quick'"
-            ref="svgRef"
-            :viewBox="svgViewBox"
-            class="floorplan-svg"
-            xmlns="http://www.w3.org/2000/svg"
-            @click="selectedItemId = null; deselectWall()"
-          >
-            <!-- Walls as segments from room geometry -->
-            <template v-for="(wall, idx) in roomStore.walls" :key="wall.id">
-              <line
-                :x1="wall.position[0]"
-                :y1="wall.position[1]"
-                :x2="wallEndPoint(wall)[0]"
-                :y2="wallEndPoint(wall)[1]"
-                :stroke="selectedWallId === wall.id ? '#fbbf24' : wallStroke"
-                :stroke-width="selectedWallId === wall.id ? Math.max(6, wall.thickness + 1) : Math.max(4, wall.thickness)"
-                stroke-linecap="round"
-                class="wall-segment"
-                @click.stop="selectWall(wall.id, $event)"
-              />
-
-              <g
-                class="quick-wall-badge"
-                :transform="`translate(${wallMidpoint(wall)[0]}, ${wallMidpoint(wall)[1]})`"
-                @click.stop="selectWall(wall.id, $event)"
-              >
-                <circle
-                  r="10"
-                  fill="#f59e0b"
-                  stroke="#0f172a"
-                  stroke-width="1.5"
-                />
-                <text
-                  text-anchor="middle"
-                  dominant-baseline="central"
-                  fill="#0f172a"
-                  font-size="9"
-                  font-weight="700"
-                >
-                  {{ wall.label || idx + 1 }}
-                </text>
-              </g>
-
-              <template v-if="!isRectangularQuick">
-                <line
-                  :x1="dimLinePoints(wall).x1"
-                  :y1="dimLinePoints(wall).y1"
-                  :x2="dimLinePoints(wall).x2"
-                  :y2="dimLinePoints(wall).y2"
-                  stroke="#94a3b8"
-                  stroke-width="0.9"
-                  marker-start="url(#arrowL)"
-                  marker-end="url(#arrowR)"
-                />
-                <text
-                  :x="dimLinePoints(wall).tx"
-                  :y="dimLinePoints(wall).ty"
-                  text-anchor="middle"
-                  fill="#e2e8f0"
-                  font-size="10"
-                  font-weight="600"
-                >
-                  {{ formatLength(wall.length) }}
-                </text>
-              </template>
-            </template>
-
-            <template v-if="canQuickResize">
-              <!-- Top dimension -->
-              <g v-if="isRectangularQuick">
-                <line
-                  :x1="quickBounds.minX"
-                  :y1="quickBounds.minY - 25"
-                  :x2="quickBounds.maxX"
-                  :y2="quickBounds.minY - 25"
-                  stroke="#94a3b8"
-                  stroke-width="1"
-                  marker-start="url(#arrowL)"
-                  marker-end="url(#arrowR)"
-                />
-                <text
-                  :x="quickBounds.centerX"
-                  :y="quickBounds.minY - 30"
-                  text-anchor="middle"
-                  fill="#e2e8f0"
-                  font-size="12"
-                  font-weight="600"
-                >
-                  {{ formatLength(roomW) }}
-                </text>
-              </g>
-
-              <!-- Right dimension -->
-              <g v-if="isRectangularQuick">
-                <line
-                  :x1="quickBounds.maxX + 25"
-                  :y1="quickBounds.minY"
-                  :x2="quickBounds.maxX + 25"
-                  :y2="quickBounds.maxY"
-                  stroke="#94a3b8"
-                  stroke-width="1"
-                  marker-start="url(#arrowU)"
-                  marker-end="url(#arrowD)"
-                />
-                <text
-                  :x="quickBounds.maxX + 35"
-                  :y="quickBounds.centerY + 4"
-                  text-anchor="start"
-                  fill="#e2e8f0"
-                  font-size="12"
-                  font-weight="600"
-                >
-                  {{ formatLength(roomD) }}
-                </text>
-              </g>
-
-              <!-- Resize handles (corners) -->
-              <circle
-                v-for="(pos, idx) in quickResizeCorners"
-                :key="idx"
-                :cx="pos[0]"
-                :cy="pos[1]"
-                r="5"
-                fill="#fbbf24"
-                stroke="#0f172a"
-                stroke-width="2"
-                class="resize-handle"
-                :style="{ cursor: cornerCursors[idx] }"
-                @pointerdown="startCornerDrag(idx, $event)"
-              />
-
-            </template>
-
-            <!-- Arrow marker definitions -->
-            <defs>
-              <marker
-                id="arrowR"
-                markerWidth="8"
-                markerHeight="8"
-                refX="6"
-                refY="4"
-                orient="auto"
-              >
-                <path
-                  d="M0,0 L8,4 L0,8"
-                  fill="none"
-                  stroke="#94a3b8"
-                  stroke-width="1"
-                />
-              </marker>
-              <marker
-                id="arrowL"
-                markerWidth="8"
-                markerHeight="8"
-                refX="2"
-                refY="4"
-                orient="auto"
-              >
-                <path
-                  d="M8,0 L0,4 L8,8"
-                  fill="none"
-                  stroke="#94a3b8"
-                  stroke-width="1"
-                />
-              </marker>
-              <marker
-                id="arrowD"
-                markerWidth="8"
-                markerHeight="8"
-                refX="4"
-                refY="6"
-                orient="auto"
-              >
-                <path
-                  d="M0,0 L4,8 L8,0"
-                  fill="none"
-                  stroke="#94a3b8"
-                  stroke-width="1"
-                />
-              </marker>
-              <marker
-                id="arrowU"
-                markerWidth="8"
-                markerHeight="8"
-                refX="4"
-                refY="2"
-                orient="auto"
-              >
-                <path
-                  d="M0,8 L4,0 L8,8"
-                  fill="none"
-                  stroke="#94a3b8"
-                  stroke-width="1"
-                />
-              </marker>
-            </defs>
-
-            <!-- Placed architecture items -->
-            <g
-              v-for="item in roomStore.items"
-              :key="item.id"
-              :transform="`translate(${itemSvgPos(item).x}, ${itemSvgPos(item).y})${isVerticalWall(item.wallId) ? ' rotate(90)' : ''}`"
-              class="placed-item"
-              :class="{ selected: selectedItemId === item.id }"
-              @pointerdown="startItemDrag(item.id, item.wallId ?? '', $event)"
-              @click.stop="selectItem(item.id, $event)"
-            >
-              <!-- Item body -->
-              <rect
-                :x="-item.width / 2"
-                :y="-4"
-                :width="item.width"
-                :height="8"
-                :fill="itemColor(item.category)"
-                :stroke="selectedItemId === item.id ? '#fbbf24' : 'none'"
-                :stroke-width="selectedItemId === item.id ? 2 : 0"
-                rx="2"
-                :opacity="selectedItemId === item.id ? 1 : 0.8"
-                style="cursor: grab"
-              />
-              <!-- Item label -->
-              <text
-                x="0"
-                :y="selectedItemId === item.id ? -10 : 16"
-                text-anchor="middle"
-                :fill="itemColor(item.category)"
-                font-size="8"
-                font-weight="600"
-              >
-                {{ itemLabel(item.type) }}
-              </text>
-              <text
-                v-if="isDoorOrWindowItem(item)"
-                x="0"
-                :y="selectedItemId === item.id ? -19 : 25"
-                text-anchor="middle"
-                fill="#cbd5e1"
-                font-size="7"
-                font-weight="600"
-              >
-                {{ itemMeasurementLabel(item) }}
-              </text>
-              <!-- Delete button (only when selected) -->
-              <g
-                v-if="selectedItemId === item.id"
-                @click.stop="deleteSelectedItem"
-                style="cursor: pointer"
-              >
-                <circle
-                  :cx="item.width / 2 + 8"
-                  cy="-4"
-                  r="6"
-                  fill="#ef4444"
-                  stroke="#0f172a"
-                  stroke-width="1"
-                />
-                <text
-                  :x="item.width / 2 + 8"
-                  y="-1"
-                  text-anchor="middle"
-                  fill="white"
-                  font-size="8"
-                  font-weight="bold"
-                >
-                  ×
-                </text>
-              </g>
-            </g>
-          </svg>
-
-          <!-- ========== DRAW WALLS SVG CANVAS ========== -->
-          <svg
-            v-else
             ref="svgRef"
             :viewBox="drawViewBox"
             class="floorplan-svg draw-canvas"
             xmlns="http://www.w3.org/2000/svg"
             @click="onDrawCanvasClick"
             @mousemove="onDrawMouseMove"
-            @click.self="deselectWall"
+            @click.self="selectedItemId = null; deselectWall()"
           >
             <!-- Grid pattern -->
             <defs>
@@ -2115,23 +1623,87 @@ function dimLinePoints(wall: {
               stroke-dasharray="4,3"
               class="close-indicator"
             />
+
+            <g
+              v-for="item in roomStore.items"
+              :key="item.id"
+              :transform="`translate(${itemSvgPos(item).x}, ${itemSvgPos(item).y})${isVerticalWall(item.wallId) ? ' rotate(90)' : ''}`"
+              class="placed-item"
+              :class="{ selected: selectedItemId === item.id }"
+              @pointerdown="startItemDrag(item.id, item.wallId ?? '', $event)"
+              @click.stop="selectItem(item.id, $event)"
+            >
+              <rect
+                :x="-item.width / 2"
+                :y="-4"
+                :width="item.width"
+                :height="8"
+                :fill="itemColor(item.category)"
+                :stroke="selectedItemId === item.id ? '#fbbf24' : 'none'"
+                :stroke-width="selectedItemId === item.id ? 2 : 0"
+                rx="2"
+                :opacity="selectedItemId === item.id ? 1 : 0.8"
+                style="cursor: grab"
+              />
+              <text
+                x="0"
+                :y="selectedItemId === item.id ? -10 : 16"
+                text-anchor="middle"
+                :fill="itemColor(item.category)"
+                font-size="8"
+                font-weight="600"
+              >
+                {{ itemLabel(item.type) }}
+              </text>
+              <text
+                v-if="isDoorOrWindowItem(item)"
+                x="0"
+                :y="selectedItemId === item.id ? -19 : 25"
+                text-anchor="middle"
+                fill="#cbd5e1"
+                font-size="7"
+                font-weight="600"
+              >
+                {{ itemMeasurementLabel(item) }}
+              </text>
+              <g
+                v-if="selectedItemId === item.id"
+                @click.stop="deleteSelectedItem"
+                style="cursor: pointer"
+              >
+                <circle
+                  :cx="item.width / 2 + 8"
+                  cy="-4"
+                  r="6"
+                  fill="#ef4444"
+                  stroke="#0f172a"
+                  stroke-width="1"
+                />
+                <text
+                  :x="item.width / 2 + 8"
+                  y="-1"
+                  text-anchor="middle"
+                  fill="white"
+                  font-size="8"
+                  font-weight="bold"
+                >
+                  x
+                </text>
+              </g>
+            </g>
           </svg>
         </div>
 
         <!-- Hint overlay -->
-        <div class="canvas-hint" v-if="floorPlanMode === 'quick'">
-          {{
-            canQuickResize
-              ? `Drag corners or mid-points to resize (${quickResizeAxisLock})`
-              : "Select a quick preset to change the room layout"
-          }}
-        </div>
-        <div class="canvas-hint" v-else-if="isDrawing">
+        <div class="canvas-hint" v-if="isDrawing">
           Click to place vertices · Click near first point to close · Esc to
           finish
         </div>
         <div class="canvas-hint" v-else-if="isClosed">
           Click a wall to select and edit · Click empty area to deselect
+        </div>
+        <div class="canvas-hint" v-else>
+          Select a preset or click Start Drawing to redraw the room
         </div>
       </main>
 
@@ -2247,38 +1819,26 @@ function dimLinePoints(wall: {
       </aside>
     </div>
 
-    <!-- Change Room Height Dialog -->
     <Teleport to="body">
       <div
-        v-if="showHeightDialog"
+        v-if="showPresetReplaceDialog"
         class="dialog-overlay"
-        @click.self="showHeightDialog = false"
+        @click.self="cancelQuickPresetReplacement"
       >
         <div class="dialog-box">
-          <h3 class="dialog-title">Change Room Height</h3>
+          <h3 class="dialog-title">Replace Current Layout?</h3>
           <p class="dialog-desc">
-            Set the ceiling height for your room ({{
-              cmToInches(ROOM_CONSTRAINTS.height.min)
-            }}–{{ cmToInches(ROOM_CONSTRAINTS.height.max) }} in).
+            Applying a quick preset will replace existing walls and architecture
+            items in this room.
           </p>
 
-          <div class="dialog-input-row">
-            <input
-              v-model.number="heightInput"
-              type="number"
-              :min="cmToInches(ROOM_CONSTRAINTS.height.min)"
-              :max="cmToInches(ROOM_CONSTRAINTS.height.max)"
-              class="dialog-input"
-              @keydown.enter="applyHeight"
-            />
-            <span class="dialog-unit">in</span>
-          </div>
-
           <div class="dialog-actions">
-            <button class="dialog-btn cancel" @click="showHeightDialog = false">
+            <button class="dialog-btn cancel" @click="cancelQuickPresetReplacement">
               Cancel
             </button>
-            <button class="dialog-btn apply" @click="applyHeight">Apply</button>
+            <button class="dialog-btn apply" @click="confirmQuickPresetReplacement">
+              Replace Layout
+            </button>
           </div>
         </div>
       </div>
