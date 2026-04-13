@@ -795,21 +795,6 @@ function continueDrawing() {
   selectedWallAnchorType.value = "start";
 }
 
-function undoDrawStep() {
-  unlockDrawViewBox();
-  if (roomStore.walls.length > 0) {
-    roomStore.removeLastWall();
-    if (roomStore.walls.length === 0 && !pendingStartVertex.value) {
-      isDrawing.value = false;
-    }
-    return;
-  }
-  if (pendingStartVertex.value) {
-    pendingStartVertex.value = null;
-    isDrawing.value = false;
-  }
-}
-
 /** Handle canvas click in draw mode */
 function onDrawCanvasClick(e: MouseEvent) {
   if (isClosed.value || !svgRef.value) return;
@@ -1149,13 +1134,6 @@ function dimLinePoints(wall: {
               />
             </div>
 
-            <button
-              v-if="isDrawing && (roomStore.walls.length > 0 || pendingStartVertex)"
-              class="sidebar-action-btn undo-btn"
-              @click="undoDrawStep"
-            >
-              Undo Last Wall
-            </button>
             <p class="draw-hint" v-if="isDrawing">
               Click on the canvas to place wall vertices.<br />
               Click near the <strong>first point</strong> to close the room.<br />
