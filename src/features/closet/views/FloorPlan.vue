@@ -1113,7 +1113,7 @@ function dimLinePoints(wall: {
 
           <h4 class="sidebar-subheading">Draw Wall</h4>
 
-          <div v-if="!isClosed" class="draw-controls">
+          <div class="draw-controls">
             <p class="draw-hint" v-if="!isDrawing">
               Click <span class="draw-hint-accent">Start Drawing</span> to begin placing walls.
             </p>
@@ -1139,24 +1139,6 @@ function dimLinePoints(wall: {
               Click near the <strong>first point</strong> to close the room.<br />
               Press <kbd>Esc</kbd> to finish drawing.
             </p>
-          </div>
-
-          <div v-else class="draw-controls">
-            <p class="draw-hint draw-complete">
-              Room complete - {{ roomStore.walls.length }} walls
-            </p>
-            <button
-              class="sidebar-action-btn draw-btn"
-              @click="continueDrawing"
-            >
-              Add Wall
-            </button>
-            <button
-              class="sidebar-action-btn draw-btn"
-              @click="startFreshDraw"
-            >
-              Clear and Redraw
-            </button>
           </div>
         </div>
       </aside>
