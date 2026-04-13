@@ -19,7 +19,7 @@ const roomStore = useRoomStore();
 const appStore = useAppStore();
 const historyStore = useHistoryStore();
 
-const quickPresetId = ref<string>(DEFAULT_QUICK_ROOM_PRESET_ID);
+const quickPresetId = ref<string | null>(DEFAULT_QUICK_ROOM_PRESET_ID);
 const showPresetReplaceDialog = ref(false);
 const pendingPresetId = ref<string | null>(null);
 
@@ -518,6 +518,10 @@ const drawWalls = computed(() =>
   hasStartedDrawSession.value ? roomStore.walls : [],
 );
 
+const hasCustomDrawing = computed(
+  () => quickPresetId.value === null && (roomStore.walls.length > 0 || !!pendingStartVertex.value),
+);
+
 /** Compute all vertices from the wall chain */
 const wallVertices = computed(() => {
   if (drawWalls.value.length === 0) {
@@ -753,7 +757,20 @@ function startFreshDraw() {
   hasStartedDrawSession.value = true;
   unlockDrawViewBox();
   roomStore.startDrawWalls();
+  quickPresetId.value = null;
   isDrawing.value = true;
+  isClosed.value = false;
+  selectedWallId.value = null;
+  selectedWallAnchor.value = null;
+  selectedWallAnchorType.value = "start";
+  pendingStartVertex.value = null;
+}
+
+function clearCustomDrawing() {
+  hasStartedDrawSession.value = true;
+  unlockDrawViewBox();
+  roomStore.startDrawWalls();
+  isDrawing.value = false;
   isClosed.value = false;
   selectedWallId.value = null;
   selectedWallAnchor.value = null;
@@ -1114,15 +1131,28 @@ function dimLinePoints(wall: {
           <h4 class="sidebar-subheading">Draw Wall</h4>
 
           <div class="draw-controls">
-            <p class="draw-hint" v-if="!isDrawing">
+            <p class="draw-hint" v-if="!isDrawing && !hasCustomDrawing">
               Click <span class="draw-hint-accent">Start Drawing</span> to begin placing walls.
             </p>
 
+            <p class="draw-hint" v-if="!isDrawing && hasCustomDrawing">
+              Click <span class="draw-hint-accent">Clear Drawing</span> to clear the drawing and start again.
+            </p>
+
             <button
+              v-if="!hasCustomDrawing"
               class="sidebar-action-btn draw-btn"
               @click="startFreshDraw"
             >
               Start Drawing
+            </button>
+
+            <button
+              v-else
+              class="sidebar-action-btn draw-btn"
+              @click="clearCustomDrawing"
+            >
+              Clear Drawing
             </button>
 
             <div class="prop-row indicator-toggle-row">
