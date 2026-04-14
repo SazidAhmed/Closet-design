@@ -740,6 +740,7 @@ watch(
     // appear to drift due to continuous auto-fit recentering.
     lockDrawViewBoxToCurrentFrame();
   },
+  { immediate: true },
 );
 
 watch(

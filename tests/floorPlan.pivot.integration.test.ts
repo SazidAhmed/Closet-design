@@ -132,6 +132,45 @@ describe('FloorPlan wall selection + angle UI integration', () => {
     document.body.innerHTML = ''
   })
 
+  it('locks draw viewBox on initial closed room so first rotation does not recenter', async () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(FloorPlan, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          TopToolbar: true,
+          FooterBar: true,
+        },
+      },
+    })
+
+    await nextTick()
+
+    const wallPolygons = wrapper.findAll('polygon.wall-segment')
+    expect(wallPolygons.length).toBeGreaterThanOrEqual(4)
+    await wallPolygons[3]!.trigger('click')
+
+    const svg = wrapper.find('svg.draw-canvas')
+    expect(svg.exists()).toBe(true)
+    const viewBoxBefore = svg.attributes('viewBox')
+    expect(viewBoxBefore).toBeTruthy()
+
+    const plusOneButton = wrapper.find('button[title="Rotate +1°"]')
+    expect(plusOneButton.exists()).toBe(true)
+
+    for (let i = 0; i < 8; i += 1) {
+      await plusOneButton.trigger('click')
+    }
+
+    await nextTick()
+
+    const viewBoxAfter = svg.attributes('viewBox')
+    expect(viewBoxAfter).toBe(viewBoxBefore)
+
+    wrapper.unmount()
+  })
+
   it('keeps wall-2 inner-notch pivot fixed across repeated angle button updates', async () => {
     setActivePinia(createPinia())
     const roomStore = useRoomStore()
