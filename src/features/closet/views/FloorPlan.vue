@@ -1133,7 +1133,7 @@ function dimLinePoints(wall: {
 
           <div class="draw-controls">
             <p class="draw-hint" v-if="!isDrawing && !hasCustomDrawing">
-              Click <span class="draw-hint-accent">Start Drawing</span> to begin placing walls.
+              Click <span class="draw-hint-accent">Custom Room</span> to begin placing walls.
             </p>
 
             <p class="draw-hint" v-if="!isDrawing && hasCustomDrawing">
@@ -1145,7 +1145,7 @@ function dimLinePoints(wall: {
               class="sidebar-action-btn draw-btn"
               @click="startFreshDraw"
             >
-              Start Drawing
+              Custom Room
             </button>
 
             <button
@@ -1482,7 +1482,7 @@ function dimLinePoints(wall: {
           Click a wall to select and edit · Click empty area to deselect
         </div>
         <div class="canvas-hint" v-else>
-          Select a preset or click Start Drawing to redraw the room
+          Select a preset or click Custom Room to redraw the room
         </div>
       </main>
 
