@@ -42,6 +42,9 @@ describe('FloorPlan add item selection behavior', () => {
     expect(wrapper.text()).toContain('Selected Door')
     expect(wrapper.text()).toContain('Width')
     expect(wrapper.text()).toContain('Height')
+    expect(roomStore.items[0]?.type).toBe('wall_opening')
+    expect(roomStore.items[0]?.width).toBeCloseTo(27 * 2.54, 5)
+    expect(roomStore.items[0]?.height).toBeCloseTo(72 * 2.54, 5)
 
     const addWindowButton = findButtonByText(wrapper, 'Add Window')
     expect(addWindowButton).toBeTruthy()
@@ -51,6 +54,9 @@ describe('FloorPlan add item selection behavior', () => {
 
     expect(roomStore.items.length).toBe(2)
     expect(wrapper.text()).toContain('Selected Window')
+    expect(roomStore.items[1]?.type).toBe('window')
+    expect(roomStore.items[1]?.width).toBeCloseTo(36 * 2.54, 5)
+    expect(roomStore.items[1]?.height).toBeCloseTo(42 * 2.54, 5)
 
     wrapper.unmount()
   })

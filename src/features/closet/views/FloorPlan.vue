@@ -133,8 +133,8 @@ const DOOR_ITEMS: ItemDef[] = [
   {
     type: "wall_opening",
     category: "door",
-    width: 91,
-    height: 213,
+    width: inchesToCm(27),
+    height: inchesToCm(72),
     icon: "🚪",
   },
   {
@@ -165,8 +165,8 @@ const DECO_ITEMS: ItemDef[] = [
   {
     type: "window",
     category: "wall_decorator",
-    width: 91,
-    height: 122,
+    width: inchesToCm(36),
+    height: inchesToCm(42),
     icon: "🪟",
   },
   {
@@ -386,7 +386,7 @@ function itemMeasurementLabel(
   item: Pick<PlacedItem, "category" | "type" | "width" | "height">,
 ): string {
   if (!isDoorOrWindowItem(item)) return "";
-  return `${cmToInches(item.width)}\" x ${cmToInches(item.height)}\"`;
+  return `${cmToInches(item.width)}\"`;
 }
 
 // ───── Draw Walls mode ─────────────────────────────────────────────────────
