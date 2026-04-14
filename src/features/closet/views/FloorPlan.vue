@@ -207,6 +207,7 @@ const DECO_ITEMS: ItemDef[] = [
 ];
 
 function itemLabel(type: PlacedItemType): string {
+  if (type === "wall_opening") return "Door";
   return type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
@@ -216,7 +217,7 @@ function addArchItem(def: ItemDef) {
     roomStore.walls.find((wall) => wall.id === selectedWallId.value)?.id ??
     roomStore.walls[0]?.id ??
     null;
-  roomStore.addItem({
+  const createdItemId = roomStore.addItem({
     type: def.type,
     category: def.category,
     wallId,
@@ -224,6 +225,7 @@ function addArchItem(def: ItemDef) {
     width: def.width,
     height: def.height,
   });
+  selectedItemId.value = createdItemId;
 }
 
 // ───── Selected item & item drag ───────────────────────────────────────────

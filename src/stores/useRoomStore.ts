@@ -623,9 +623,11 @@ export const useRoomStore = defineStore('room', {
       setWallFromPoints(this.walls[nextIdx]!, bridgeStart, bridgeEnd)
     },
 
-    /** Place a new architectural item. */
-    addItem(item: Omit<PlacedItem, 'id'>) {
-      this.items.push({ ...item, id: createItemId() })
+    /** Place a new architectural item and return its ID. */
+    addItem(item: Omit<PlacedItem, 'id'>): string {
+      const nextItem = { ...item, id: createItemId() }
+      this.items.push(nextItem)
+      return nextItem.id
     },
 
     /** Remove a placed item by ID. */
