@@ -1776,6 +1776,24 @@ function dimLinePoints(wall: {
   border-left: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+@media (min-width: 1024px) {
+  .sidebar-left {
+    order: 2;
+    border-right: none;
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .floorplan-canvas-area {
+    order: 1;
+  }
+
+  .sidebar-right {
+    order: 0;
+    border-left: none;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+  }
+}
+
 .sidebar-section {
   display: flex;
   flex-direction: column;
