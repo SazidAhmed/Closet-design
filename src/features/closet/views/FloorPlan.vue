@@ -217,6 +217,8 @@ function addArchItem(def: ItemDef) {
     roomStore.walls.find((wall) => wall.id === selectedWallId.value)?.id ??
     roomStore.walls[0]?.id ??
     null;
+  // Default elevation: 0 for doors, 42 for windows
+  const defaultElevation = def.type === "window" ? 42 : 0;
   const createdItemId = roomStore.addItem({
     type: def.type,
     category: def.category,
@@ -224,6 +226,9 @@ function addArchItem(def: ItemDef) {
     positionAlongWall: 0.5,
     width: def.width,
     height: def.height,
+    leftPosition: 0,
+    rightPosition: 0,
+    elevation: defaultElevation,
   });
   selectedItemId.value = createdItemId;
 }
@@ -318,6 +323,58 @@ function onSelectedItemSizeInput(
   roomStore.updateItemProps(selectedDoorWindowItem.value.id, {
     height: nextCm,
   });
+}
+
+function onSelectedItemElevationInput(e: Event) {
+  if (!selectedDoorWindowItem.value) return;
+  const valueIn = Number((e.target as HTMLInputElement).value);
+  if (!Number.isFinite(valueIn)) return;
+  const nextValue = Math.max(0, valueIn);
+
+  roomStore.updateItemProps(selectedDoorWindowItem.value.id, {
+    elevation: nextValue,
+  });
+}
+
+function onSelectedItemSideInput(
+  side: "leftPosition" | "rightPosition",
+  e: Event,
+) {
+  if (!selectedDoorWindowItem.value) return;
+  const valueIn = Number((e.target as HTMLInputElement).value);
+  if (!Number.isFinite(valueIn)) return;
+
+  const item = selectedDoorWindowItem.value;
+  if (!item.wallId) return;
+
+  const wall = roomStore.walls.find((entry) => entry.id === item.wallId);
+  if (!wall) return;
+
+  const wallLengthIn = wall.length / CM_PER_INCH;
+  if (wallLengthIn <= 0) return;
+
+  const itemWidthIn = item.width / CM_PER_INCH;
+  const halfWidthIn = itemWidthIn / 2;
+  const requested = Math.max(0, valueIn);
+
+  let centerOffsetIn =
+    side === "leftPosition"
+      ? requested + halfWidthIn
+      : wallLengthIn - (requested + halfWidthIn);
+
+  let minCenterIn = halfWidthIn;
+  let maxCenterIn = wallLengthIn - halfWidthIn;
+
+  // If the item is wider than the wall, pin to wall center.
+  if (minCenterIn > maxCenterIn) {
+    minCenterIn = wallLengthIn / 2;
+    maxCenterIn = wallLengthIn / 2;
+  }
+
+  centerOffsetIn = Math.max(minCenterIn, Math.min(maxCenterIn, centerOffsetIn));
+  const nextPos = Math.max(0, Math.min(1, centerOffsetIn / wallLengthIn));
+
+  roomStore.moveItem(item.id, nextPos);
 }
 
 // Register item drag listeners
@@ -1702,6 +1759,43 @@ function dimLinePoints(wall: {
                 min="1"
                 :value="cmToInches(selectedDoorWindowItem.height)"
                 @input="onSelectedItemSizeInput('height', $event)"
+              />
+            </div>
+
+            <div class="prop-row">
+              <label class="prop-label">Left Position</label>
+              <input
+                class="prop-input"
+                type="number"
+                min="0"
+                step="0.1"
+                data-testid="left-position-input"
+                :value="selectedDoorWindowItem.leftPosition"
+                @input="onSelectedItemSideInput('leftPosition', $event)"
+              />
+            </div>
+
+            <div class="prop-row">
+              <label class="prop-label">Right Position</label>
+              <input
+                class="prop-input"
+                type="number"
+                min="0"
+                step="0.1"
+                data-testid="right-position-input"
+                :value="selectedDoorWindowItem.rightPosition"
+                @input="onSelectedItemSideInput('rightPosition', $event)"
+              />
+            </div>
+
+            <div class="prop-row">
+              <label class="prop-label">Elevation</label>
+              <input
+                class="prop-input"
+                type="number"
+                min="0"
+                :value="selectedDoorWindowItem.elevation"
+                @input="onSelectedItemElevationInput($event)"
               />
             </div>
           </div>

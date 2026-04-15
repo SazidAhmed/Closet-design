@@ -66,6 +66,12 @@ export type PlacedItem = {
   width: number
   /** Height of the item in current units. */
   height: number
+  /** Distance from the left corner of the wall to the item's left edge (in inches). */
+  leftPosition: number
+  /** Distance from the right corner of the wall to the item's right edge (in inches). */
+  rightPosition: number
+  /** Distance from the floor to the item's bottom edge (in inches). */
+  elevation: number
 }
 
 // ---- Room cosmetic options ------------------------------------------------

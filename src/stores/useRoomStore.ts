@@ -4,7 +4,7 @@
 
 import { defineStore } from 'pinia'
 import type { Room, PlacedItem, RoomColors, Vec2 } from '../features/closet/domain/types/room'
-import { createDefaultRoom, createItemId, createWallId } from '../features/closet/domain/types/room'
+import { CM_PER_INCH, createDefaultRoom, createItemId, createWallId } from '../features/closet/domain/types/room'
 import { ROOM_CONSTRAINTS } from '../features/closet/domain/constraints'
 
 function clampWall(v: number): number {
@@ -14,6 +14,31 @@ function clampWall(v: number): number {
 function clampItemSize(v: number): number {
   if (!Number.isFinite(v)) return 1
   return Math.max(1, Math.round(v))
+}
+
+function roundToTenth(v: number): number {
+  return Math.round(v * 10) / 10
+}
+
+function isDoorOrWindowItem(item: Pick<PlacedItem, 'category' | 'type'>): boolean {
+  return item.category === 'door' || item.type === 'window'
+}
+
+function recalculateDoorWindowSidePositions(item: PlacedItem, walls: Room['walls']): void {
+  if (!isDoorOrWindowItem(item) || !item.wallId) return
+
+  const wall = walls.find((entry) => entry.id === item.wallId)
+  if (!wall) return
+
+  const wallLengthIn = wall.length / CM_PER_INCH
+  const itemWidthIn = item.width / CM_PER_INCH
+  const centerOffsetIn = Math.max(0, Math.min(1, item.positionAlongWall)) * wallLengthIn
+
+  const leftPosition = Math.max(0, centerOffsetIn - itemWidthIn / 2)
+  const rightPosition = Math.max(0, wallLengthIn - (centerOffsetIn + itemWidthIn / 2))
+
+  item.leftPosition = roundToTenth(leftPosition)
+  item.rightPosition = roundToTenth(rightPosition)
 }
 
 function snapped45Segment(start: Vec2, target: Vec2): { angle: number; length: number; end: Vec2 } | null {
@@ -626,6 +651,7 @@ export const useRoomStore = defineStore('room', {
     /** Place a new architectural item and return its ID. */
     addItem(item: Omit<PlacedItem, 'id'>): string {
       const nextItem = { ...item, id: createItemId() }
+      recalculateDoorWindowSidePositions(nextItem, this.walls)
       this.items.push(nextItem)
       return nextItem.id
     },
@@ -639,15 +665,19 @@ export const useRoomStore = defineStore('room', {
     /** Move a placed item along its wall. */
     moveItem(itemId: string, positionAlongWall: number) {
       const item = this.items.find((i) => i.id === itemId)
-      if (item) item.positionAlongWall = positionAlongWall
+      if (!item) return
+      item.positionAlongWall = positionAlongWall
+      recalculateDoorWindowSidePositions(item, this.walls)
     },
 
     /** Update editable properties of a placed item. */
-    updateItemProps(itemId: string, props: Partial<Pick<PlacedItem, 'width' | 'height'>>) {
+    updateItemProps(itemId: string, props: Partial<Pick<PlacedItem, 'width' | 'height' | 'leftPosition' | 'rightPosition' | 'elevation'>>) {
       const item = this.items.find((i) => i.id === itemId)
       if (!item) return
       if (props.width !== undefined) item.width = clampItemSize(props.width)
       if (props.height !== undefined) item.height = clampItemSize(props.height)
+      if (props.elevation !== undefined) item.elevation = Math.max(0, props.elevation)
+      recalculateDoorWindowSidePositions(item, this.walls)
     },
 
     /** Update room colors. */
