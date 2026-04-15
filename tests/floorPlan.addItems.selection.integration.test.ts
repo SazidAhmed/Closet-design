@@ -74,6 +74,20 @@ describe('FloorPlan add item selection behavior', () => {
       roundToTenth(doorWallLengthIn - (movedCenterIn + doorWidthIn / 2)),
     )
 
+    roomStore.moveItem(firstItemId, 0)
+    await nextTick()
+
+    const startClampedDoor = roomStore.items[0]!
+    expect(startClampedDoor.leftPosition).toBe(0)
+    expect(startClampedDoor.rightPosition).toBe(roundToTenth(doorWallLengthIn - doorWidthIn))
+
+    roomStore.moveItem(firstItemId, 1)
+    await nextTick()
+
+    const endClampedDoor = roomStore.items[0]!
+    expect(endClampedDoor.leftPosition).toBe(roundToTenth(doorWallLengthIn - doorWidthIn))
+    expect(endClampedDoor.rightPosition).toBe(0)
+
     const leftPositionInput = wrapper.find('[data-testid="left-position-input"]')
     expect(leftPositionInput.exists()).toBe(true)
     await leftPositionInput.setValue('10')
@@ -111,6 +125,20 @@ describe('FloorPlan add item selection behavior', () => {
     expect(window.leftPosition).toBe(roundToTenth((windowWallLengthIn - windowWidthIn) / 2))
     expect(window.rightPosition).toBe(roundToTenth((windowWallLengthIn - windowWidthIn) / 2))
     expect(roomStore.items[1]?.elevation).toBe(42) // Window default elevation is 42
+
+    roomStore.moveItem(window.id, 0)
+    await nextTick()
+
+    const startClampedWindow = roomStore.items[1]!
+    expect(startClampedWindow.leftPosition).toBe(0)
+    expect(startClampedWindow.rightPosition).toBe(roundToTenth(windowWallLengthIn - windowWidthIn))
+
+    roomStore.moveItem(window.id, 1)
+    await nextTick()
+
+    const endClampedWindow = roomStore.items[1]!
+    expect(endClampedWindow.leftPosition).toBe(roundToTenth(windowWallLengthIn - windowWidthIn))
+    expect(endClampedWindow.rightPosition).toBe(0)
 
     wrapper.unmount()
   })

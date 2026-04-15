@@ -24,11 +24,40 @@ function isDoorOrWindowItem(item: Pick<PlacedItem, 'category' | 'type'>): boolea
   return item.category === 'door' || item.type === 'window'
 }
 
+function clamp01(v: number): number {
+  if (!Number.isFinite(v)) return 0
+  return Math.max(0, Math.min(1, v))
+}
+
+function clampItemPositionAlongWall(
+  item: Pick<PlacedItem, 'wallId' | 'width'>,
+  walls: Room['walls'],
+  requestedPositionAlongWall: number,
+): number {
+  const clamped = clamp01(requestedPositionAlongWall)
+  if (!item.wallId) return clamped
+
+  const wall = walls.find((entry) => entry.id === item.wallId)
+  if (!wall || wall.length <= 0) return clamped
+
+  const halfItemWidthRatio = Math.max(0, item.width) / (2 * wall.length)
+  if (!Number.isFinite(halfItemWidthRatio)) return clamped
+
+  if (halfItemWidthRatio >= 0.5) {
+    // If item width is larger than wall length, keep centered on the wall.
+    return 0.5
+  }
+
+  return Math.max(halfItemWidthRatio, Math.min(1 - halfItemWidthRatio, clamped))
+}
+
 function recalculateDoorWindowSidePositions(item: PlacedItem, walls: Room['walls']): void {
   if (!isDoorOrWindowItem(item) || !item.wallId) return
 
   const wall = walls.find((entry) => entry.id === item.wallId)
   if (!wall) return
+
+  item.positionAlongWall = clampItemPositionAlongWall(item, walls, item.positionAlongWall)
 
   const wallLengthIn = wall.length / CM_PER_INCH
   const itemWidthIn = item.width / CM_PER_INCH
@@ -651,6 +680,7 @@ export const useRoomStore = defineStore('room', {
     /** Place a new architectural item and return its ID. */
     addItem(item: Omit<PlacedItem, 'id'>): string {
       const nextItem = { ...item, id: createItemId() }
+      nextItem.positionAlongWall = clampItemPositionAlongWall(nextItem, this.walls, nextItem.positionAlongWall)
       recalculateDoorWindowSidePositions(nextItem, this.walls)
       this.items.push(nextItem)
       return nextItem.id
@@ -666,7 +696,7 @@ export const useRoomStore = defineStore('room', {
     moveItem(itemId: string, positionAlongWall: number) {
       const item = this.items.find((i) => i.id === itemId)
       if (!item) return
-      item.positionAlongWall = positionAlongWall
+      item.positionAlongWall = clampItemPositionAlongWall(item, this.walls, positionAlongWall)
       recalculateDoorWindowSidePositions(item, this.walls)
     },
 
@@ -677,6 +707,7 @@ export const useRoomStore = defineStore('room', {
       if (props.width !== undefined) item.width = clampItemSize(props.width)
       if (props.height !== undefined) item.height = clampItemSize(props.height)
       if (props.elevation !== undefined) item.elevation = Math.max(0, props.elevation)
+      item.positionAlongWall = clampItemPositionAlongWall(item, this.walls, item.positionAlongWall)
       recalculateDoorWindowSidePositions(item, this.walls)
     },
 

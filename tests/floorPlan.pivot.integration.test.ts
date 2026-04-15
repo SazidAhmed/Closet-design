@@ -120,6 +120,8 @@ function findButtonByText(wrapper: ReturnType<typeof mount>, text: string) {
 
 async function beginDrawingSession(wrapper: ReturnType<typeof mount>) {
   const startDrawingButton =
+    findButtonByText(wrapper, 'Custom Room') ??
+    findButtonByText(wrapper, 'Clear Drawing') ??
     findButtonByText(wrapper, 'Start Drawing') ??
     findButtonByText(wrapper, 'Clear and Redraw')
 

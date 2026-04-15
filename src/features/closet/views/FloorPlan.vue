@@ -280,8 +280,8 @@ function onItemPointerMove(e: PointerEvent) {
     ((pt.x - start[0]) * dx + (pt.y - start[1]) * dy) /
     lengthSq;
 
-  // Clamp between 0.05 and 0.95 to keep items on the wall
-  pos = Math.max(0.05, Math.min(0.95, pos));
+  // Store-level clamping keeps opening width inside wall endpoints.
+  pos = Math.max(0, Math.min(1, pos));
   roomStore.moveItem(itemDrag.itemId, pos);
 }
 
@@ -437,6 +437,15 @@ function isVerticalWall(wallId: string | null): boolean {
 
 function isDoorOrWindowItem(item: Pick<PlacedItem, "category" | "type">): boolean {
   return item.category === "door" || item.type === "window";
+}
+
+function itemWallBandThickness(item: Pick<PlacedItem, "wallId">): number {
+  if (!item.wallId) return 6;
+  const wall = roomStore.walls.find((entry) => entry.id === item.wallId);
+  if (!wall) return 6;
+
+  // Keep the opening strip inside wall thickness with a slight inset.
+  return Math.max(1, wall.thickness - 1);
 }
 
 function itemMeasurementLabel(
@@ -1473,9 +1482,9 @@ function dimLinePoints(wall: {
             >
               <rect
                 :x="-item.width / 2"
-                :y="-4"
+                :y="-itemWallBandThickness(item) / 2"
                 :width="item.width"
-                :height="8"
+                :height="itemWallBandThickness(item)"
                 :fill="itemColor(item.category)"
                 :stroke="selectedItemId === item.id ? '#fbbf24' : 'none'"
                 :stroke-width="selectedItemId === item.id ? 2 : 0"
@@ -1511,7 +1520,7 @@ function dimLinePoints(wall: {
               >
                 <circle
                   :cx="item.width / 2 + 8"
-                  cy="-4"
+                  :cy="-itemWallBandThickness(item) / 2"
                   r="6"
                   fill="#ef4444"
                   stroke="#0f172a"
