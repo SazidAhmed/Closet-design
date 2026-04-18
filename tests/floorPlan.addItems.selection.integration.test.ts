@@ -6,6 +6,7 @@ import { nextTick } from 'vue'
 import { afterEach, describe, expect, it } from 'vitest'
 import FloorPlan from '../src/features/closet/views/FloorPlan.vue'
 import { useRoomStore } from '../src/stores/useRoomStore'
+import { useClosetStore } from '../src/stores/useClosetStore'
 
 const CM_PER_INCH = 2.54
 
@@ -17,6 +18,56 @@ function findButtonByText(wrapper: ReturnType<typeof mount>, text: string) {
   return wrapper
     .findAll('button')
     .find((button) => button.text().includes(text))
+}
+
+function installSvgPointerPolyfill() {
+  const proto = SVGSVGElement.prototype as unknown as {
+    createSVGPoint?: () => {
+      x: number
+      y: number
+      matrixTransform: (_matrix: unknown) => { x: number; y: number }
+    }
+    getScreenCTM?: () => { inverse: () => unknown }
+  }
+
+  if (!proto.createSVGPoint) {
+    proto.createSVGPoint = function () {
+      return {
+        x: 0,
+        y: 0,
+        matrixTransform(_matrix: unknown) {
+          return { x: this.x, y: this.y }
+        },
+      }
+    }
+  }
+
+  if (!proto.getScreenCTM) {
+    proto.getScreenCTM = function () {
+      return {
+        inverse() {
+          return {}
+        },
+      }
+    }
+  }
+}
+
+function createPointerLikeEvent(type: string, x: number, y: number, pointerId = 1): Event {
+  const evt = new Event(type, { bubbles: true, cancelable: true })
+  Object.defineProperty(evt, 'clientX', { value: x })
+  Object.defineProperty(evt, 'clientY', { value: y })
+  Object.defineProperty(evt, 'pointerId', { value: pointerId })
+  return evt
+}
+
+function dispatchPointerLikeEvent(type: 'pointermove' | 'pointerup', x: number, y: number) {
+  const evt = createPointerLikeEvent(type, x, y)
+  document.dispatchEvent(evt)
+}
+
+function dispatchPointerDown(target: Element, x: number, y: number, pointerId: number) {
+  target.dispatchEvent(createPointerLikeEvent('pointerdown', x, y, pointerId))
 }
 
 describe('FloorPlan add item selection behavior', () => {
@@ -220,6 +271,221 @@ describe('FloorPlan add item selection behavior', () => {
 
     expect(wrapper.find('[data-testid="elevation-overlay"]').exists()).toBe(false)
     expect(drawCanvas.attributes('style') ?? '').not.toContain('display: none')
+
+    wrapper.unmount()
+  })
+
+  it('adds a closet unit in elevation and shows ordering measurements', async () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(FloorPlan, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          TopToolbar: true,
+          FooterBar: true,
+        },
+      },
+    })
+
+    const wallSegments = wrapper.findAll('polygon.wall-segment')
+    expect(wallSegments.length).toBeGreaterThan(0)
+    await wallSegments[0]!.trigger('click')
+    await nextTick()
+
+    const addClosetButton = wrapper.find('[data-testid="add-elevation-closet-btn"]')
+    expect(addClosetButton.exists()).toBe(true)
+    expect(addClosetButton.attributes('disabled')).toBeUndefined()
+    await addClosetButton.trigger('click')
+    await nextTick()
+
+    const elevationButton = wrapper.find('[data-testid="open-elevation-btn"]')
+    expect(elevationButton.exists()).toBe(true)
+    await elevationButton.trigger('click')
+    await nextTick()
+
+    const closets = wrapper.findAll('[data-testid^="elevation-closet-"]')
+    expect(closets.length).toBe(1)
+    expect(wrapper.findAll('.elevation-connected-band').length).toBe(2)
+    expect(wrapper.text()).toContain('Order Measurements')
+
+    wrapper.unmount()
+  })
+
+  it('blocks closet drag and resize when movement would overlap a door opening', async () => {
+    installSvgPointerPolyfill()
+    setActivePinia(createPinia())
+    const roomStore = useRoomStore()
+    const closetStore = useClosetStore()
+
+    closetStore.setCabinetDimensions({ width: 12 * CM_PER_INCH, height: 80 * CM_PER_INCH })
+
+    const wrapper = mount(FloorPlan, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          TopToolbar: true,
+          FooterBar: true,
+        },
+      },
+    })
+
+    const wallSegments = wrapper.findAll('polygon.wall-segment')
+    expect(wallSegments.length).toBeGreaterThan(0)
+    await wallSegments[0]!.trigger('click')
+    await nextTick()
+
+    const selectedWall = roomStore.walls[0]!
+    roomStore.addItem({
+      type: 'wall_opening',
+      category: 'door',
+      wallId: selectedWall.id,
+      positionAlongWall: 0.5,
+      width: 14 * CM_PER_INCH,
+      height: 80 * CM_PER_INCH,
+      leftPosition: 0,
+      rightPosition: 0,
+      elevation: 0,
+    })
+    await nextTick()
+
+    const addClosetButton = wrapper.find('[data-testid="add-elevation-closet-btn"]')
+    expect(addClosetButton.exists()).toBe(true)
+    await addClosetButton.trigger('click')
+    await nextTick()
+
+    const elevationButton = wrapper.find('[data-testid="open-elevation-btn"]')
+    await elevationButton.trigger('click')
+    await nextTick()
+
+    const closetRect = wrapper.find('[data-testid^="elevation-closet-"]')
+    expect(closetRect.exists()).toBe(true)
+    const openingRect = wrapper.find('[data-testid^="elevation-item-"]')
+    expect(openingRect.exists()).toBe(true)
+
+    const startX = Number(closetRect.attributes('x'))
+    const startY = Number(closetRect.attributes('y'))
+    const startWidth = Number(closetRect.attributes('width'))
+    const openingX = Number(openingRect.attributes('x'))
+    const openingY = Number(openingRect.attributes('y'))
+
+    dispatchPointerDown(closetRect.element, startX + 2, startY + 2, 1)
+    await nextTick()
+
+    // Move toward middle where door opening sits; invalid overlap should be rejected.
+    dispatchPointerLikeEvent('pointermove', openingX + 2, openingY + 2)
+    dispatchPointerLikeEvent('pointerup', openingX + 2, openingY + 2)
+    await nextTick()
+
+    const afterBlockedMove = wrapper.find('[data-testid^="elevation-closet-"]')
+    expect(Number(afterBlockedMove.attributes('x'))).toBe(startX)
+
+    await afterBlockedMove.trigger('click')
+    await nextTick()
+
+    const widthHandle = wrapper.find('.elevation-closet-handle-width')
+    expect(widthHandle.exists()).toBe(true)
+    const handleX = Number(widthHandle.attributes('cx'))
+    const handleY = Number(widthHandle.attributes('cy'))
+
+    dispatchPointerDown(widthHandle.element, handleX, handleY, 2)
+    await nextTick()
+
+    // Expanding width into the opening is invalid and should be rejected.
+    dispatchPointerLikeEvent('pointermove', openingX + startWidth, handleY)
+    dispatchPointerLikeEvent('pointerup', openingX + startWidth, handleY)
+    await nextTick()
+
+    const afterBlockedResize = wrapper.find('[data-testid^="elevation-closet-"]')
+    expect(Number(afterBlockedResize.attributes('width'))).toBe(startWidth)
+
+    wrapper.unmount()
+  })
+
+  it('allows closet drag and resize when target area does not overlap openings', async () => {
+    installSvgPointerPolyfill()
+    setActivePinia(createPinia())
+    const roomStore = useRoomStore()
+    const closetStore = useClosetStore()
+
+    closetStore.setCabinetDimensions({ width: 12 * CM_PER_INCH, height: 80 * CM_PER_INCH })
+
+    const wrapper = mount(FloorPlan, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          TopToolbar: true,
+          FooterBar: true,
+        },
+      },
+    })
+
+    const wallSegments = wrapper.findAll('polygon.wall-segment')
+    expect(wallSegments.length).toBeGreaterThan(0)
+    await wallSegments[0]!.trigger('click')
+    await nextTick()
+
+    const selectedWall = roomStore.walls[0]!
+    roomStore.addItem({
+      type: 'wall_opening',
+      category: 'door',
+      wallId: selectedWall.id,
+      positionAlongWall: 0.5,
+      width: 14 * CM_PER_INCH,
+      height: 80 * CM_PER_INCH,
+      leftPosition: 0,
+      rightPosition: 0,
+      elevation: 0,
+    })
+    await nextTick()
+
+    const addClosetButton = wrapper.find('[data-testid="add-elevation-closet-btn"]')
+    expect(addClosetButton.exists()).toBe(true)
+    await addClosetButton.trigger('click')
+    await nextTick()
+
+    const elevationButton = wrapper.find('[data-testid="open-elevation-btn"]')
+    await elevationButton.trigger('click')
+    await nextTick()
+
+    const closetRect = wrapper.find('[data-testid^="elevation-closet-"]')
+    expect(closetRect.exists()).toBe(true)
+
+    const startX = Number(closetRect.attributes('x'))
+    const startY = Number(closetRect.attributes('y'))
+    const startWidth = Number(closetRect.attributes('width'))
+
+    dispatchPointerDown(closetRect.element, startX + 2, startY + 2, 11)
+    await nextTick()
+
+    // Move slightly right but still outside the central opening area.
+    dispatchPointerLikeEvent('pointermove', startX + 18, startY + 2)
+    dispatchPointerLikeEvent('pointerup', startX + 18, startY + 2)
+    await nextTick()
+
+    const afterMove = wrapper.find('[data-testid^="elevation-closet-"]')
+    const movedX = Number(afterMove.attributes('x'))
+    expect(movedX).toBeGreaterThan(startX)
+
+    await afterMove.trigger('click')
+    await nextTick()
+
+    const widthHandle = wrapper.find('.elevation-closet-handle-width')
+    expect(widthHandle.exists()).toBe(true)
+    const handleX = Number(widthHandle.attributes('cx'))
+    const handleY = Number(widthHandle.attributes('cy'))
+
+    dispatchPointerDown(widthHandle.element, handleX, handleY, 12)
+    await nextTick()
+
+    // Small width increase in a valid area should be accepted.
+    dispatchPointerLikeEvent('pointermove', handleX + 10, handleY)
+    dispatchPointerLikeEvent('pointerup', handleX + 10, handleY)
+    await nextTick()
+
+    const afterResize = wrapper.find('[data-testid^="elevation-closet-"]')
+    const resizedWidth = Number(afterResize.attributes('width'))
+    expect(resizedWidth).toBeGreaterThan(startWidth)
 
     wrapper.unmount()
   })

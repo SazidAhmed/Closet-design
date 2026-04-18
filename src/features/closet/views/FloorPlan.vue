@@ -3,6 +3,7 @@ import TopToolbar from "../../../components/TopToolbar.vue";
 import FooterBar from "../../../components/FooterBar.vue";
 import { useRoomStore } from "../../../stores/useRoomStore";
 import { useAppStore } from "../../../stores/useAppStore";
+import { useClosetStore } from "../../../stores/useClosetStore";
 import { onMounted, onUnmounted, computed, ref, reactive, watch } from "vue";
 import { ROOM_CONSTRAINTS } from "../domain/constraints";
 import {
@@ -18,6 +19,7 @@ import { useHistoryStore } from "../../../stores/useHistoryStore";
 const roomStore = useRoomStore();
 const appStore = useAppStore();
 const historyStore = useHistoryStore();
+const closetStore = useClosetStore();
 
 const quickPresetId = ref<string | null>(DEFAULT_QUICK_ROOM_PRESET_ID);
 const showPresetReplaceDialog = ref(false);
@@ -412,9 +414,96 @@ const elevationDrag = reactive<{
   startPointerY: 0,
 });
 
+type ElevationClosetBlock = {
+  id: string;
+  leftCm: number;
+  bottomCm: number;
+  widthCm: number;
+  heightCm: number;
+};
+
+type ElevationClosetInteractionMode =
+  | "move"
+  | "resize-width"
+  | "resize-height"
+  | "resize-both";
+
+type ElevationRectCm = {
+  leftCm: number;
+  rightCm: number;
+  bottomCm: number;
+  topCm: number;
+};
+
+const MAX_ELEVATION_CLOSETS_PER_WALL = 8;
+const elevationClosetIdCounter = ref(1);
+const elevationClosetBlocksByWall = reactive<Record<string, ElevationClosetBlock[]>>({});
+const selectedElevationClosetId = ref<string | null>(null);
+
+const elevationClosetDrag = reactive<{
+  active: boolean;
+  closetId: string;
+  mode: ElevationClosetInteractionMode;
+  offsetX: number;
+  offsetY: number;
+  startLeftCm: number;
+  startBottomCm: number;
+  startWidthCm: number;
+  startHeightCm: number;
+  startPointerX: number;
+  startPointerY: number;
+}>({
+  active: false,
+  closetId: "",
+  mode: "move",
+  offsetX: 0,
+  offsetY: 0,
+  startLeftCm: 0,
+  startBottomCm: 0,
+  startWidthCm: 0,
+  startHeightCm: 0,
+  startPointerX: 0,
+  startPointerY: 0,
+});
+
 const elevationWall = computed(() => {
   if (!elevationWallId.value) return null;
   return roomStore.walls.find((wall) => wall.id === elevationWallId.value) ?? null;
+});
+
+const elevationWallConnectivity = computed(() => {
+  const wall = elevationWall.value;
+  if (!wall) {
+    return { startConnected: false, endConnected: false };
+  }
+
+  const start: [number, number] = [wall.position[0], wall.position[1]];
+  const end = wallEndPoint(wall);
+  const tolerance = 1;
+
+  const pointsMatch = (a: [number, number], b: [number, number]) =>
+    Math.hypot(a[0] - b[0], a[1] - b[1]) <= tolerance;
+
+  let startConnected = false;
+  let endConnected = false;
+
+  for (const other of roomStore.walls) {
+    if (other.id === wall.id) continue;
+    const otherStart: [number, number] = [other.position[0], other.position[1]];
+    const otherEnd = wallEndPoint(other);
+
+    if (!startConnected && (pointsMatch(start, otherStart) || pointsMatch(start, otherEnd))) {
+      startConnected = true;
+    }
+
+    if (!endConnected && (pointsMatch(end, otherStart) || pointsMatch(end, otherEnd))) {
+      endConnected = true;
+    }
+
+    if (startConnected && endConnected) break;
+  }
+
+  return { startConnected, endConnected };
 });
 
 const elevationItems = computed(() => {
@@ -443,6 +532,62 @@ const elevationLayout = computed(() => {
     wallY: (ELEVATION_VIEW_HEIGHT - wallHeightPx) / 2,
     wallWidthPx,
     wallHeightPx,
+  };
+});
+
+const elevationClosetBlocks = computed(() => {
+  if (!elevationWallId.value) return [] as ElevationClosetBlock[];
+  return elevationClosetBlocksByWall[elevationWallId.value] ?? [];
+});
+
+const selectedElevationCloset = computed(() => {
+  if (!selectedElevationClosetId.value) return null;
+  return (
+    elevationClosetBlocks.value.find((block) => block.id === selectedElevationClosetId.value) ??
+    null
+  );
+});
+
+const elevationOrderMetrics = computed(() => {
+  const wall = elevationWall.value;
+  if (!wall || elevationClosetBlocks.value.length === 0) return null;
+
+  const active = selectedElevationCloset.value ?? elevationClosetBlocks.value[0] ?? null;
+  if (!active) return null;
+
+  const activeRect: ElevationRectCm = {
+    leftCm: active.leftCm,
+    rightCm: active.leftCm + active.widthCm,
+    bottomCm: active.bottomCm,
+    topCm: active.bottomCm + active.heightCm,
+  };
+
+  let nearestOpeningGapCm: number | null = null;
+  for (const opening of elevationOpeningRectsCmForCurrentWall()) {
+    const gap =
+      opening.rightCm <= activeRect.leftCm
+        ? activeRect.leftCm - opening.rightCm
+        : opening.leftCm >= activeRect.rightCm
+          ? opening.leftCm - activeRect.rightCm
+          : 0;
+    if (nearestOpeningGapCm === null || gap < nearestOpeningGapCm) {
+      nearestOpeningGapCm = gap;
+    }
+  }
+
+  const topClearanceCm = Math.max(0, roomStore.height - activeRect.topCm);
+  const leftGapCm = Math.max(0, activeRect.leftCm);
+  const rightGapCm = Math.max(0, wall.length - activeRect.rightCm);
+  const orderedUnits = [...elevationClosetBlocks.value].sort((a, b) => a.leftCm - b.leftCm);
+
+  return {
+    leftGapCm,
+    rightGapCm,
+    nearestOpeningGapCm,
+    totalWidthCm: orderedUnits.reduce((sum, block) => sum + block.widthCm, 0),
+    unitWidthsCm: orderedUnits.map((block) => block.widthCm),
+    topClearanceCm,
+    bottomCm: Math.max(0, active.bottomCm),
   };
 });
 
@@ -503,13 +648,191 @@ function elevationItemRect(
   };
 }
 
+function elevationOpeningRectCm(
+  item: Pick<PlacedItem, "id" | "width" | "height" | "leftPosition" | "elevation">,
+  wallLengthCm: number,
+  roomHeightCm: number,
+): ElevationRectCm {
+  const widthCm = Math.max(1, item.width);
+  const heightCm = Math.max(1, item.height);
+  const leftCm = Math.max(
+    0,
+    Math.min(Math.max(0, wallLengthCm - widthCm), Math.max(0, item.leftPosition) * CM_PER_INCH),
+  );
+  const bottomCm = Math.max(
+    0,
+    Math.min(Math.max(0, roomHeightCm - heightCm), Math.max(0, item.elevation) * CM_PER_INCH),
+  );
+
+  return {
+    leftCm,
+    rightCm: leftCm + widthCm,
+    bottomCm,
+    topCm: bottomCm + heightCm,
+  };
+}
+
+function elevationOpeningRectsCmForCurrentWall(): ElevationRectCm[] {
+  const wall = elevationWall.value;
+  if (!wall) return [];
+  return elevationItems.value.map((item) =>
+    elevationOpeningRectCm(item, wall.length, roomStore.height),
+  );
+}
+
+function elevationClosetRectCm(block: ElevationClosetBlock): ElevationRectCm {
+  return {
+    leftCm: block.leftCm,
+    rightCm: block.leftCm + block.widthCm,
+    bottomCm: block.bottomCm,
+    topCm: block.bottomCm + block.heightCm,
+  };
+}
+
+function elevationClosetRect(block: ElevationClosetBlock): ElevationItemRect {
+  const layout = elevationLayout.value;
+  return {
+    x: layout.wallX + block.leftCm * layout.scale,
+    y: layout.wallY + (layout.roomHeightCm - (block.bottomCm + block.heightCm)) * layout.scale,
+    width: block.widthCm * layout.scale,
+    height: block.heightCm * layout.scale,
+  };
+}
+
+function rectsOverlapCm(a: ElevationRectCm, b: ElevationRectCm): boolean {
+  return (
+    a.leftCm < b.rightCm &&
+    a.rightCm > b.leftCm &&
+    a.bottomCm < b.topCm &&
+    a.topCm > b.bottomCm
+  );
+}
+
+function isClosetPlacementValid(
+  wallId: string,
+  candidate: ElevationClosetBlock,
+  options?: { excludeId?: string },
+): boolean {
+  const wall = roomStore.walls.find((entry) => entry.id === wallId);
+  if (!wall) return false;
+
+  if (candidate.widthCm < 1 || candidate.heightCm < 1) return false;
+  if (candidate.leftCm < 0 || candidate.bottomCm < 0) return false;
+  if (candidate.leftCm + candidate.widthCm > wall.length) return false;
+  if (candidate.bottomCm + candidate.heightCm > roomStore.height) return false;
+
+  const candidateRect = elevationClosetRectCm(candidate);
+
+  for (const opening of roomStore.items) {
+    if (opening.wallId !== wallId || !isDoorOrWindowItem(opening)) continue;
+    const openingRect = elevationOpeningRectCm(opening, wall.length, roomStore.height);
+    if (rectsOverlapCm(candidateRect, openingRect)) return false;
+  }
+
+  const wallClosets = elevationClosetBlocksByWall[wallId] ?? [];
+  for (const block of wallClosets) {
+    if (options?.excludeId && block.id === options.excludeId) continue;
+    if (rectsOverlapCm(candidateRect, elevationClosetRectCm(block))) return false;
+  }
+
+  return true;
+}
+
+function setWallClosetBlocks(wallId: string, blocks: ElevationClosetBlock[]) {
+  elevationClosetBlocksByWall[wallId] = blocks;
+}
+
+function updateWallClosetBlock(
+  wallId: string,
+  closetId: string,
+  updater: (current: ElevationClosetBlock) => ElevationClosetBlock,
+) {
+  const blocks = elevationClosetBlocksByWall[wallId] ?? [];
+  const nextBlocks = blocks.map((block) =>
+    block.id === closetId ? updater(block) : block,
+  );
+  setWallClosetBlocks(wallId, nextBlocks);
+}
+
 function formatPositionInches(value: number): string {
   return `${Math.round(value * 10) / 10}`;
+}
+
+function findFirstValidClosetLeftCm(
+  wallId: string,
+  widthCm: number,
+  heightCm: number,
+  bottomCm: number,
+): number | null {
+  const wall = roomStore.walls.find((entry) => entry.id === wallId);
+  if (!wall) return null;
+
+  const maxLeft = Math.max(0, wall.length - widthCm);
+  for (let left = 0; left <= maxLeft; left += 1) {
+    if (
+      isClosetPlacementValid(wallId, {
+        id: "candidate",
+        leftCm: left,
+        bottomCm,
+        widthCm,
+        heightCm,
+      })
+    ) {
+      return left;
+    }
+  }
+  return null;
+}
+
+function addElevationClosetBlockForSelectedWall() {
+  const wall = selectedWall.value;
+  if (!wall) return;
+
+  const existing = elevationClosetBlocksByWall[wall.id] ?? [];
+  if (existing.length >= MAX_ELEVATION_CLOSETS_PER_WALL) return;
+
+  const widthCm = Math.max(30, Math.min(wall.length, closetStore.cabinet.width));
+  const heightCm = Math.max(60, Math.min(roomStore.height, closetStore.cabinet.height));
+  const bottomCm = 0;
+  const leftCm = findFirstValidClosetLeftCm(wall.id, widthCm, heightCm, bottomCm);
+  if (leftCm === null) return;
+
+  const next: ElevationClosetBlock = {
+    id: `elevation-closet-${elevationClosetIdCounter.value++}`,
+    leftCm,
+    bottomCm,
+    widthCm,
+    heightCm,
+  };
+
+  setWallClosetBlocks(wall.id, [...existing, next]);
+  selectedElevationClosetId.value = next.id;
+}
+
+function removeSelectedElevationClosetForSelectedWall() {
+  const wall = selectedWall.value;
+  const selectedId = selectedElevationClosetId.value;
+  if (!wall || !selectedId) return;
+
+  const existing = elevationClosetBlocksByWall[wall.id] ?? [];
+  const next = existing.filter((block) => block.id !== selectedId);
+  setWallClosetBlocks(wall.id, next);
+  selectedElevationClosetId.value = next[0]?.id ?? null;
 }
 
 function openElevationForSelectedWall() {
   if (!selectedWall.value) return;
   elevationWallId.value = selectedWall.value.id;
+
+  if (!elevationClosetBlocksByWall[selectedWall.value.id]) {
+    elevationClosetBlocksByWall[selectedWall.value.id] = [];
+  }
+
+  if (!selectedElevationClosetId.value) {
+    selectedElevationClosetId.value =
+      elevationClosetBlocksByWall[selectedWall.value.id]?.[0]?.id ?? null;
+  }
+
   showElevationOverlay.value = true;
 }
 
@@ -527,10 +850,25 @@ function stopElevationItemDrag() {
   elevationDrag.startPointerY = 0;
 }
 
+function stopElevationClosetDrag() {
+  elevationClosetDrag.active = false;
+  elevationClosetDrag.closetId = "";
+  elevationClosetDrag.mode = "move";
+  elevationClosetDrag.offsetX = 0;
+  elevationClosetDrag.offsetY = 0;
+  elevationClosetDrag.startLeftCm = 0;
+  elevationClosetDrag.startBottomCm = 0;
+  elevationClosetDrag.startWidthCm = 0;
+  elevationClosetDrag.startHeightCm = 0;
+  elevationClosetDrag.startPointerX = 0;
+  elevationClosetDrag.startPointerY = 0;
+}
+
 function closeElevationOverlay() {
   showElevationOverlay.value = false;
   elevationWallId.value = null;
   stopElevationItemDrag();
+  stopElevationClosetDrag();
 }
 
 function selectElevationItem(itemId: string, e: MouseEvent | PointerEvent) {
@@ -595,17 +933,152 @@ function startElevationItemResize(
   (e.currentTarget as Element | null)?.setPointerCapture?.(e.pointerId);
 }
 
+function selectElevationCloset(closetId: string, e: MouseEvent | PointerEvent) {
+  e.stopPropagation();
+  selectedElevationClosetId.value = closetId;
+}
+
+function startElevationClosetDrag(closetId: string, e: PointerEvent) {
+  if (!elevationSvgRef.value || !elevationWall.value) return;
+
+  const block = elevationClosetBlocks.value.find((entry) => entry.id === closetId);
+  if (!block) return;
+
+  selectElevationCloset(closetId, e);
+  e.preventDefault();
+
+  const pointerPoint = screenToSvg(elevationSvgRef.value, e.clientX, e.clientY);
+  const rect = elevationClosetRect(block);
+
+  elevationClosetDrag.active = true;
+  elevationClosetDrag.closetId = closetId;
+  elevationClosetDrag.mode = "move";
+  elevationClosetDrag.offsetX = pointerPoint.x - rect.x;
+  elevationClosetDrag.offsetY = pointerPoint.y - rect.y;
+  elevationClosetDrag.startLeftCm = block.leftCm;
+  elevationClosetDrag.startBottomCm = block.bottomCm;
+  elevationClosetDrag.startWidthCm = block.widthCm;
+  elevationClosetDrag.startHeightCm = block.heightCm;
+  elevationClosetDrag.startPointerX = pointerPoint.x;
+  elevationClosetDrag.startPointerY = pointerPoint.y;
+
+  (e.currentTarget as Element | null)?.setPointerCapture?.(e.pointerId);
+}
+
+function startElevationClosetResize(
+  closetId: string,
+  mode: "resize-width" | "resize-height" | "resize-both",
+  e: PointerEvent,
+) {
+  if (!elevationSvgRef.value || !elevationWall.value) return;
+
+  const block = elevationClosetBlocks.value.find((entry) => entry.id === closetId);
+  if (!block) return;
+
+  selectElevationCloset(closetId, e);
+  e.preventDefault();
+
+  const pointerPoint = screenToSvg(elevationSvgRef.value, e.clientX, e.clientY);
+
+  elevationClosetDrag.active = true;
+  elevationClosetDrag.closetId = closetId;
+  elevationClosetDrag.mode = mode;
+  elevationClosetDrag.startLeftCm = block.leftCm;
+  elevationClosetDrag.startBottomCm = block.bottomCm;
+  elevationClosetDrag.startWidthCm = block.widthCm;
+  elevationClosetDrag.startHeightCm = block.heightCm;
+  elevationClosetDrag.startPointerX = pointerPoint.x;
+  elevationClosetDrag.startPointerY = pointerPoint.y;
+
+  (e.currentTarget as Element | null)?.setPointerCapture?.(e.pointerId);
+}
+
 function onElevationPointerMove(e: PointerEvent) {
-  if (!elevationDrag.active || !elevationSvgRef.value || !elevationWall.value) return;
+  if (!elevationSvgRef.value || !elevationWall.value) return;
+
+  const layout = elevationLayout.value;
+  if (layout.scale <= 0) return;
+
+  if (elevationClosetDrag.active) {
+    const closetId = elevationClosetDrag.closetId;
+    const closet = elevationClosetBlocks.value.find((entry) => entry.id === closetId);
+    if (!closet) {
+      stopElevationClosetDrag();
+      return;
+    }
+
+    const pointerPoint = screenToSvg(elevationSvgRef.value, e.clientX, e.clientY);
+
+    if (elevationClosetDrag.mode === "move") {
+      const widthPx = closet.widthCm * layout.scale;
+      const heightPx = closet.heightCm * layout.scale;
+      const minX = layout.wallX;
+      const maxX = layout.wallX + Math.max(0, layout.wallWidthPx - widthPx);
+      const minY = layout.wallY;
+      const maxY = layout.wallY + Math.max(0, layout.wallHeightPx - heightPx);
+
+      const nextX = Math.max(minX, Math.min(maxX, pointerPoint.x - elevationClosetDrag.offsetX));
+      const nextY = Math.max(minY, Math.min(maxY, pointerPoint.y - elevationClosetDrag.offsetY));
+      const nextLeftCm = (nextX - layout.wallX) / layout.scale;
+      const topCm = (nextY - layout.wallY) / layout.scale;
+      const nextBottomCm = Math.max(0, layout.roomHeightCm - (topCm + closet.heightCm));
+
+      const nextCandidate: ElevationClosetBlock = {
+        ...closet,
+        leftCm: nextLeftCm,
+        bottomCm: nextBottomCm,
+      };
+
+      if (isClosetPlacementValid(elevationWall.value.id, nextCandidate, { excludeId: closet.id })) {
+        updateWallClosetBlock(elevationWall.value.id, closet.id, () => nextCandidate);
+      }
+      return;
+    }
+
+    const deltaXcm = (pointerPoint.x - elevationClosetDrag.startPointerX) / layout.scale;
+    const deltaYcm = (pointerPoint.y - elevationClosetDrag.startPointerY) / layout.scale;
+    const maxWidthCm = Math.max(1, layout.wallLengthCm - elevationClosetDrag.startLeftCm);
+    const maxHeightCm = Math.max(1, layout.roomHeightCm - elevationClosetDrag.startBottomCm);
+
+    let nextWidthCm = elevationClosetDrag.startWidthCm;
+    let nextHeightCm = elevationClosetDrag.startHeightCm;
+
+    if (
+      elevationClosetDrag.mode === "resize-width" ||
+      elevationClosetDrag.mode === "resize-both"
+    ) {
+      nextWidthCm = Math.max(1, Math.min(maxWidthCm, elevationClosetDrag.startWidthCm + deltaXcm));
+    }
+
+    if (
+      elevationClosetDrag.mode === "resize-height" ||
+      elevationClosetDrag.mode === "resize-both"
+    ) {
+      nextHeightCm = Math.max(
+        1,
+        Math.min(maxHeightCm, elevationClosetDrag.startHeightCm - deltaYcm),
+      );
+    }
+
+    const resizedCandidate: ElevationClosetBlock = {
+      ...closet,
+      widthCm: nextWidthCm,
+      heightCm: nextHeightCm,
+    };
+
+    if (isClosetPlacementValid(elevationWall.value.id, resizedCandidate, { excludeId: closet.id })) {
+      updateWallClosetBlock(elevationWall.value.id, closet.id, () => resizedCandidate);
+    }
+    return;
+  }
+
+  if (!elevationDrag.active) return;
 
   const item = roomStore.items.find((entry) => entry.id === elevationDrag.itemId);
   if (!item || item.wallId !== elevationWall.value.id || !isDoorOrWindowItem(item)) {
     stopElevationItemDrag();
     return;
   }
-
-  const layout = elevationLayout.value;
-  if (layout.scale <= 0) return;
 
   const pointerPoint = screenToSvg(elevationSvgRef.value, e.clientX, e.clientY);
   if (elevationDrag.mode === "move") {
@@ -671,6 +1144,7 @@ function onElevationPointerMove(e: PointerEvent) {
 
 function onElevationPointerUp() {
   stopElevationItemDrag();
+  stopElevationClosetDrag();
 }
 
 watch(
@@ -678,6 +1152,17 @@ watch(
   (wall) => {
     if (showElevationOverlay.value && !wall) {
       closeElevationOverlay();
+      return;
+    }
+
+    if (!wall) {
+      selectedElevationClosetId.value = null;
+      return;
+    }
+
+    const blocks = elevationClosetBlocksByWall[wall.id] ?? [];
+    if (!blocks.some((block) => block.id === selectedElevationClosetId.value)) {
+      selectedElevationClosetId.value = blocks[0]?.id ?? null;
     }
   },
 );
@@ -687,8 +1172,19 @@ watch(
   (open) => {
     if (!open) {
       stopElevationItemDrag();
+      stopElevationClosetDrag();
     }
   },
+);
+
+watch(
+  () => elevationClosetBlocks.value,
+  (blocks) => {
+    if (!blocks.some((block) => block.id === selectedElevationClosetId.value)) {
+      selectedElevationClosetId.value = blocks[0]?.id ?? null;
+    }
+  },
+  { deep: true },
 );
 
 // Register item drag listeners
@@ -1336,6 +1832,22 @@ const canAddWallFromSelectedWall = computed(() => {
   return !isConnectedVertex(continuationStart);
 });
 
+const selectedElevationClosetForSelectedWall = computed(() => {
+  if (!selectedWall.value || !selectedElevationClosetId.value) return null;
+  const blocks = elevationClosetBlocksByWall[selectedWall.value.id] ?? [];
+  return blocks.find((block) => block.id === selectedElevationClosetId.value) ?? null;
+});
+
+const canAddElevationClosetForSelectedWall = computed(() => {
+  if (!selectedWall.value) return false;
+  const blocks = elevationClosetBlocksByWall[selectedWall.value.id] ?? [];
+  if (blocks.length >= MAX_ELEVATION_CLOSETS_PER_WALL) return false;
+
+  const widthCm = Math.max(30, Math.min(selectedWall.value.length, closetStore.cabinet.width));
+  const heightCm = Math.max(60, Math.min(roomStore.height, closetStore.cabinet.height));
+  return findFirstValidClosetLeftCm(selectedWall.value.id, widthCm, heightCm, 0) !== null;
+});
+
 /** Computed angle in degrees for display */
 const selectedWallAngleDeg = computed(() => {
   if (!selectedWall.value) return 0;
@@ -1864,20 +2376,38 @@ function dimLinePoints(wall: {
               </button>
             </div>
 
-            <svg
-              v-if="elevationWall"
-              ref="elevationSvgRef"
-              class="elevation-svg"
-              :viewBox="`0 0 ${ELEVATION_VIEW_WIDTH} ${ELEVATION_VIEW_HEIGHT}`"
-              xmlns="http://www.w3.org/2000/svg"
-              @click.self="selectedItemId = null"
-            >
+            <template v-if="elevationWall">
+              <svg
+                ref="elevationSvgRef"
+                class="elevation-svg"
+                :viewBox="`0 0 ${ELEVATION_VIEW_WIDTH} ${ELEVATION_VIEW_HEIGHT}`"
+                xmlns="http://www.w3.org/2000/svg"
+                @click.self="selectedItemId = null; selectedElevationClosetId = null"
+              >
               <rect
                 :x="elevationLayout.wallX"
                 :y="elevationLayout.wallY"
                 :width="elevationLayout.wallWidthPx"
                 :height="elevationLayout.wallHeightPx"
                 class="elevation-wall"
+              />
+
+              <rect
+                v-if="elevationWallConnectivity.startConnected"
+                :x="elevationLayout.wallX"
+                :y="elevationLayout.wallY"
+                :width="Math.min(16, elevationLayout.wallWidthPx / 4)"
+                :height="elevationLayout.wallHeightPx"
+                class="elevation-connected-band"
+              />
+
+              <rect
+                v-if="elevationWallConnectivity.endConnected"
+                :x="elevationLayout.wallX + elevationLayout.wallWidthPx - Math.min(16, elevationLayout.wallWidthPx / 4)"
+                :y="elevationLayout.wallY"
+                :width="Math.min(16, elevationLayout.wallWidthPx / 4)"
+                :height="elevationLayout.wallHeightPx"
+                class="elevation-connected-band"
               />
 
               <line
@@ -1968,7 +2498,88 @@ function dimLinePoints(wall: {
                   />
                 </g>
               </g>
-            </svg>
+
+              <g
+                v-for="block in elevationClosetBlocks"
+                :key="block.id"
+                class="elevation-closet"
+                :class="{ selected: selectedElevationClosetId === block.id }"
+                @pointerdown="startElevationClosetDrag(block.id, $event)"
+                @click.stop="selectElevationCloset(block.id, $event)"
+              >
+                <rect
+                  :x="elevationClosetRect(block).x"
+                  :y="elevationClosetRect(block).y"
+                  :width="elevationClosetRect(block).width"
+                  :height="elevationClosetRect(block).height"
+                  :data-testid="`elevation-closet-${block.id}`"
+                  class="elevation-closet-rect"
+                />
+                <text
+                  :x="elevationClosetRect(block).x + elevationClosetRect(block).width / 2"
+                  :y="elevationClosetRect(block).y - 8"
+                  text-anchor="middle"
+                  class="elevation-closet-label"
+                >
+                  Closet · {{ formatLength(block.widthCm) }} x {{ formatLength(block.heightCm) }}
+                </text>
+
+                <g
+                  v-if="selectedElevationClosetId === block.id"
+                  class="elevation-closet-handles"
+                >
+                  <circle
+                    :cx="elevationClosetRect(block).x + elevationClosetRect(block).width"
+                    :cy="elevationClosetRect(block).y + elevationClosetRect(block).height / 2"
+                    r="5"
+                    class="elevation-closet-handle elevation-closet-handle-width"
+                    @pointerdown.stop.prevent="startElevationClosetResize(block.id, 'resize-width', $event)"
+                  />
+                  <circle
+                    :cx="elevationClosetRect(block).x + elevationClosetRect(block).width / 2"
+                    :cy="elevationClosetRect(block).y"
+                    r="5"
+                    class="elevation-closet-handle elevation-closet-handle-height"
+                    @pointerdown.stop.prevent="startElevationClosetResize(block.id, 'resize-height', $event)"
+                  />
+                  <rect
+                    :x="elevationClosetRect(block).x + elevationClosetRect(block).width - 4"
+                    :y="elevationClosetRect(block).y - 4"
+                    width="8"
+                    height="8"
+                    rx="1.5"
+                    class="elevation-closet-handle elevation-closet-handle-corner"
+                    @pointerdown.stop.prevent="startElevationClosetResize(block.id, 'resize-both', $event)"
+                  />
+                </g>
+              </g>
+              </svg>
+
+              <div v-if="elevationOrderMetrics" class="elevation-measurements-panel">
+                <h5 class="elevation-measurements-title">Order Measurements</h5>
+                <p class="elevation-measurements-row">
+                  Left Gap: {{ formatLength(elevationOrderMetrics.leftGapCm) }}
+                </p>
+                <p class="elevation-measurements-row">
+                  Right Gap: {{ formatLength(elevationOrderMetrics.rightGapCm) }}
+                </p>
+                <p class="elevation-measurements-row">
+                  Nearest Opening: {{ elevationOrderMetrics.nearestOpeningGapCm === null ? 'N/A' : formatLength(elevationOrderMetrics.nearestOpeningGapCm) }}
+                </p>
+                <p class="elevation-measurements-row">
+                  Total Closet Width: {{ formatLength(elevationOrderMetrics.totalWidthCm) }}
+                </p>
+                <p class="elevation-measurements-row">
+                  Unit Widths: {{ elevationOrderMetrics.unitWidthsCm.map((v) => formatLength(v)).join(' | ') }}
+                </p>
+                <p class="elevation-measurements-row">
+                  Top Clearance: {{ formatLength(elevationOrderMetrics.topClearanceCm) }}
+                </p>
+                <p class="elevation-measurements-row">
+                  Bottom Elevation: {{ formatLength(elevationOrderMetrics.bottomCm) }}
+                </p>
+              </div>
+            </template>
 
             <div v-else class="elevation-empty">
               Selected wall is no longer available.
@@ -2147,6 +2758,26 @@ function dimLinePoints(wall: {
               @click="openElevationForSelectedWall"
             >
               Elevation
+            </button>
+
+            <button
+              type="button"
+              class="sidebar-action-btn draw-btn"
+              data-testid="add-elevation-closet-btn"
+              :disabled="!canAddElevationClosetForSelectedWall"
+              @click="addElevationClosetBlockForSelectedWall"
+            >
+              Add Closet Unit
+            </button>
+
+            <button
+              v-if="selectedElevationClosetForSelectedWall"
+              type="button"
+              class="sidebar-action-btn delete-wall-btn"
+              data-testid="remove-elevation-closet-btn"
+              @click="removeSelectedElevationClosetForSelectedWall"
+            >
+              Remove Selected Unit
             </button>
 
             <button
@@ -2609,6 +3240,13 @@ function dimLinePoints(wall: {
   stroke-dasharray: 4, 3;
 }
 
+.elevation-connected-band {
+  fill: rgba(148, 163, 184, 0.28);
+  stroke: rgba(100, 116, 139, 0.75);
+  stroke-width: 1;
+  stroke-dasharray: 3, 2;
+}
+
 .elevation-dim {
   fill: #cbd5e1;
   font-size: 12px;
@@ -2642,6 +3280,78 @@ function dimLinePoints(wall: {
   fill: #93c5fd;
   font-size: 10px;
   font-weight: 600;
+}
+
+.elevation-closet {
+  cursor: grab;
+}
+
+.elevation-closet-rect {
+  fill: rgba(59, 130, 246, 0.34);
+  stroke: rgba(147, 197, 253, 0.95);
+  stroke-width: 1.2;
+  rx: 3;
+}
+
+.elevation-closet.selected .elevation-closet-rect {
+  fill: rgba(59, 130, 246, 0.45);
+  stroke: #fbbf24;
+  stroke-width: 1.8;
+}
+
+.elevation-closet-label {
+  fill: #dbeafe;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.elevation-closet-handles {
+  pointer-events: all;
+}
+
+.elevation-closet-handle {
+  fill: #fbbf24;
+  stroke: #0f172a;
+  stroke-width: 1.2;
+}
+
+.elevation-closet-handle:hover {
+  fill: #fde68a;
+}
+
+.elevation-closet-handle-width {
+  cursor: ew-resize;
+}
+
+.elevation-closet-handle-height {
+  cursor: ns-resize;
+}
+
+.elevation-closet-handle-corner {
+  cursor: nwse-resize;
+}
+
+.elevation-measurements-panel {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: rgba(15, 23, 42, 0.78);
+}
+
+.elevation-measurements-title {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #e2e8f0;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.elevation-measurements-row {
+  margin: 2px 0;
+  font-size: 11px;
+  color: #cbd5e1;
+  line-height: 1.3;
 }
 
 .elevation-resize-handles {
