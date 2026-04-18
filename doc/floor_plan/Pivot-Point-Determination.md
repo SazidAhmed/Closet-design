@@ -78,6 +78,12 @@ Intermittent flip fix:
 - Only the anchor coordinates are refreshed from updated geometry while preserving the same endpoint type.
 - This prevents occasional pivot jumps to the opposite endpoint in open/boundary shapes.
 
+Add Wall continuation rule:
+
+- When a wall is selected, Add Wall uses the endpoint opposite the selected inside-left pivot endpoint.
+- Add Wall is visible only if that continuation endpoint is free (not connected).
+- If the continuation endpoint is connected, Add Wall stays hidden for that selected wall.
+
 ---
 
 ## Viewport Locking During Rotation

@@ -567,18 +567,15 @@ function continuationStartVertexForWall(wall: {
   position: [number, number];
   angle: number;
   length: number;
+  id: string;
 }): [number, number] {
   const start: [number, number] = [wall.position[0], wall.position[1]];
   const end = wallEndPoint(wall);
-  const startConnected = isConnectedVertex(start);
-  const endConnected = isConnectedVertex(end);
 
-  // Prefer the non-connected endpoint so Add Wall extends from a chain end.
-  if (startConnected && !endConnected) return end;
-  if (!startConnected && endConnected) return start;
-
-  // If both ends share the same connectivity state, keep a deterministic fallback.
-  return end;
+  // Add Wall must always continue from the endpoint opposite the inside-left
+  // pivot endpoint selected for this wall.
+  const insideLeftAnchorType = insideLeftAnchorTypeForWall(wall);
+  return insideLeftAnchorType === "start" ? end : start;
 }
 
 /** Compute all vertices from the wall chain */
@@ -606,12 +603,6 @@ const wallVertices = computed(() => {
     verts.push(wallEndPoint(last));
   }
   return verts;
-});
-
-const chainEndVertex = computed<[number, number] | null>(() => {
-  if (drawWalls.value.length === 0) return null;
-  const last = drawWalls.value[drawWalls.value.length - 1]!;
-  return wallEndPoint(last);
 });
 
 function polygonSignedArea2D(vertices: [number, number][]): number {
@@ -848,30 +839,18 @@ function clearCustomDrawing() {
 }
 
 function continueDrawing() {
-  unlockDrawViewBox();
-  if (drawWalls.value.length === 0 && !pendingStartVertex.value) {
-    startFreshDraw();
-    return;
-  }
+  if (!selectedWall.value) return;
 
-  if (selectedWall.value) {
-    const continuationStart = continuationStartVertexForWall(selectedWall.value);
-    pendingStartVertex.value = [
-      snapToGrid(continuationStart[0]),
-      snapToGrid(continuationStart[1]),
-    ];
-    mousePos.x = pendingStartVertex.value[0];
-    mousePos.y = pendingStartVertex.value[1];
-  } else if (chainEndVertex.value) {
-    pendingStartVertex.value = [
-      snapToGrid(chainEndVertex.value[0]),
-      snapToGrid(chainEndVertex.value[1]),
-    ];
-    mousePos.x = pendingStartVertex.value[0];
-    mousePos.y = pendingStartVertex.value[1];
-  } else {
-    pendingStartVertex.value = null;
-  }
+  const continuationStart = continuationStartVertexForWall(selectedWall.value);
+  if (isConnectedVertex(continuationStart)) return;
+
+  unlockDrawViewBox();
+  pendingStartVertex.value = [
+    snapToGrid(continuationStart[0]),
+    snapToGrid(continuationStart[1]),
+  ];
+  mousePos.x = pendingStartVertex.value[0];
+  mousePos.y = pendingStartVertex.value[1];
 
   hasStartedDrawSession.value = true;
   isDrawing.value = true;
@@ -1032,6 +1011,12 @@ function removeSelectedWall() {
 const selectedWall = computed(() => {
   if (!selectedWallId.value) return null;
   return drawWalls.value.find((w) => w.id === selectedWallId.value) ?? null;
+});
+
+const canAddWallFromSelectedWall = computed(() => {
+  if (isDrawing.value || !selectedWall.value) return false;
+  const continuationStart = continuationStartVertexForWall(selectedWall.value);
+  return !isConnectedVertex(continuationStart);
 });
 
 /** Computed angle in degrees for display */
@@ -1588,14 +1573,14 @@ function dimLinePoints(wall: {
             <h4 class="sidebar-subheading">Wall {{ selectedWall.label }}</h4>
 
               <p
-                v-if="!isDrawing && drawWalls.length > 0"
+                v-if="canAddWallFromSelectedWall"
                 class="draw-hint"
               >
                 Click <strong>Add Wall</strong> to continue from the selected wall endpoint.
               </p>
 
               <button
-                v-if="!isDrawing && drawWalls.length > 0"
+                v-if="canAddWallFromSelectedWall"
                 type="button"
                 class="sidebar-action-btn draw-btn"
                 @click="continueDrawing"

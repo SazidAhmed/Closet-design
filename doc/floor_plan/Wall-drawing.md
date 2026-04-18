@@ -113,14 +113,14 @@ Note: No zero-length placeholder segment is created.
 
 1. User selects a wall.
 2. User clicks Add Wall.
-3. System resolves the selected wall continuation endpoint.
-4. If exactly one endpoint is non-connected (green), `pendingStartVertex` is seeded from that non-connected endpoint.
-5. If both endpoints share the same connectivity state, continuation falls back deterministically to wall end.
+3. System resolves the selected wall continuation endpoint as the endpoint opposite the inside-left pivot endpoint.
+4. Add Wall is shown only when that continuation endpoint is non-connected.
+5. `pendingStartVertex` is seeded from that continuation endpoint.
 6. First click places a segment starting from `pendingStartVertex`.
 
-Fallback behavior if no wall selected:
+Behavior when no wall selected:
 
-- Continue from chain end.
+- Add Wall is not available.
 
 ## 6.3 Close / Finish Drawing
 

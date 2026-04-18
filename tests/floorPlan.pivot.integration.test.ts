@@ -112,6 +112,33 @@ function setOpenWall4BoundaryRepresentative(store: ReturnType<typeof useRoomStor
   store.setRoomFromWalls(walls)
 }
 
+function setTwoWallRightEndpointScenario(store: ReturnType<typeof useRoomStore>) {
+  const walls: Wall[] = [
+    {
+      id: 'ui_right_endpoint_1',
+      position: [0, 0],
+      length: 140,
+      angle: 0,
+      hasCloset: true,
+      thickness: 6,
+      label: '1',
+      visible: true,
+    },
+    {
+      id: 'ui_right_endpoint_2',
+      position: [140, 0],
+      length: 100,
+      angle: Math.PI / 2,
+      hasCloset: false,
+      thickness: 6,
+      label: '2',
+      visible: true,
+    },
+  ]
+
+  store.setRoomFromWalls(walls)
+}
+
 function findButtonByText(wrapper: ReturnType<typeof mount>, text: string) {
   return wrapper
     .findAll('button')
@@ -270,7 +297,7 @@ describe('FloorPlan wall selection + angle UI integration', () => {
     wrapper.unmount()
   })
 
-  it('Add Wall starts from selected wall non-connected endpoint', async () => {
+  it('Add Wall is hidden when selected wall right endpoint is connected and continues from wall-2 right endpoint when free', async () => {
     setActivePinia(createPinia())
     const roomStore = useRoomStore()
 
@@ -286,21 +313,27 @@ describe('FloorPlan wall selection + angle UI integration', () => {
 
     await beginDrawingSession(wrapper)
 
-    setOpenWall4BoundaryRepresentative(roomStore)
+    setTwoWallRightEndpointScenario(roomStore)
     await nextTick()
 
     const before = snapshotWalls(roomStore.walls)
-    expect(before.length).toBe(4)
+    expect(before.length).toBe(2)
 
     // Stop active drawing so Add Wall action is available.
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await nextTick()
 
     const wallPolygons = wrapper.findAll('polygon.wall-segment')
-    expect(wallPolygons.length).toBe(4)
+    expect(wallPolygons.length).toBe(2)
 
-    // Select wall 4: its non-connected endpoint is its END point.
-    await wallPolygons[3]!.trigger('click')
+    // Wall 1 right endpoint is already connected to wall 2, so Add Wall stays hidden.
+    await wallPolygons[0]!.trigger('click')
+
+    const hiddenForWall1 = findButtonByText(wrapper, 'Add Wall')
+    expect(hiddenForWall1).toBeUndefined()
+
+    // Wall 2 right endpoint (opposite inside-left) is free, so Add Wall is available.
+    await wallPolygons[1]!.trigger('click')
 
     const addWallButton = findButtonByText(wrapper, 'Add Wall')
     expect(addWallButton).toBeTruthy()
@@ -323,11 +356,11 @@ describe('FloorPlan wall selection + angle UI integration', () => {
     await nextTick()
 
     const after = snapshotWalls(roomStore.walls)
-    expect(after.length).toBe(5)
+    expect(after.length).toBe(3)
 
-    const wall4Before = before[3]!
-    const expectedStart = wallEndPoint(wall4Before)
-    const newWall = after[4]!
+    const wall2Before = before[1]!
+    const expectedStart = wallEndPoint(wall2Before)
+    const newWall = after[2]!
 
     expectVecClose(newWall.position, expectedStart)
 
