@@ -377,15 +377,333 @@ function onSelectedItemSideInput(
   roomStore.moveItem(item.id, nextPos);
 }
 
+const showElevationOverlay = ref(false);
+const elevationWallId = ref<string | null>(null);
+const elevationSvgRef = ref<SVGSVGElement | null>(null);
+
+const ELEVATION_VIEW_WIDTH = 760;
+const ELEVATION_VIEW_HEIGHT = 520;
+
+type ElevationInteractionMode = "move" | "resize-width" | "resize-height" | "resize-both";
+
+const elevationDrag = reactive<{
+  active: boolean;
+  itemId: string;
+  mode: ElevationInteractionMode;
+  offsetX: number;
+  offsetY: number;
+  startWidthCm: number;
+  startHeightCm: number;
+  startLeftCm: number;
+  startElevationCm: number;
+  startPointerX: number;
+  startPointerY: number;
+}>({
+  active: false,
+  itemId: "",
+  mode: "move",
+  offsetX: 0,
+  offsetY: 0,
+  startWidthCm: 0,
+  startHeightCm: 0,
+  startLeftCm: 0,
+  startElevationCm: 0,
+  startPointerX: 0,
+  startPointerY: 0,
+});
+
+const elevationWall = computed(() => {
+  if (!elevationWallId.value) return null;
+  return roomStore.walls.find((wall) => wall.id === elevationWallId.value) ?? null;
+});
+
+const elevationItems = computed(() => {
+  if (!elevationWallId.value) return [] as PlacedItem[];
+  return roomStore.items.filter(
+    (item) => item.wallId === elevationWallId.value && isDoorOrWindowItem(item),
+  );
+});
+
+const elevationLayout = computed(() => {
+  const roomHeightCm = Math.max(1, roomStore.height);
+  const wallLengthCm = Math.max(1, elevationWall.value?.length ?? 1);
+  const paddingX = 56;
+  const paddingY = 42;
+  const innerWidth = Math.max(1, ELEVATION_VIEW_WIDTH - paddingX * 2);
+  const innerHeight = Math.max(1, ELEVATION_VIEW_HEIGHT - paddingY * 2);
+  const scale = Math.min(innerWidth / wallLengthCm, innerHeight / roomHeightCm);
+  const wallWidthPx = wallLengthCm * scale;
+  const wallHeightPx = roomHeightCm * scale;
+
+  return {
+    scale,
+    roomHeightCm,
+    wallLengthCm,
+    wallX: (ELEVATION_VIEW_WIDTH - wallWidthPx) / 2,
+    wallY: (ELEVATION_VIEW_HEIGHT - wallHeightPx) / 2,
+    wallWidthPx,
+    wallHeightPx,
+  };
+});
+
+type ElevationItemRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type ElevationItemGeometryCm = {
+  leftCm: number;
+  elevationCm: number;
+  widthCm: number;
+  heightCm: number;
+};
+
+function elevationItemGeometryCm(
+  item: Pick<PlacedItem, "width" | "height" | "leftPosition" | "elevation">,
+): ElevationItemGeometryCm {
+  const layout = elevationLayout.value;
+  const widthCm = Math.max(1, item.width);
+  const heightCm = Math.max(1, item.height);
+
+  const maxLeftCm = Math.max(0, layout.wallLengthCm - widthCm);
+  const leftCm = Math.max(
+    0,
+    Math.min(maxLeftCm, Math.max(0, item.leftPosition) * CM_PER_INCH),
+  );
+
+  const maxElevationCm = Math.max(0, layout.roomHeightCm - heightCm);
+  const elevationCm = Math.max(
+    0,
+    Math.min(maxElevationCm, Math.max(0, item.elevation) * CM_PER_INCH),
+  );
+
+  return {
+    leftCm,
+    elevationCm,
+    widthCm,
+    heightCm,
+  };
+}
+
+function elevationItemRect(
+  item: Pick<PlacedItem, "width" | "height" | "leftPosition" | "elevation">,
+): ElevationItemRect {
+  const layout = elevationLayout.value;
+  const geometry = elevationItemGeometryCm(item);
+
+  return {
+    x: layout.wallX + geometry.leftCm * layout.scale,
+    y:
+      layout.wallY +
+      (layout.roomHeightCm - (geometry.elevationCm + geometry.heightCm)) * layout.scale,
+    width: geometry.widthCm * layout.scale,
+    height: geometry.heightCm * layout.scale,
+  };
+}
+
+function formatPositionInches(value: number): string {
+  return `${Math.round(value * 10) / 10}`;
+}
+
+function openElevationForSelectedWall() {
+  if (!selectedWall.value) return;
+  elevationWallId.value = selectedWall.value.id;
+  showElevationOverlay.value = true;
+}
+
+function stopElevationItemDrag() {
+  elevationDrag.active = false;
+  elevationDrag.itemId = "";
+  elevationDrag.mode = "move";
+  elevationDrag.offsetX = 0;
+  elevationDrag.offsetY = 0;
+  elevationDrag.startWidthCm = 0;
+  elevationDrag.startHeightCm = 0;
+  elevationDrag.startLeftCm = 0;
+  elevationDrag.startElevationCm = 0;
+  elevationDrag.startPointerX = 0;
+  elevationDrag.startPointerY = 0;
+}
+
+function closeElevationOverlay() {
+  showElevationOverlay.value = false;
+  elevationWallId.value = null;
+  stopElevationItemDrag();
+}
+
+function selectElevationItem(itemId: string, e: MouseEvent | PointerEvent) {
+  e.stopPropagation();
+  selectedItemId.value = itemId;
+}
+
+function startElevationItemDrag(itemId: string, e: PointerEvent) {
+  if (!elevationSvgRef.value || !elevationWall.value) return;
+
+  const item = elevationItems.value.find((entry) => entry.id === itemId);
+  if (!item) return;
+
+  selectElevationItem(itemId, e);
+  e.preventDefault();
+
+  const pointerPoint = screenToSvg(elevationSvgRef.value, e.clientX, e.clientY);
+  const rect = elevationItemRect(item);
+  const geometry = elevationItemGeometryCm(item);
+
+  elevationDrag.active = true;
+  elevationDrag.itemId = itemId;
+  elevationDrag.mode = "move";
+  elevationDrag.offsetX = pointerPoint.x - rect.x;
+  elevationDrag.offsetY = pointerPoint.y - rect.y;
+  elevationDrag.startWidthCm = geometry.widthCm;
+  elevationDrag.startHeightCm = geometry.heightCm;
+  elevationDrag.startLeftCm = geometry.leftCm;
+  elevationDrag.startElevationCm = geometry.elevationCm;
+  elevationDrag.startPointerX = pointerPoint.x;
+  elevationDrag.startPointerY = pointerPoint.y;
+
+  (e.currentTarget as Element | null)?.setPointerCapture?.(e.pointerId);
+}
+
+function startElevationItemResize(
+  itemId: string,
+  mode: "resize-width" | "resize-height" | "resize-both",
+  e: PointerEvent,
+) {
+  if (!elevationSvgRef.value || !elevationWall.value) return;
+
+  const item = elevationItems.value.find((entry) => entry.id === itemId);
+  if (!item) return;
+
+  selectElevationItem(itemId, e);
+  e.preventDefault();
+
+  const pointerPoint = screenToSvg(elevationSvgRef.value, e.clientX, e.clientY);
+  const geometry = elevationItemGeometryCm(item);
+
+  elevationDrag.active = true;
+  elevationDrag.itemId = itemId;
+  elevationDrag.mode = mode;
+  elevationDrag.startWidthCm = geometry.widthCm;
+  elevationDrag.startHeightCm = geometry.heightCm;
+  elevationDrag.startLeftCm = geometry.leftCm;
+  elevationDrag.startElevationCm = geometry.elevationCm;
+  elevationDrag.startPointerX = pointerPoint.x;
+  elevationDrag.startPointerY = pointerPoint.y;
+
+  (e.currentTarget as Element | null)?.setPointerCapture?.(e.pointerId);
+}
+
+function onElevationPointerMove(e: PointerEvent) {
+  if (!elevationDrag.active || !elevationSvgRef.value || !elevationWall.value) return;
+
+  const item = roomStore.items.find((entry) => entry.id === elevationDrag.itemId);
+  if (!item || item.wallId !== elevationWall.value.id || !isDoorOrWindowItem(item)) {
+    stopElevationItemDrag();
+    return;
+  }
+
+  const layout = elevationLayout.value;
+  if (layout.scale <= 0) return;
+
+  const pointerPoint = screenToSvg(elevationSvgRef.value, e.clientX, e.clientY);
+  if (elevationDrag.mode === "move") {
+    const itemWidthCm = Math.max(1, item.width);
+    const itemHeightCm = Math.max(1, item.height);
+    const itemWidthPx = itemWidthCm * layout.scale;
+    const itemHeightPx = itemHeightCm * layout.scale;
+
+    const minX = layout.wallX;
+    const maxX = layout.wallX + Math.max(0, layout.wallWidthPx - itemWidthPx);
+    const minY = layout.wallY;
+    const maxY = layout.wallY + Math.max(0, layout.wallHeightPx - itemHeightPx);
+
+    const nextX = Math.max(
+      minX,
+      Math.min(maxX, pointerPoint.x - elevationDrag.offsetX),
+    );
+    const nextY = Math.max(
+      minY,
+      Math.min(maxY, pointerPoint.y - elevationDrag.offsetY),
+    );
+
+    const nextLeftCm = (nextX - layout.wallX) / layout.scale;
+    const centerCm = nextLeftCm + itemWidthCm / 2;
+    const nextAlong = Math.max(0, Math.min(1, centerCm / layout.wallLengthCm));
+    roomStore.moveItem(item.id, nextAlong);
+
+    const topCm = (nextY - layout.wallY) / layout.scale;
+    const nextElevationCm = Math.max(0, layout.roomHeightCm - (topCm + itemHeightCm));
+    roomStore.updateItemProps(item.id, {
+      elevation: nextElevationCm / CM_PER_INCH,
+    });
+    return;
+  }
+
+  const deltaXcm = (pointerPoint.x - elevationDrag.startPointerX) / layout.scale;
+  const deltaYcm = (pointerPoint.y - elevationDrag.startPointerY) / layout.scale;
+
+  const nextProps: Partial<Pick<PlacedItem, "width" | "height">> = {};
+
+  if (elevationDrag.mode === "resize-width" || elevationDrag.mode === "resize-both") {
+    const maxWidthCm = Math.max(1, layout.wallLengthCm - elevationDrag.startLeftCm);
+    const nextWidthCm = Math.max(
+      1,
+      Math.min(maxWidthCm, elevationDrag.startWidthCm + deltaXcm),
+    );
+    nextProps.width = nextWidthCm;
+  }
+
+  if (elevationDrag.mode === "resize-height" || elevationDrag.mode === "resize-both") {
+    const maxHeightCm = Math.max(1, layout.roomHeightCm - elevationDrag.startElevationCm);
+    const nextHeightCm = Math.max(
+      1,
+      Math.min(maxHeightCm, elevationDrag.startHeightCm - deltaYcm),
+    );
+    nextProps.height = nextHeightCm;
+  }
+
+  if (nextProps.width !== undefined || nextProps.height !== undefined) {
+    roomStore.updateItemProps(item.id, nextProps);
+  }
+}
+
+function onElevationPointerUp() {
+  stopElevationItemDrag();
+}
+
+watch(
+  () => elevationWall.value,
+  (wall) => {
+    if (showElevationOverlay.value && !wall) {
+      closeElevationOverlay();
+    }
+  },
+);
+
+watch(
+  () => showElevationOverlay.value,
+  (open) => {
+    if (!open) {
+      stopElevationItemDrag();
+    }
+  },
+);
+
 // Register item drag listeners
 onMounted(() => {
   document.addEventListener("pointermove", onItemPointerMove);
   document.addEventListener("pointerup", onItemPointerUp);
+  document.addEventListener("pointermove", onElevationPointerMove);
+  document.addEventListener("pointerup", onElevationPointerUp);
 });
 
 onUnmounted(() => {
   document.removeEventListener("pointermove", onItemPointerMove);
   document.removeEventListener("pointerup", onItemPointerUp);
+  document.removeEventListener("pointermove", onElevationPointerMove);
+  document.removeEventListener("pointerup", onElevationPointerUp);
 });
 
 // ───── SVG helpers for placed items ────────────────────────────────────────
@@ -1231,6 +1549,7 @@ function dimLinePoints(wall: {
         <div class="canvas-container">
           <svg
             ref="svgRef"
+            v-show="!showElevationOverlay"
             :viewBox="drawViewBox"
             class="floorplan-svg draw-canvas"
             xmlns="http://www.w3.org/2000/svg"
@@ -1525,17 +1844,147 @@ function dimLinePoints(wall: {
               </g>
             </g>
           </svg>
+
+          <div
+            v-if="showElevationOverlay"
+            class="elevation-overlay"
+            data-testid="elevation-overlay"
+          >
+            <div class="elevation-header">
+              <h4 class="elevation-title">
+                Wall {{ elevationWall?.label ?? "-" }} Elevation
+              </h4>
+              <button
+                type="button"
+                class="elevation-close-btn"
+                data-testid="close-elevation-btn"
+                @click="closeElevationOverlay"
+              >
+                Close Elevation
+              </button>
+            </div>
+
+            <svg
+              v-if="elevationWall"
+              ref="elevationSvgRef"
+              class="elevation-svg"
+              :viewBox="`0 0 ${ELEVATION_VIEW_WIDTH} ${ELEVATION_VIEW_HEIGHT}`"
+              xmlns="http://www.w3.org/2000/svg"
+              @click.self="selectedItemId = null"
+            >
+              <rect
+                :x="elevationLayout.wallX"
+                :y="elevationLayout.wallY"
+                :width="elevationLayout.wallWidthPx"
+                :height="elevationLayout.wallHeightPx"
+                class="elevation-wall"
+              />
+
+              <line
+                :x1="elevationLayout.wallX"
+                :y1="elevationLayout.wallY + elevationLayout.wallHeightPx"
+                :x2="elevationLayout.wallX + elevationLayout.wallWidthPx"
+                :y2="elevationLayout.wallY + elevationLayout.wallHeightPx"
+                class="elevation-floor-line"
+              />
+
+              <text
+                :x="elevationLayout.wallX + elevationLayout.wallWidthPx / 2"
+                :y="elevationLayout.wallY - 10"
+                text-anchor="middle"
+                class="elevation-dim"
+              >
+                {{ formatLength(elevationWall.length) }}
+              </text>
+
+              <text
+                :x="elevationLayout.wallX - 10"
+                :y="elevationLayout.wallY + elevationLayout.wallHeightPx / 2"
+                text-anchor="end"
+                dominant-baseline="middle"
+                class="elevation-dim"
+              >
+                {{ formatLength(roomStore.height) }}
+              </text>
+
+              <g
+                v-for="item in elevationItems"
+                :key="`elevation-${item.id}`"
+                class="elevation-item"
+                :class="{ selected: selectedItemId === item.id }"
+                @pointerdown="startElevationItemDrag(item.id, $event)"
+                @click.stop="selectElevationItem(item.id, $event)"
+              >
+                <rect
+                  :x="elevationItemRect(item).x"
+                  :y="elevationItemRect(item).y"
+                  :width="elevationItemRect(item).width"
+                  :height="elevationItemRect(item).height"
+                  :data-testid="`elevation-item-${item.id}`"
+                  class="elevation-item-rect"
+                />
+                <text
+                  :x="elevationItemRect(item).x + elevationItemRect(item).width / 2"
+                  :y="elevationItemRect(item).y - 8"
+                  text-anchor="middle"
+                  class="elevation-item-label"
+                >
+                  {{ itemLabel(item.type) }} · {{ formatLength(item.width) }} x {{ formatLength(item.height) }}
+                </text>
+                <text
+                  :x="elevationItemRect(item).x + elevationItemRect(item).width / 2"
+                  :y="elevationItemRect(item).y + elevationItemRect(item).height + 14"
+                  text-anchor="middle"
+                  class="elevation-item-meta"
+                >
+                  L {{ formatPositionInches(item.leftPosition) }}" ·
+                  R {{ formatPositionInches(item.rightPosition) }}" ·
+                  E {{ formatPositionInches(item.elevation) }}"
+                </text>
+
+                <g v-if="selectedItemId === item.id" class="elevation-resize-handles">
+                  <circle
+                    :cx="elevationItemRect(item).x + elevationItemRect(item).width"
+                    :cy="elevationItemRect(item).y + elevationItemRect(item).height / 2"
+                    r="5"
+                    class="elevation-handle elevation-handle-width"
+                    @pointerdown.stop.prevent="startElevationItemResize(item.id, 'resize-width', $event)"
+                  />
+                  <circle
+                    :cx="elevationItemRect(item).x + elevationItemRect(item).width / 2"
+                    :cy="elevationItemRect(item).y"
+                    r="5"
+                    class="elevation-handle elevation-handle-height"
+                    @pointerdown.stop.prevent="startElevationItemResize(item.id, 'resize-height', $event)"
+                  />
+                  <rect
+                    :x="elevationItemRect(item).x + elevationItemRect(item).width - 4"
+                    :y="elevationItemRect(item).y - 4"
+                    width="8"
+                    height="8"
+                    rx="1.5"
+                    class="elevation-handle elevation-handle-corner"
+                    @pointerdown.stop.prevent="startElevationItemResize(item.id, 'resize-both', $event)"
+                  />
+                </g>
+              </g>
+            </svg>
+
+            <div v-else class="elevation-empty">
+              Selected wall is no longer available.
+            </div>
+          </div>
         </div>
 
         <!-- Hint overlay -->
-        <div class="canvas-hint" v-if="isDrawing">
+        <div class="canvas-hint" v-if="!showElevationOverlay && isDrawing">
           Click to place vertices · Click near first point to close · Esc to
           finish
         </div>
-        <div class="canvas-hint" v-else-if="isClosed">
+        <div class="canvas-hint" v-else-if="!showElevationOverlay && isClosed">
           Click a wall to select and edit · Click empty area to deselect
         </div>
-        <div class="canvas-hint" v-else>
+        <div class="canvas-hint" v-else-if="!showElevationOverlay">
           Select a preset or click Custom Room to redraw the room
         </div>
       </main>
@@ -1690,6 +2139,15 @@ function dimLinePoints(wall: {
                 "
               />
             </div>
+
+            <button
+              type="button"
+              class="sidebar-action-btn draw-btn"
+              data-testid="open-elevation-btn"
+              @click="openElevationForSelectedWall"
+            >
+              Elevation
+            </button>
 
             <button
               type="button"
@@ -1926,6 +2384,14 @@ function dimLinePoints(wall: {
   border-color: rgba(251, 191, 36, 0.35);
 }
 
+.sidebar-action-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  background: rgba(148, 163, 184, 0.08);
+  border-color: rgba(148, 163, 184, 0.2);
+  color: #94a3b8;
+}
+
 .preset-list {
   display: flex;
   flex-direction: column;
@@ -2061,11 +2527,155 @@ function dimLinePoints(wall: {
   width: 80%;
   max-width: 600px;
   aspect-ratio: 1;
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
 }
 
 .floorplan-svg {
   width: 100%;
   height: 100%;
+}
+
+.elevation-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.96) 0%, rgba(15, 23, 42, 0.96) 100%);
+}
+
+.elevation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.elevation-title {
+  margin: 0;
+  font-size: 13px;
+  color: #e2e8f0;
+  letter-spacing: 0.02em;
+}
+
+.elevation-close-btn {
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  border-radius: 8px;
+  background: rgba(96, 165, 250, 0.12);
+  color: #93c5fd;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.elevation-close-btn:hover {
+  background: rgba(96, 165, 250, 0.2);
+  border-color: rgba(96, 165, 250, 0.5);
+}
+
+.elevation-svg {
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(148, 163, 184, 0.07) 0,
+      rgba(148, 163, 184, 0.07) 1px,
+      transparent 1px,
+      transparent 24px
+    ),
+    linear-gradient(180deg, #0f172a 0%, #0b1220 100%);
+}
+
+.elevation-wall {
+  fill: rgba(212, 201, 184, 0.2);
+  stroke: #cbd5e1;
+  stroke-width: 1;
+  rx: 2;
+}
+
+.elevation-floor-line {
+  stroke: #fbbf24;
+  stroke-width: 1.5;
+  stroke-dasharray: 4, 3;
+}
+
+.elevation-dim {
+  fill: #cbd5e1;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.elevation-item {
+  cursor: grab;
+}
+
+.elevation-item-rect {
+  fill: rgba(14, 165, 233, 0.6);
+  stroke: rgba(186, 230, 253, 0.9);
+  stroke-width: 1;
+  rx: 3;
+}
+
+.elevation-item.selected .elevation-item-rect {
+  fill: rgba(14, 165, 233, 0.85);
+  stroke: #fbbf24;
+  stroke-width: 1.6;
+}
+
+.elevation-item-label {
+  fill: #e2e8f0;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.elevation-item-meta {
+  fill: #93c5fd;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.elevation-resize-handles {
+  pointer-events: all;
+}
+
+.elevation-handle {
+  fill: #fbbf24;
+  stroke: #0f172a;
+  stroke-width: 1.2;
+}
+
+.elevation-handle:hover {
+  fill: #fde68a;
+}
+
+.elevation-handle-width {
+  cursor: ew-resize;
+}
+
+.elevation-handle-height {
+  cursor: ns-resize;
+}
+
+.elevation-handle-corner {
+  cursor: nwse-resize;
+}
+
+.elevation-empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  color: #94a3b8;
+  font-size: 13px;
 }
 
 .resize-handle {

@@ -198,7 +198,43 @@ For creating complex, non-rectangular room shapes with manual control.
 
 ---
 
-### 4. **Coordinate Systems & Transformations**
+### 4. **Wall Elevation Overlay (Canvas-Scoped)**
+
+#### Entry And Layout
+- Right sidebar wall-properties section includes an **Elevation** button.
+- Button appears only when a wall is selected, above **Use As Closet Wall**.
+- Clicking the button opens an elevation overlay inside the center canvas area.
+- Both sidebars remain visible and unchanged while elevation is open.
+
+#### Rendering Contract
+- Elevation always targets the selected wall at open time.
+- Wall face is rendered as a flat 2D rectangle:
+  - Width = selected wall length
+  - Height = room height
+- Overlay renders only door/window openings attached to that wall.
+- Opening placement uses the same values shown in right-side selected-item fields:
+  - `leftPosition` / `rightPosition` (inches)
+  - `width` / `height` (cm internally, inches in labels)
+  - `elevation` (inches)
+
+#### Editing Behavior
+- Openings are draggable in elevation:
+  - Horizontal drag updates along-wall position (`positionAlongWall` via `moveItem`).
+  - Vertical drag updates `elevation` via `updateItemProps`.
+- Selected opening shows resize handles in elevation:
+  - Right handle resizes width.
+  - Top handle resizes height.
+  - Top-right corner handle resizes width and height together.
+- Existing right-side width/height/left/right/elevation inputs stay in sync with elevation edits.
+
+#### Persistence / Visibility
+- Floor-plan SVG is hidden (not deleted) while elevation is open.
+- Closing elevation restores the floor-plan drawing immediately with prior state intact.
+- No route change and no room reset is performed for elevation open/close.
+
+---
+
+### 5. **Coordinate Systems & Transformations**
 
 #### SVG to Screen Mapping:
 ```
@@ -227,7 +263,7 @@ screenToSvg(svg, screenX, screenY):
 
 ---
 
-### 5. **Units & Measurements**
+### 6. **Units & Measurements**
 
 #### Internal Units: Centimeters (cm)
 - Wall lengths stored in cm
