@@ -674,6 +674,52 @@ const elevationOrderMetrics = computed(() => {
   };
 });
 
+const elevationOpeningMetrics = computed(() => {
+  const wall = elevationWall.value;
+  if (!wall || elevationItems.value.length === 0) return null;
+
+  const activeOpening =
+    elevationItems.value.find((item) => item.id === selectedItemId.value) ?? elevationItems.value[0] ?? null;
+  if (!activeOpening) return null;
+
+  const horizontalBounds = elevationHorizontalBounds.value;
+  const geometry = elevationItemGeometryCm(activeOpening);
+  const leftGapCm = Math.max(0, geometry.leftCm - horizontalBounds.minLeftCm);
+  const rightGapCm = Math.max(
+    0,
+    horizontalBounds.maxRightCm - (geometry.leftCm + geometry.widthCm),
+  );
+  const topClearanceCm = Math.max(0, roomStore.height - (geometry.elevationCm + geometry.heightCm));
+
+  return {
+    label: itemLabel(activeOpening.type),
+    widthCm: geometry.widthCm,
+    heightCm: geometry.heightCm,
+    leftGapCm,
+    rightGapCm,
+    topClearanceCm,
+    bottomCm: geometry.elevationCm,
+  };
+});
+
+const elevationWallContextMetrics = computed(() => {
+  const wall = elevationWall.value;
+  if (!wall) return null;
+
+  const horizontalBounds = elevationHorizontalBounds.value;
+  const openingCount = elevationItems.value.length;
+  const closetCount = elevationClosetBlocks.value.length;
+
+  return {
+    wallLengthCm: wall.length,
+    usableWidthCm: horizontalBounds.usableSpanCm,
+    blockedLeftCm: horizontalBounds.startMarginCm,
+    blockedRightCm: horizontalBounds.endMarginCm,
+    openingCount,
+    closetCount,
+  };
+});
+
 type ElevationItemRect = {
   x: number;
   y: number;
@@ -2679,29 +2725,75 @@ function dimLinePoints(wall: {
               </g>
               </svg>
 
-              <div v-if="elevationOrderMetrics" class="elevation-measurements-panel">
-                <h5 class="elevation-measurements-title">Order Measurements</h5>
-                <p class="elevation-measurements-row">
-                  Left Gap: {{ formatLength(elevationOrderMetrics.leftGapCm) }}
-                </p>
-                <p class="elevation-measurements-row">
-                  Right Gap: {{ formatLength(elevationOrderMetrics.rightGapCm) }}
-                </p>
-                <p class="elevation-measurements-row">
-                  Nearest Opening: {{ elevationOrderMetrics.nearestOpeningGapCm === null ? 'N/A' : formatLength(elevationOrderMetrics.nearestOpeningGapCm) }}
-                </p>
-                <p class="elevation-measurements-row">
-                  Total Closet Width: {{ formatLength(elevationOrderMetrics.totalWidthCm) }}
-                </p>
-                <p class="elevation-measurements-row">
-                  Unit Widths: {{ elevationOrderMetrics.unitWidthsCm.map((v) => formatLength(v)).join(' | ') }}
-                </p>
-                <p class="elevation-measurements-row">
-                  Top Clearance: {{ formatLength(elevationOrderMetrics.topClearanceCm) }}
-                </p>
-                <p class="elevation-measurements-row">
-                  Bottom Elevation: {{ formatLength(elevationOrderMetrics.bottomCm) }}
-                </p>
+              <div class="elevation-measurements-panel" data-testid="elevation-measurements-panel">
+                <template v-if="elevationOrderMetrics">
+                  <h5 class="elevation-measurements-title">Order Measurements</h5>
+                  <p class="elevation-measurements-row">
+                    Left Gap: {{ formatLength(elevationOrderMetrics.leftGapCm) }}
+                  </p>
+                  <p class="elevation-measurements-row">
+                    Right Gap: {{ formatLength(elevationOrderMetrics.rightGapCm) }}
+                  </p>
+                  <p class="elevation-measurements-row">
+                    Nearest Opening: {{ elevationOrderMetrics.nearestOpeningGapCm === null ? 'N/A' : formatLength(elevationOrderMetrics.nearestOpeningGapCm) }}
+                  </p>
+                  <p class="elevation-measurements-row">
+                    Total Closet Width: {{ formatLength(elevationOrderMetrics.totalWidthCm) }}
+                  </p>
+                  <p class="elevation-measurements-row">
+                    Unit Widths: {{ elevationOrderMetrics.unitWidthsCm.map((v) => formatLength(v)).join(' | ') }}
+                  </p>
+                  <p class="elevation-measurements-row">
+                    Top Clearance: {{ formatLength(elevationOrderMetrics.topClearanceCm) }}
+                  </p>
+                  <p class="elevation-measurements-row">
+                    Bottom Elevation: {{ formatLength(elevationOrderMetrics.bottomCm) }}
+                  </p>
+                </template>
+
+                <template v-else-if="elevationOpeningMetrics">
+                  <h5 class="elevation-measurements-title">Opening Measurements</h5>
+                  <p class="elevation-measurements-row">
+                    Type: {{ elevationOpeningMetrics.label }}
+                  </p>
+                  <p class="elevation-measurements-row">
+                    Width x Height: {{ formatLength(elevationOpeningMetrics.widthCm) }} x {{ formatLength(elevationOpeningMetrics.heightCm) }}
+                  </p>
+                  <p class="elevation-measurements-row">
+                    Left Gap: {{ formatLength(elevationOpeningMetrics.leftGapCm) }}
+                  </p>
+                  <p class="elevation-measurements-row">
+                    Right Gap: {{ formatLength(elevationOpeningMetrics.rightGapCm) }}
+                  </p>
+                  <p class="elevation-measurements-row">
+                    Top Clearance: {{ formatLength(elevationOpeningMetrics.topClearanceCm) }}
+                  </p>
+                  <p class="elevation-measurements-row">
+                    Bottom Elevation: {{ formatLength(elevationOpeningMetrics.bottomCm) }}
+                  </p>
+                </template>
+
+                <template v-else-if="elevationWallContextMetrics">
+                  <h5 class="elevation-measurements-title">Wall Context</h5>
+                  <p class="elevation-measurements-row">
+                    Wall Width: {{ formatLength(elevationWallContextMetrics.wallLengthCm) }}
+                  </p>
+                  <p class="elevation-measurements-row">
+                    Usable Width: {{ formatLength(elevationWallContextMetrics.usableWidthCm) }}
+                  </p>
+                  <p class="elevation-measurements-row">
+                    Blocked Left: {{ formatLength(elevationWallContextMetrics.blockedLeftCm) }}
+                  </p>
+                  <p class="elevation-measurements-row">
+                    Blocked Right: {{ formatLength(elevationWallContextMetrics.blockedRightCm) }}
+                  </p>
+                  <p class="elevation-measurements-row">
+                    Openings: {{ elevationWallContextMetrics.openingCount }}
+                  </p>
+                  <p class="elevation-measurements-row">
+                    Closet Units: {{ elevationWallContextMetrics.closetCount }}
+                  </p>
+                </template>
               </div>
             </template>
 

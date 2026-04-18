@@ -255,6 +255,8 @@ describe('FloorPlan add item selection behavior', () => {
 
     const elevationItems = wrapper.findAll('[data-testid^="elevation-item-"]')
     expect(elevationItems.length).toBe(1)
+    expect(wrapper.find('[data-testid="elevation-measurements-panel"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Opening Measurements')
 
     expect(wrapper.findAll('.elevation-handle').length).toBe(0)
     await elevationItems[0]!.trigger('click')
