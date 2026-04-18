@@ -383,8 +383,8 @@ const showElevationOverlay = ref(false);
 const elevationWallId = ref<string | null>(null);
 const elevationSvgRef = ref<SVGSVGElement | null>(null);
 
-const ELEVATION_VIEW_WIDTH = 760;
-const ELEVATION_VIEW_HEIGHT = 520;
+const ELEVATION_VIEW_WIDTH = 980;
+const ELEVATION_VIEW_HEIGHT = 620;
 
 type ElevationInteractionMode = "move" | "resize-width" | "resize-height" | "resize-both";
 
@@ -435,7 +435,16 @@ type ElevationRectCm = {
   topCm: number;
 };
 
+type ElevationHorizontalBoundsCm = {
+  startMarginCm: number;
+  endMarginCm: number;
+  minLeftCm: number;
+  maxRightCm: number;
+  usableSpanCm: number;
+};
+
 const MAX_ELEVATION_CLOSETS_PER_WALL = 8;
+const ELEVATION_BOUNDS_EPSILON_CM = 0.001;
 const elevationClosetIdCounter = ref(1);
 const elevationClosetBlocksByWall = reactive<Record<string, ElevationClosetBlock[]>>({});
 const selectedElevationClosetId = ref<string | null>(null);
@@ -471,12 +480,14 @@ const elevationWall = computed(() => {
   return roomStore.walls.find((wall) => wall.id === elevationWallId.value) ?? null;
 });
 
-const elevationWallConnectivity = computed(() => {
-  const wall = elevationWall.value;
-  if (!wall) {
-    return { startConnected: false, endConnected: false };
-  }
-
+function wallConnectivityForWall(
+  wall: {
+    id: string;
+    position: [number, number];
+    angle: number;
+    length: number;
+  },
+): { startConnected: boolean; endConnected: boolean } {
   const start: [number, number] = [wall.position[0], wall.position[1]];
   const end = wallEndPoint(wall);
   const tolerance = 1;
@@ -504,7 +515,78 @@ const elevationWallConnectivity = computed(() => {
   }
 
   return { startConnected, endConnected };
+}
+
+function elevationHorizontalBoundsForWall(
+  wallId: string,
+  wallLengthCm: number,
+): ElevationHorizontalBoundsCm {
+  const minLength = Math.max(0, wallLengthCm);
+  const wall = roomStore.walls.find((entry) => entry.id === wallId);
+  if (!wall) {
+    return {
+      startMarginCm: 0,
+      endMarginCm: 0,
+      minLeftCm: 0,
+      maxRightCm: minLength,
+      usableSpanCm: minLength,
+    };
+  }
+
+  const connectivity = wallConnectivityForWall(wall);
+  const rawStartMargin = connectivity.startConnected ? Math.max(0, wall.thickness) : 0;
+  const rawEndMargin = connectivity.endConnected ? Math.max(0, wall.thickness) : 0;
+  const startMarginCm = Math.min(rawStartMargin, minLength);
+  const endMarginCm = Math.min(rawEndMargin, minLength);
+  const minLeftCm = startMarginCm;
+  const maxRightCm = Math.max(minLeftCm, minLength - endMarginCm);
+
+  return {
+    startMarginCm,
+    endMarginCm,
+    minLeftCm,
+    maxRightCm,
+    usableSpanCm: Math.max(0, maxRightCm - minLeftCm),
+  };
+}
+
+function clampElevationLeftCm(
+  leftCm: number,
+  widthCm: number,
+  bounds: ElevationHorizontalBoundsCm,
+): number {
+  const minLeft = bounds.minLeftCm;
+  const maxLeft = Math.max(minLeft, bounds.maxRightCm - widthCm);
+  return Math.max(minLeft, Math.min(maxLeft, leftCm));
+}
+
+const elevationWallConnectivity = computed(() => {
+  const wall = elevationWall.value;
+  if (!wall) {
+    return { startConnected: false, endConnected: false };
+  }
+
+  return wallConnectivityForWall(wall);
 });
+
+const elevationHorizontalBounds = computed(() => {
+  const wall = elevationWall.value;
+  if (!wall) {
+    return {
+      startMarginCm: 0,
+      endMarginCm: 0,
+      minLeftCm: 0,
+      maxRightCm: 0,
+      usableSpanCm: 0,
+    } as ElevationHorizontalBoundsCm;
+  }
+  return elevationHorizontalBoundsForWall(wall.id, wall.length);
+});
+
+const elevationConnectedBandWidthsPx = computed(() => ({
+  start: elevationHorizontalBounds.value.startMarginCm * elevationLayout.value.scale,
+  end: elevationHorizontalBounds.value.endMarginCm * elevationLayout.value.scale,
+}));
 
 const elevationItems = computed(() => {
   if (!elevationWallId.value) return [] as PlacedItem[];
@@ -576,8 +658,9 @@ const elevationOrderMetrics = computed(() => {
   }
 
   const topClearanceCm = Math.max(0, roomStore.height - activeRect.topCm);
-  const leftGapCm = Math.max(0, activeRect.leftCm);
-  const rightGapCm = Math.max(0, wall.length - activeRect.rightCm);
+  const horizontalBounds = elevationHorizontalBounds.value;
+  const leftGapCm = Math.max(0, activeRect.leftCm - horizontalBounds.minLeftCm);
+  const rightGapCm = Math.max(0, horizontalBounds.maxRightCm - activeRect.rightCm);
   const orderedUnits = [...elevationClosetBlocks.value].sort((a, b) => a.leftCm - b.leftCm);
 
   return {
@@ -609,13 +692,14 @@ function elevationItemGeometryCm(
   item: Pick<PlacedItem, "width" | "height" | "leftPosition" | "elevation">,
 ): ElevationItemGeometryCm {
   const layout = elevationLayout.value;
+  const horizontalBounds = elevationHorizontalBounds.value;
   const widthCm = Math.max(1, item.width);
   const heightCm = Math.max(1, item.height);
 
-  const maxLeftCm = Math.max(0, layout.wallLengthCm - widthCm);
-  const leftCm = Math.max(
-    0,
-    Math.min(maxLeftCm, Math.max(0, item.leftPosition) * CM_PER_INCH),
+  const leftCm = clampElevationLeftCm(
+    Math.max(0, item.leftPosition) * CM_PER_INCH,
+    widthCm,
+    horizontalBounds,
   );
 
   const maxElevationCm = Math.max(0, layout.roomHeightCm - heightCm);
@@ -652,12 +736,23 @@ function elevationOpeningRectCm(
   item: Pick<PlacedItem, "id" | "width" | "height" | "leftPosition" | "elevation">,
   wallLengthCm: number,
   roomHeightCm: number,
+  horizontalBounds?: ElevationHorizontalBoundsCm,
 ): ElevationRectCm {
+  const bounds =
+    horizontalBounds ??
+    ({
+      startMarginCm: 0,
+      endMarginCm: 0,
+      minLeftCm: 0,
+      maxRightCm: Math.max(0, wallLengthCm),
+      usableSpanCm: Math.max(0, wallLengthCm),
+    } as ElevationHorizontalBoundsCm);
   const widthCm = Math.max(1, item.width);
   const heightCm = Math.max(1, item.height);
-  const leftCm = Math.max(
-    0,
-    Math.min(Math.max(0, wallLengthCm - widthCm), Math.max(0, item.leftPosition) * CM_PER_INCH),
+  const leftCm = clampElevationLeftCm(
+    Math.max(0, item.leftPosition) * CM_PER_INCH,
+    widthCm,
+    bounds,
   );
   const bottomCm = Math.max(
     0,
@@ -675,8 +770,9 @@ function elevationOpeningRectCm(
 function elevationOpeningRectsCmForCurrentWall(): ElevationRectCm[] {
   const wall = elevationWall.value;
   if (!wall) return [];
+  const horizontalBounds = elevationHorizontalBounds.value;
   return elevationItems.value.map((item) =>
-    elevationOpeningRectCm(item, wall.length, roomStore.height),
+    elevationOpeningRectCm(item, wall.length, roomStore.height, horizontalBounds),
   );
 }
 
@@ -715,17 +811,30 @@ function isClosetPlacementValid(
 ): boolean {
   const wall = roomStore.walls.find((entry) => entry.id === wallId);
   if (!wall) return false;
+  const horizontalBounds = elevationHorizontalBoundsForWall(wallId, wall.length);
 
   if (candidate.widthCm < 1 || candidate.heightCm < 1) return false;
-  if (candidate.leftCm < 0 || candidate.bottomCm < 0) return false;
-  if (candidate.leftCm + candidate.widthCm > wall.length) return false;
+  if (horizontalBounds.usableSpanCm <= ELEVATION_BOUNDS_EPSILON_CM) return false;
+  if (candidate.leftCm < horizontalBounds.minLeftCm - ELEVATION_BOUNDS_EPSILON_CM) return false;
+  if (candidate.bottomCm < 0) return false;
+  if (
+    candidate.leftCm + candidate.widthCm >
+    horizontalBounds.maxRightCm + ELEVATION_BOUNDS_EPSILON_CM
+  ) {
+    return false;
+  }
   if (candidate.bottomCm + candidate.heightCm > roomStore.height) return false;
 
   const candidateRect = elevationClosetRectCm(candidate);
 
   for (const opening of roomStore.items) {
     if (opening.wallId !== wallId || !isDoorOrWindowItem(opening)) continue;
-    const openingRect = elevationOpeningRectCm(opening, wall.length, roomStore.height);
+    const openingRect = elevationOpeningRectCm(
+      opening,
+      wall.length,
+      roomStore.height,
+      horizontalBounds,
+    );
     if (rectsOverlapCm(candidateRect, openingRect)) return false;
   }
 
@@ -766,9 +875,12 @@ function findFirstValidClosetLeftCm(
 ): number | null {
   const wall = roomStore.walls.find((entry) => entry.id === wallId);
   if (!wall) return null;
+  const horizontalBounds = elevationHorizontalBoundsForWall(wallId, wall.length);
+  if (widthCm > horizontalBounds.usableSpanCm + ELEVATION_BOUNDS_EPSILON_CM) return null;
 
-  const maxLeft = Math.max(0, wall.length - widthCm);
-  for (let left = 0; left <= maxLeft; left += 1) {
+  const minLeft = Math.ceil(horizontalBounds.minLeftCm);
+  const maxLeft = Math.floor(horizontalBounds.maxRightCm - widthCm);
+  for (let left = minLeft; left <= maxLeft; left += 1) {
     if (
       isClosetPlacementValid(wallId, {
         id: "candidate",
@@ -998,6 +1110,8 @@ function onElevationPointerMove(e: PointerEvent) {
 
   const layout = elevationLayout.value;
   if (layout.scale <= 0) return;
+  const horizontalBounds = elevationHorizontalBounds.value;
+  if (horizontalBounds.usableSpanCm <= ELEVATION_BOUNDS_EPSILON_CM) return;
 
   if (elevationClosetDrag.active) {
     const closetId = elevationClosetDrag.closetId;
@@ -1010,10 +1124,12 @@ function onElevationPointerMove(e: PointerEvent) {
     const pointerPoint = screenToSvg(elevationSvgRef.value, e.clientX, e.clientY);
 
     if (elevationClosetDrag.mode === "move") {
-      const widthPx = closet.widthCm * layout.scale;
       const heightPx = closet.heightCm * layout.scale;
-      const minX = layout.wallX;
-      const maxX = layout.wallX + Math.max(0, layout.wallWidthPx - widthPx);
+      const minX = layout.wallX + horizontalBounds.minLeftCm * layout.scale;
+      const maxX =
+        layout.wallX +
+        Math.max(horizontalBounds.minLeftCm, horizontalBounds.maxRightCm - closet.widthCm) *
+          layout.scale;
       const minY = layout.wallY;
       const maxY = layout.wallY + Math.max(0, layout.wallHeightPx - heightPx);
 
@@ -1037,7 +1153,10 @@ function onElevationPointerMove(e: PointerEvent) {
 
     const deltaXcm = (pointerPoint.x - elevationClosetDrag.startPointerX) / layout.scale;
     const deltaYcm = (pointerPoint.y - elevationClosetDrag.startPointerY) / layout.scale;
-    const maxWidthCm = Math.max(1, layout.wallLengthCm - elevationClosetDrag.startLeftCm);
+    const maxWidthCm = Math.max(
+      1,
+      horizontalBounds.maxRightCm - elevationClosetDrag.startLeftCm,
+    );
     const maxHeightCm = Math.max(1, layout.roomHeightCm - elevationClosetDrag.startBottomCm);
 
     let nextWidthCm = elevationClosetDrag.startWidthCm;
@@ -1084,11 +1203,13 @@ function onElevationPointerMove(e: PointerEvent) {
   if (elevationDrag.mode === "move") {
     const itemWidthCm = Math.max(1, item.width);
     const itemHeightCm = Math.max(1, item.height);
-    const itemWidthPx = itemWidthCm * layout.scale;
     const itemHeightPx = itemHeightCm * layout.scale;
 
-    const minX = layout.wallX;
-    const maxX = layout.wallX + Math.max(0, layout.wallWidthPx - itemWidthPx);
+    const minX = layout.wallX + horizontalBounds.minLeftCm * layout.scale;
+    const maxX =
+      layout.wallX +
+      Math.max(horizontalBounds.minLeftCm, horizontalBounds.maxRightCm - itemWidthCm) *
+        layout.scale;
     const minY = layout.wallY;
     const maxY = layout.wallY + Math.max(0, layout.wallHeightPx - itemHeightPx);
 
@@ -1120,7 +1241,7 @@ function onElevationPointerMove(e: PointerEvent) {
   const nextProps: Partial<Pick<PlacedItem, "width" | "height">> = {};
 
   if (elevationDrag.mode === "resize-width" || elevationDrag.mode === "resize-both") {
-    const maxWidthCm = Math.max(1, layout.wallLengthCm - elevationDrag.startLeftCm);
+    const maxWidthCm = Math.max(1, horizontalBounds.maxRightCm - elevationDrag.startLeftCm);
     const nextWidthCm = Math.max(
       1,
       Math.min(maxWidthCm, elevationDrag.startWidthCm + deltaXcm),
@@ -2058,7 +2179,10 @@ function dimLinePoints(wall: {
 
       <!-- Center: 2D Floor Plan Canvas -->
       <main class="floorplan-canvas-area">
-        <div class="canvas-container">
+        <div
+          class="canvas-container"
+          :class="{ 'elevation-mode': showElevationOverlay }"
+        >
           <svg
             ref="svgRef"
             v-show="!showElevationOverlay"
@@ -2396,16 +2520,16 @@ function dimLinePoints(wall: {
                 v-if="elevationWallConnectivity.startConnected"
                 :x="elevationLayout.wallX"
                 :y="elevationLayout.wallY"
-                :width="Math.min(16, elevationLayout.wallWidthPx / 4)"
+                :width="elevationConnectedBandWidthsPx.start"
                 :height="elevationLayout.wallHeightPx"
                 class="elevation-connected-band"
               />
 
               <rect
                 v-if="elevationWallConnectivity.endConnected"
-                :x="elevationLayout.wallX + elevationLayout.wallWidthPx - Math.min(16, elevationLayout.wallWidthPx / 4)"
+                :x="elevationLayout.wallX + elevationLayout.wallWidthPx - elevationConnectedBandWidthsPx.end"
                 :y="elevationLayout.wallY"
-                :width="Math.min(16, elevationLayout.wallWidthPx / 4)"
+                :width="elevationConnectedBandWidthsPx.end"
                 :height="elevationLayout.wallHeightPx"
                 class="elevation-connected-band"
               />
@@ -3163,6 +3287,12 @@ function dimLinePoints(wall: {
   border-radius: 12px;
 }
 
+.canvas-container.elevation-mode {
+  width: 96%;
+  max-width: 1080px;
+  aspect-ratio: 16 / 10;
+}
+
 .floorplan-svg {
   width: 100%;
   height: 100%;
@@ -3172,8 +3302,9 @@ function dimLinePoints(wall: {
   position: absolute;
   inset: 0;
   z-index: 10;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  grid-template-rows: auto 1fr;
   gap: 8px;
   padding: 10px;
   border: 1px solid rgba(148, 163, 184, 0.22);
@@ -3182,6 +3313,7 @@ function dimLinePoints(wall: {
 }
 
 .elevation-header {
+  grid-column: 1 / 3;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3212,8 +3344,11 @@ function dimLinePoints(wall: {
 }
 
 .elevation-svg {
+  grid-column: 1;
+  grid-row: 2;
   width: 100%;
   height: 100%;
+  min-height: 0;
   border-radius: 10px;
   border: 1px solid rgba(148, 163, 184, 0.2);
   background:
@@ -3332,10 +3467,40 @@ function dimLinePoints(wall: {
 }
 
 .elevation-measurements-panel {
+  grid-column: 2;
+  grid-row: 2;
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 10px;
   padding: 8px 10px;
   background: rgba(15, 23, 42, 0.78);
+  overflow: auto;
+}
+
+@media (max-width: 1100px) {
+  .canvas-container.elevation-mode {
+    width: 92%;
+    max-width: 860px;
+    aspect-ratio: 4 / 3;
+  }
+
+  .elevation-overlay {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr auto;
+  }
+
+  .elevation-header {
+    grid-column: 1;
+  }
+
+  .elevation-svg {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .elevation-measurements-panel {
+    grid-column: 1;
+    grid-row: 3;
+  }
 }
 
 .elevation-measurements-title {

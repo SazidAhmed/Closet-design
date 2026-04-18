@@ -221,11 +221,19 @@ For creating complex, non-rectangular room shapes with manual control.
 - Openings are draggable in elevation:
   - Horizontal drag updates along-wall position (`positionAlongWall` via `moveItem`).
   - Vertical drag updates `elevation` via `updateItemProps`.
+- Horizontal opening movement and width resize are constrained to the selected wall's usable span:
+  - Start-connected endpoint reserves a left no-go margin equal to wall thickness.
+  - End-connected endpoint reserves a right no-go margin equal to wall thickness.
 - Selected opening shows resize handles in elevation:
   - Right handle resizes width.
   - Top handle resizes height.
   - Top-right corner handle resizes width and height together.
 - Existing right-side width/height/left/right/elevation inputs stay in sync with elevation edits.
+
+#### Connected Side-Wall Boundaries
+- Connected side-wall gray bands are not visual-only.
+- Bands represent strict no-go zones for all elevation elements (doors, windows, closet units).
+- Add/drag/resize operations are clamped/rejected so elements cannot cross into neighboring wall regions.
 
 #### Persistence / Visibility
 - Floor-plan SVG is hidden (not deleted) while elevation is open.

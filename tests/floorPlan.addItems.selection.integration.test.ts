@@ -277,6 +277,8 @@ describe('FloorPlan add item selection behavior', () => {
 
   it('adds a closet unit in elevation and shows ordering measurements', async () => {
     setActivePinia(createPinia())
+    const closetStore = useClosetStore()
+    closetStore.setCabinetDimensions({ width: 12 * CM_PER_INCH, height: 80 * CM_PER_INCH })
 
     const wrapper = mount(FloorPlan, {
       attachTo: document.body,
@@ -398,6 +400,94 @@ describe('FloorPlan add item selection behavior', () => {
 
     const afterBlockedResize = wrapper.find('[data-testid^="elevation-closet-"]')
     expect(Number(afterBlockedResize.attributes('width'))).toBe(startWidth)
+
+    wrapper.unmount()
+  })
+
+  it('keeps door and closet inside connected-wall side boundaries in elevation', async () => {
+    installSvgPointerPolyfill()
+    setActivePinia(createPinia())
+    const roomStore = useRoomStore()
+    const closetStore = useClosetStore()
+
+    closetStore.setCabinetDimensions({ width: 12 * CM_PER_INCH, height: 80 * CM_PER_INCH })
+
+    const wrapper = mount(FloorPlan, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          TopToolbar: true,
+          FooterBar: true,
+        },
+      },
+    })
+
+    const wallSegments = wrapper.findAll('polygon.wall-segment')
+    expect(wallSegments.length).toBeGreaterThan(0)
+    await wallSegments[0]!.trigger('click')
+    await nextTick()
+
+    const selectedWall = roomStore.walls[0]!
+    roomStore.addItem({
+      type: 'wall_opening',
+      category: 'door',
+      wallId: selectedWall.id,
+      positionAlongWall: 0.5,
+      width: 27 * CM_PER_INCH,
+      height: 72 * CM_PER_INCH,
+      leftPosition: 0,
+      rightPosition: 0,
+      elevation: 0,
+    })
+    await nextTick()
+
+    const addClosetButton = wrapper.find('[data-testid="add-elevation-closet-btn"]')
+    expect(addClosetButton.exists()).toBe(true)
+    await addClosetButton.trigger('click')
+    await nextTick()
+
+    const elevationButton = wrapper.find('[data-testid="open-elevation-btn"]')
+    expect(elevationButton.exists()).toBe(true)
+    await elevationButton.trigger('click')
+    await nextTick()
+
+    const connectedBands = wrapper.findAll('.elevation-connected-band')
+    expect(connectedBands.length).toBeGreaterThanOrEqual(1)
+    const leftBand = connectedBands[0]!
+    const leftBoundaryX = Number(leftBand.attributes('x')) + Number(leftBand.attributes('width'))
+
+    const doorRect = wrapper.find('[data-testid^="elevation-item-"]')
+    expect(doorRect.exists()).toBe(true)
+    const doorStartY = Number(doorRect.attributes('y'))
+
+    dispatchPointerDown(doorRect.element, Number(doorRect.attributes('x')) + 4, doorStartY + 4, 21)
+    await nextTick()
+
+    dispatchPointerLikeEvent('pointermove', leftBoundaryX - 200, doorStartY + 4)
+    dispatchPointerLikeEvent('pointerup', leftBoundaryX - 200, doorStartY + 4)
+    await nextTick()
+
+    const doorAfterMove = wrapper.find('[data-testid^="elevation-item-"]')
+    expect(Number(doorAfterMove.attributes('x'))).toBeGreaterThanOrEqual(leftBoundaryX - 0.5)
+
+    const closetRect = wrapper.find('[data-testid^="elevation-closet-"]')
+    expect(closetRect.exists()).toBe(true)
+    const closetStartY = Number(closetRect.attributes('y'))
+
+    dispatchPointerDown(
+      closetRect.element,
+      Number(closetRect.attributes('x')) + 4,
+      closetStartY + 4,
+      22,
+    )
+    await nextTick()
+
+    dispatchPointerLikeEvent('pointermove', leftBoundaryX - 240, closetStartY + 4)
+    dispatchPointerLikeEvent('pointerup', leftBoundaryX - 240, closetStartY + 4)
+    await nextTick()
+
+    const closetAfterMove = wrapper.find('[data-testid^="elevation-closet-"]')
+    expect(Number(closetAfterMove.attributes('x'))).toBeGreaterThanOrEqual(leftBoundaryX - 0.5)
 
     wrapper.unmount()
   })

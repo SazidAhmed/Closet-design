@@ -16,7 +16,7 @@ This supports practical planning for rooms with multiple walls/openings and mult
 
 1. Multiple closet blocks per wall (independent units).
 2. Door/window overlap is hard-blocked (invalid placements are not applied).
-3. Connected side-wall bands are visual-only (no forced clearance).
+3. Connected side-wall bands are hard no-go zones enforced with wall-thickness margins.
 4. First release is session-local (no schema/store migration for closet block persistence).
 5. Required measurements:
    - Left gap
@@ -64,9 +64,15 @@ Then projected to elevation SVG coordinates using existing layout scale.
 
 A closet candidate is valid only if:
 
-1. It stays inside wall length and room height bounds.
+1. It stays inside the usable wall span and room height bounds.
 2. It does not overlap any opening rect on the same wall.
 3. It does not overlap any other closet block on the same wall.
+
+Usable wall span in elevation:
+
+1. If selected wall start endpoint is connected, left no-go margin = wall thickness.
+2. If selected wall end endpoint is connected, right no-go margin = wall thickness.
+3. Horizontal drag/resize/add placement is clamped to the remaining usable span.
 
 Collision check uses axis-aligned rectangle overlap in wall-local cm space.
 
@@ -102,7 +108,7 @@ Closet interactions:
 2. Right handle -> width resize.
 3. Top handle -> height resize.
 4. Corner handle -> width + height resize.
-5. Any operation that would overlap an opening or another closet is rejected.
+5. Any operation that would overlap an opening, overlap another closet, or cross into connected side-wall no-go bands is rejected.
 
 ## 5.3 Measurements Panel
 
@@ -220,7 +226,7 @@ Current verification status:
 
 1. Elevation closet blocks are intentionally session-local in this phase (not persisted to schema/history).
 2. Pointer interaction tests in jsdom require SVG/pointer polyfills and manual event dispatch.
-3. Wall connectivity bands are visual context only and do not enforce side clearances.
+3. Wall connectivity bands are synchronized with strict horizontal constraints; the band edges are hard limits for doors, windows, and closet units.
 4. Collision is axis-aligned in wall-local 2D space; this is correct for current elevation model.
 
 ## 12. Tomorrow Start Checklist
