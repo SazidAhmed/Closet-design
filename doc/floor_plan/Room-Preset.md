@@ -2,6 +2,7 @@
 
 ## Date
 - April 9, 2026
+- April 18, 2026 (connectivity/joint rendering addendum)
 
 ## Scope
 This document describes the implementation details of Quick Room presets in Floor Plan, including:
@@ -145,6 +146,10 @@ Automated tests:
 - npm test
 - Result: 23/23 tests passing.
 
+Latest regression validation (April 18, 2026):
+- npm test
+- Result: 26/26 tests passing.
+
 Build validation:
 - npm run build
 - Result: successful build.
@@ -164,3 +169,21 @@ Build validation:
 - Add thumbnail previews for each quick preset card.
 - Add optional "Maintain aspect ratio" lock in quick resize.
 - Add tests that directly verify resizeRoom behavior on open presets.
+
+## 13. Open-Preset Add Wall Connectivity Addendum
+
+Scenario covered:
+1. User applies an open preset (for example U-open).
+2. User selects a boundary wall with one free endpoint.
+3. User clicks Add Wall and draws a connecting wall from that free endpoint.
+
+Expected behavior:
+1. Before connection, the free endpoint dot is green (`#22c55e`).
+2. After the new wall is created from that endpoint, the same endpoint turns yellow (`#fbbf24`).
+3. Add Wall continuation seeds from the exact continuation endpoint coordinate (no seed-time grid snap).
+
+Why this was needed:
+- Seed-time grid snapping could drift the new wall start enough that connectivity checks did not classify the endpoint as connected, leaving the dot green incorrectly.
+
+Visual joint note:
+- To reduce visible seams at the new-to-existing wall junction, wall polygons render with `stroke-linejoin="round"` and `stroke-linecap="round"`.

@@ -145,6 +145,20 @@ function findButtonByText(wrapper: ReturnType<typeof mount>, text: string) {
     .find((button) => button.text().includes(text))
 }
 
+function findVertexDotByPosition(
+  wrapper: ReturnType<typeof mount>,
+  target: Vec2,
+  tolerance = 1,
+) {
+  const dots = wrapper.findAll('circle.vertex-dot')
+  return dots.find((dot) => {
+    const cx = Number(dot.attributes('cx'))
+    const cy = Number(dot.attributes('cy'))
+    if (!Number.isFinite(cx) || !Number.isFinite(cy)) return false
+    return Math.hypot(cx - target[0], cy - target[1]) <= tolerance
+  })
+}
+
 async function beginDrawingSession(wrapper: ReturnType<typeof mount>) {
   const startDrawingButton =
     findButtonByText(wrapper, 'Custom Room') ??
@@ -335,6 +349,12 @@ describe('FloorPlan wall selection + angle UI integration', () => {
     // Wall 2 right endpoint (opposite inside-left) is free, so Add Wall is available.
     await wallPolygons[1]!.trigger('click')
 
+    const wall2Before = before[1]!
+    const expectedStart = wallEndPoint(wall2Before)
+    const freeBefore = findVertexDotByPosition(wrapper, expectedStart)
+    expect(freeBefore).toBeTruthy()
+    expect(freeBefore!.attributes('fill')).toBe('#22c55e')
+
     const addWallButton = findButtonByText(wrapper, 'Add Wall')
     expect(addWallButton).toBeTruthy()
     await addWallButton!.trigger('click')
@@ -358,11 +378,18 @@ describe('FloorPlan wall selection + angle UI integration', () => {
     const after = snapshotWalls(roomStore.walls)
     expect(after.length).toBe(3)
 
-    const wall2Before = before[1]!
-    const expectedStart = wallEndPoint(wall2Before)
     const newWall = after[2]!
 
     expectVecClose(newWall.position, expectedStart)
+
+    const connectedAfter = findVertexDotByPosition(wrapper, expectedStart)
+    expect(connectedAfter).toBeTruthy()
+    expect(connectedAfter!.attributes('fill')).toBe('#fbbf24')
+
+    const firstWallAfter = wrapper.find('polygon.wall-segment')
+    expect(firstWallAfter.exists()).toBe(true)
+    expect(firstWallAfter.attributes('stroke-linejoin')).toBe('round')
+    expect(firstWallAfter.attributes('stroke-linecap')).toBe('round')
 
     wrapper.unmount()
   })

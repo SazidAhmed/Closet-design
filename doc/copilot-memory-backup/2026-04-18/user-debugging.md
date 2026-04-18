@@ -1,0 +1,1 @@
+- Vitest v3 in this environment does not support --runInBand; use npm test (vitest run) without that flag.

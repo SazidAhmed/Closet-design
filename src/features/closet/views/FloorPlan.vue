@@ -845,10 +845,9 @@ function continueDrawing() {
   if (isConnectedVertex(continuationStart)) return;
 
   unlockDrawViewBox();
-  pendingStartVertex.value = [
-    snapToGrid(continuationStart[0]),
-    snapToGrid(continuationStart[1]),
-  ];
+  // Keep continuation anchored to the exact endpoint so connectivity detection
+  // remains stable when a new wall starts from an existing wall endpoint.
+  pendingStartVertex.value = [continuationStart[0], continuationStart[1]];
   mousePos.x = pendingStartVertex.value[0];
   mousePos.y = pendingStartVertex.value[1];
 
@@ -1321,6 +1320,8 @@ function dimLinePoints(wall: {
                 :fill="selectedWallId === wall.id ? '#e8c88a' : '#d4c9b8'"
                 :stroke="selectedWallId === wall.id ? '#f59e0b' : '#8b7355'"
                 :stroke-width="selectedWallId === wall.id ? 2 : 1"
+                stroke-linejoin="round"
+                stroke-linecap="round"
                 class="wall-segment"
                 @click.stop="selectWall(wall.id, $event)"
               />

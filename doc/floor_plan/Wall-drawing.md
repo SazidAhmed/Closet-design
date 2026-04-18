@@ -115,7 +115,7 @@ Note: No zero-length placeholder segment is created.
 2. User clicks Add Wall.
 3. System resolves the selected wall continuation endpoint as the endpoint opposite the inside-left pivot endpoint.
 4. Add Wall is shown only when that continuation endpoint is non-connected.
-5. `pendingStartVertex` is seeded from that continuation endpoint.
+5. `pendingStartVertex` is seeded from that continuation endpoint using the exact endpoint coordinate (no grid snap at seed time).
 6. First click places a segment starting from `pendingStartVertex`.
 
 Behavior when no wall selected:
@@ -157,6 +157,24 @@ Important stabilization:
 Preview line now prioritizes `pendingStartVertex` over chain end.
 
 This ensures Add Wall preview starts from selected wall anchor, not unrelated first wall points.
+
+## 7.4 Endpoint connectivity colors
+
+Vertex dots use connectivity state:
+
+- yellow (`#fbbf24`) means the vertex is connected,
+- green (`#22c55e`) means the vertex is non-connected.
+
+Connectivity is evaluated by incident endpoint count with a small tolerance, so a newly connected endpoint must visually transition from green to yellow after Add Wall creates a segment.
+
+## 7.5 Wall joint rendering
+
+To reduce visible seams at wall-to-wall joints (for example where a newly added vertical wall meets an existing horizontal wall), wall polygons render with:
+
+- `stroke-linejoin="round"`
+- `stroke-linecap="round"`
+
+This is a visual-only polish and does not change geometry or pivot behavior.
 
 
 ## 8. Key Problems Solved During Implementation
@@ -234,10 +252,26 @@ Problem:
 Fix:
 
 - Resolved selected-wall continuation from endpoint connectivity.
-- Preferred non-connected endpoint (green) for Add Wall start.
-- Kept deterministic fallback when both endpoints have same connectivity.
+- Enforced topology rule: continuation endpoint is opposite the inside-left pivot endpoint.
+- Seeded `pendingStartVertex` from the exact continuation endpoint coordinate (no seed-time grid quantization).
 
-## 8.8 Escape key removed walls instead of finishing
+## 8.8 Connected endpoint stayed green after continuation
+
+Problem:
+
+- In open preset flows, after selecting a boundary wall and adding a new wall from its free endpoint, the original endpoint could remain green even though geometry was now connected.
+
+Root cause:
+
+- Add Wall continuation seed was snapped to grid before storing `pendingStartVertex`, which could drift the new segment start beyond connectivity tolerance.
+
+Fix:
+
+- Continue flow now seeds from the exact continuation endpoint coordinate.
+- Regression test now checks color transition from green to yellow after the connecting wall is created.
+- Test also asserts continuation start coordinate continuity and wall polygon joint style attributes.
+
+## 8.9 Escape key removed walls instead of finishing
 
 Problem:
 
@@ -247,7 +281,7 @@ Fix:
 
 - Escape now exits drawing mode cleanly.
 
-## 8.9 Canvas click auto-started drawing unexpectedly
+## 8.10 Canvas click auto-started drawing unexpectedly
 
 Problem:
 
@@ -285,7 +319,7 @@ Added or updated behavior in `useRoomStore`:
 	- Start Drawing -> click anchor -> click next point to create first segment.
 
 3. Continue flow:
-	- Select wall -> Add Wall -> first click creates segment from selected wall non-connected endpoint (or deterministic fallback when needed).
+	- Select wall -> Add Wall -> first click creates segment from the exact continuation endpoint opposite inside-left pivot.
 
 4. Finish flow:
 	- Click near first point to close polygon, or press Escape to finish without closing.
@@ -308,7 +342,7 @@ No TypeScript or build-blocking errors remained after each accepted change.
 
 Current limitations:
 
-1. Continuation is endpoint-based (non-connected preferred), not arbitrary point along wall length.
+1. Continuation is endpoint-based (opposite inside-left pivot endpoint), not arbitrary point along wall length.
 2. Removing walls does not yet enforce polygon topology constraints.
 3. Self-intersections are not prevented.
 
@@ -350,7 +384,7 @@ A correct implementation must satisfy all of these:
 	- Add Wall (continue).
 3. First click in fresh drawing sets anchor only; no wall created yet.
 4. First real segment must be label 1.
-5. Add Wall must start from selected wall non-connected endpoint when available.
+5. Add Wall must start from the exact continuation endpoint opposite inside-left pivot, and that endpoint must be free for the action to appear.
 6. Escape must finish drawing mode, not undo/delete geometry.
 7. Remove Wall removes only selected segment and preserves remaining geometry.
 8. After remove, Add Wall remains available when walls still exist.
@@ -460,7 +494,7 @@ Always test these scenarios in a new app:
 1. Enter draw mode: no pre-rendered default walls unless explicitly started.
 2. First segment label starts at 1.
 3. Remove one wall from closed shape, then Add Wall still visible.
-4. Select a boundary wall, Add Wall, verify first new segment starts at selected wall non-connected endpoint.
+4. Select a boundary wall, Add Wall, verify first new segment starts at the exact continuation endpoint opposite inside-left pivot and endpoint color changes green to yellow after connection.
 5. Preview line origin matches pending start, not chain start.
 6. Escape does not delete walls.
 7. Canvas click in idle draw mode does not start or reset drawing.

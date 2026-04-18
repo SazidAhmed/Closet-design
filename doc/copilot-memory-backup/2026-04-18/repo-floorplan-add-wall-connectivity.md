@@ -1,0 +1,3 @@
+- Add Wall continuation start must use the exact selected wall endpoint (no grid snap), otherwise endpoint distance can exceed 1-unit connectivity tolerance and a connected joint may still render green.
+- Keep 45-degree snapping for user target direction, but do not quantize the continuation anchor itself.
+- Regression guard: verify endpoint color transitions green -> yellow after adding a wall from a previously free continuation endpoint.
