@@ -122,6 +122,12 @@ Show order-oriented values for selected closet (or first closet if none selected
 6. Top Clearance
 7. Bottom Elevation
 
+Fallback behavior when no closet exists:
+
+1. Show `Opening Measurements` for selected opening (or first opening on wall).
+2. If no openings exist, show `Wall Context` (wall width, usable width, blocked margins, opening/closet counts).
+3. Keep the right panel populated (never blank while elevation is open).
+
 ## 6. Technical Scope Boundaries
 
 Included in first release:
@@ -156,7 +162,8 @@ Implementation for Phase 1 and initial hardening is in place in FloorPlan:
 2. Connected-wall side-band computation and rendering is implemented.
 3. Closet overlay rendering and controls are implemented.
 4. Ordering measurement panel is implemented.
-5. Integration tests now cover both blocked and valid interaction paths.
+5. Measurement panel now has closet/opening/wall-context fallback modes to avoid empty state.
+6. Integration tests now cover blocked and valid interaction paths plus connected-side boundary behavior.
 
 ## 9. Implementation Log (2026-04-18)
 
@@ -194,7 +201,10 @@ In elevation overlay:
 1. Connected-side gray bands.
 2. Closet unit rectangles with selection state.
 3. Closet resize handles (width, height, corner).
-4. Order Measurements panel showing required values.
+4. Right-side measurements panel with fallback sections:
+   - `Order Measurements` (when closet metrics exist)
+   - `Opening Measurements` (when opening exists but no closet metrics)
+   - `Wall Context` (when no closet/opening metrics exist)
 
 ### 9.4 Measurements Implemented
 
@@ -208,6 +218,11 @@ For selected closet (fallback first closet if none selected):
 6. Top Clearance
 7. Bottom Elevation
 
+Additional panel modes:
+
+1. Opening Measurements includes type, width/height, left/right gaps, top clearance, and bottom elevation.
+2. Wall Context includes wall width, usable width, blocked left/right margins, and opening/closet counts.
+
 ## 10. Test Coverage Added Today
 
 In `tests/floorPlan.addItems.selection.integration.test.ts`:
@@ -216,6 +231,8 @@ In `tests/floorPlan.addItems.selection.integration.test.ts`:
 2. Elevation closet unit can be created and metrics panel renders.
 3. Drag/resize are blocked when operation would overlap opening (negative path).
 4. Drag/resize are allowed when operation is in valid non-overlap area (positive path).
+5. Doors/closets cannot cross connected side-wall no-go boundaries.
+6. Elevation measurements panel remains visible for opening-only scenarios.
 
 Current verification status:
 
