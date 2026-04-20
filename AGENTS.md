@@ -24,7 +24,7 @@ Core stack in active code:
 - Pinia (Options stores are currently used in this repo)
 - TresJS + Three.js for 3D
 - SVG-based 2D floor plan interactions (not Konva at this time)
-- Tailwind + custom component styles
+- Tailwind utilities + custom component styles (active step views use substantial scoped CSS)
 - Vitest for tests
 
 Important: do not reintroduce removed specs/docs content from deleted folders or old design frameworks.
@@ -40,6 +40,9 @@ Primary implementation folders:
 - tests: floor plan geometry and pivot/rotation regression suite
 
 Legacy or draft docs may exist under doc/, but code and tests are authoritative.
+
+Legacy implementation note:
+- `src/features/closet/views/Configurator.vue` and `src/views/Configurator.vue` are secondary/legacy and not part of the canonical `/closet/*` route flow.
 
 ## 3. State Ownership Contracts
 
@@ -200,6 +203,8 @@ Primary tests:
 - tests/roomRotation.test.ts
 - tests/roomRotation.openBothConnected.test.ts
 - tests/floorPlan.pivot.integration.test.ts
+- tests/floorPlan.addItems.selection.integration.test.ts
+- tests/floorPlan.presets.integration.test.ts
 
 Test command:
 - npm test
