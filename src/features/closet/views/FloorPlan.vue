@@ -2065,6 +2065,26 @@ function rotateSelectedWall(deltaDeg: number) {
   setSelectedWallAngleDeg(radToDeg(selectedWall.value.angle) + deltaDeg);
 }
 
+function setSelectedWallLengthInches(lengthIn: number) {
+  if (!selectedWall.value || !Number.isFinite(lengthIn)) return;
+  if (!isClosed.value && !lockedDrawViewBox.value) {
+    // Keep the frame fixed while resizing open/boundary structures.
+    lockDrawViewBoxToCurrentFrame();
+  }
+
+  roomStore.resizeWallLength(
+    selectedWall.value.id,
+    inchesToCm(lengthIn),
+    "end",
+  );
+}
+
+function onSelectedWallLengthInput(e: Event) {
+  const next = Number((e.target as HTMLInputElement).value);
+  if (!Number.isFinite(next)) return;
+  setSelectedWallLengthInches(next);
+}
+
 /** Wall midpoint for label placement */
 function wallMidpoint(wall: {
   position: [number, number];
@@ -2885,12 +2905,7 @@ function dimLinePoints(wall: {
                 class="prop-input"
                 type="number"
                 :value="cmToInches(selectedWall.length)"
-                @input="
-                  (e: Event) =>
-                    roomStore.updateWallProps(selectedWall!.id, {
-                      length: inchesToCm(Number((e.target as HTMLInputElement).value)),
-                    })
-                "
+                @input="onSelectedWallLengthInput"
               />
             </div>
 

@@ -344,6 +344,23 @@ function wallEndpointConnectivity(walls: Room['walls'], wallIdx: number): {
   return { startConnected, endConnected }
 }
 
+function setWallFromPoints(wall: Room['walls'][number], start: Vec2, end: Vec2): void {
+  const dx = end[0] - start[0]
+  const dy = end[1] - start[1]
+  const dist = Math.hypot(dx, dy)
+  wall.position = [start[0], start[1]]
+  if (dist < 1e-9) {
+    wall.length = 1
+    return
+  }
+  wall.length = dist
+  wall.angle = Math.atan2(dy, dx)
+}
+
+function translateWall(wall: Room['walls'][number], dx: number, dy: number): void {
+  wall.position = [wall.position[0] + dx, wall.position[1] + dy]
+}
+
 export const useRoomStore = defineStore('room', {
   state: (): Room & { closetOffsetX: number; closetOffsetY: number; closetOffsetZ: number } => ({
     ...createDefaultRoom(),
@@ -385,8 +402,129 @@ export const useRoomStore = defineStore('room', {
 
     /** Resize a wall by its ID. */
     setWallLength(wallId: string, length: number) {
-      const wall = this.walls.find((w) => w.id === wallId)
-      if (wall) wall.length = length
+      this.resizeWallLength(wallId, length, 'end')
+    },
+
+    /** Resize a wall while preserving connectivity through topology-aware propagation. */
+    resizeWallLength(wallId: string, length: number, growthSide: 'start' | 'end' = 'end') {
+      const walls = this.walls
+      const selectedIdx = walls.findIndex((w) => w.id === wallId)
+      if (selectedIdx < 0 || !Number.isFinite(length)) return
+
+      const wall = walls[selectedIdx]!
+      const nextLength = clampWall(length)
+      const delta = nextLength - wall.length
+      if (Math.abs(delta) < 1e-9) return
+
+      const ux = Math.cos(wall.angle)
+      const uy = Math.sin(wall.angle)
+
+      const translateConnectedFromEnd = (dx: number, dy: number) => {
+        const chain: number[] = []
+        const visited = new Set<number>([selectedIdx])
+        let current = selectedIdx
+        let loopsToSelected = false
+
+        while (true) {
+          const next = findWallConnectedToEnd(walls, current)
+          if (!next) break
+          if (next.idx === selectedIdx) {
+            loopsToSelected = true
+            break
+          }
+          if (visited.has(next.idx)) break
+          visited.add(next.idx)
+          chain.push(next.idx)
+          current = next.idx
+        }
+
+        if (chain.length === 0) return
+
+        if (loopsToSelected) {
+          const bridgeIdx = chain[chain.length - 1]!
+          for (let i = 0; i < chain.length - 1; i += 1) {
+            translateWall(walls[chain[i]!]!, dx, dy)
+          }
+
+          const bridgeStart =
+            chain.length > 1
+              ? wallEndPoint(walls[chain[chain.length - 2]!]!)
+              : wallEndPoint(wall)
+          const fixedEnd: Vec2 = [wall.position[0], wall.position[1]]
+          setWallFromPoints(walls[bridgeIdx]!, bridgeStart, fixedEnd)
+          return
+        }
+
+        for (const idx of chain) {
+          translateWall(walls[idx]!, dx, dy)
+        }
+      }
+
+      const translateConnectedFromStart = (dx: number, dy: number) => {
+        const chain: number[] = []
+        const visited = new Set<number>([selectedIdx])
+        let current = selectedIdx
+        let loopsToSelected = false
+
+        while (true) {
+          const prev = findWallConnectedToStart(walls, current)
+          if (!prev) break
+          if (prev.idx === selectedIdx) {
+            loopsToSelected = true
+            break
+          }
+          if (visited.has(prev.idx)) break
+          visited.add(prev.idx)
+          chain.push(prev.idx)
+          current = prev.idx
+        }
+
+        if (chain.length === 0) return
+
+        if (loopsToSelected) {
+          const bridgeIdx = chain[chain.length - 1]!
+          for (let i = 0; i < chain.length - 1; i += 1) {
+            translateWall(walls[chain[i]!]!, dx, dy)
+          }
+
+          const fixedStart = wallEndPoint(wall)
+          const bridgeEnd: Vec2 =
+            chain.length > 1
+              ? [
+                walls[chain[chain.length - 2]!]!.position[0],
+                walls[chain[chain.length - 2]!]!.position[1],
+              ]
+              : [wall.position[0], wall.position[1]]
+          setWallFromPoints(walls[bridgeIdx]!, fixedStart, bridgeEnd)
+          return
+        }
+
+        for (const idx of chain) {
+          translateWall(walls[idx]!, dx, dy)
+        }
+      }
+
+      const { startConnected, endConnected } = wallEndpointConnectivity(walls, selectedIdx)
+
+      if (growthSide === 'end') {
+        if (endConnected) {
+          translateConnectedFromEnd(ux * delta, uy * delta)
+        }
+        wall.length = nextLength
+      } else {
+        if (startConnected) {
+          translateConnectedFromStart(-ux * delta, -uy * delta)
+        }
+        wall.position = [
+          wall.position[0] - ux * delta,
+          wall.position[1] - uy * delta,
+        ]
+        wall.length = nextLength
+      }
+
+      for (const item of this.items) {
+        recalculateDoorWindowSidePositions(item, this.walls)
+      }
     },
 
     /**

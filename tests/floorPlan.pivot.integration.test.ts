@@ -145,6 +145,18 @@ function findButtonByText(wrapper: ReturnType<typeof mount>, text: string) {
     .find((button) => button.text().includes(text))
 }
 
+function findLengthInput(wrapper: ReturnType<typeof mount>) {
+  const rows = wrapper.findAll('.wall-props .prop-row')
+  for (const row of rows) {
+    const label = row.find('label')
+    if (!label.exists()) continue
+    if (label.text().trim() !== 'Length') continue
+    const input = row.find('input')
+    if (input.exists()) return input
+  }
+  return null
+}
+
 function findVertexDotByPosition(
   wrapper: ReturnType<typeof mount>,
   target: Vec2,
@@ -210,6 +222,52 @@ describe('FloorPlan wall selection + angle UI integration', () => {
 
     const viewBoxAfter = svg.attributes('viewBox')
     expect(viewBoxAfter).toBe(viewBoxBefore)
+
+    wrapper.unmount()
+  })
+
+  it('keeps draw viewBox locked during repeated wall length updates in open topology', async () => {
+    setActivePinia(createPinia())
+    const roomStore = useRoomStore()
+
+    const wrapper = mount(FloorPlan, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          TopToolbar: true,
+          FooterBar: true,
+        },
+      },
+    })
+
+    await beginDrawingSession(wrapper)
+    setTwoWallRightEndpointScenario(roomStore)
+    await nextTick()
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+
+    const wallPolygons = wrapper.findAll('polygon.wall-segment')
+    expect(wallPolygons.length).toBe(2)
+    await wallPolygons[0]!.trigger('click')
+
+    const svg = wrapper.find('svg.draw-canvas')
+    expect(svg.exists()).toBe(true)
+    const viewBoxBefore = svg.attributes('viewBox')
+    expect(viewBoxBefore).toBeTruthy()
+
+    const lengthInput = findLengthInput(wrapper)
+    expect(lengthInput).toBeTruthy()
+
+    await lengthInput!.setValue('70')
+    await nextTick()
+    const viewBoxAfterFirst = svg.attributes('viewBox')
+    expect(viewBoxAfterFirst).toBe(viewBoxBefore)
+
+    await lengthInput!.setValue('85')
+    await nextTick()
+    const viewBoxAfterSecond = svg.attributes('viewBox')
+    expect(viewBoxAfterSecond).toBe(viewBoxBefore)
 
     wrapper.unmount()
   })
