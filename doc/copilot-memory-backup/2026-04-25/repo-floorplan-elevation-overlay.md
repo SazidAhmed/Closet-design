@@ -1,0 +1,9 @@
+- FloorPlan elevation is implemented as a center-canvas overlay, not a route/modal; both sidebars stay visible.
+- Floor-plan SVG is hidden with v-show during elevation and restored on close (state preserved, drawing not destroyed).
+- Elevation entry is in the selected-wall right sidebar panel (`Elevation` button) and appears only when a wall is selected.
+- Elevation renders only door/window items attached to the opened wall and supports drag edits: X -> moveItem (along-wall), Y -> updateItemProps.elevation.
+- Integration guard added in tests/floorPlan.addItems.selection.integration.test.ts for open/close + wall-specific item filtering + floor-plan restoration.
+- Selected elevation opening now exposes width/height/corner resize handles; width clamps by remaining wall span from left edge, height clamps by room height above current elevation.
+- Test guard also verifies resize handles appear when an elevation opening is selected.
+- Phase-1 closet-fit start: session-local multi-closet blocks per wall are modeled in FloorPlan elevation with hard collision blocking against door/window and other closet rectangles.
+- Elevation now shows connected-side gray bands and an order-measurement panel (left/right gaps, nearest opening distance, total/unit widths, top clearance, bottom elevation).
