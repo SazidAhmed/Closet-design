@@ -166,4 +166,48 @@ describe('wall length growth-side behavior', () => {
     const after = snapshotWalls(store.walls)
     expectClosedConnectivity(after)
   })
+
+  it('closed room end-growth only changes selected wall length', () => {
+    const store = createStore()
+
+    const before = snapshotWalls(store.walls)
+    expect(before.length).toBeGreaterThanOrEqual(4)
+
+    const selectedIdx = 3
+    const selectedBefore = before[selectedIdx]!
+    const requestedLength = selectedBefore.length + 35
+
+    store.resizeWallLength(selectedBefore.id, requestedLength, 'end')
+
+    const after = snapshotWalls(store.walls)
+    expectClosedConnectivity(after)
+
+    expect(after[selectedIdx]!.length).toBeCloseTo(requestedLength, 6)
+    for (let i = 0; i < before.length; i += 1) {
+      if (i === selectedIdx) continue
+      expect(after[i]!.length).toBeCloseTo(before[i]!.length, 6)
+    }
+  })
+
+  it('closed room start-growth only changes selected wall length', () => {
+    const store = createStore()
+
+    const before = snapshotWalls(store.walls)
+    expect(before.length).toBeGreaterThanOrEqual(4)
+
+    const selectedIdx = 3
+    const selectedBefore = before[selectedIdx]!
+    const requestedLength = selectedBefore.length - 30
+
+    store.resizeWallLength(selectedBefore.id, requestedLength, 'start')
+
+    const after = snapshotWalls(store.walls)
+    expectClosedConnectivity(after)
+
+    expect(after[selectedIdx]!.length).toBeCloseTo(requestedLength, 6)
+    for (let i = 0; i < before.length; i += 1) {
+      if (i === selectedIdx) continue
+      expect(after[i]!.length).toBeCloseTo(before[i]!.length, 6)
+    }
+  })
 })

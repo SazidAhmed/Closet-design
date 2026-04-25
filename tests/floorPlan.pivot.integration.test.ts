@@ -272,6 +272,46 @@ describe('FloorPlan wall selection + angle UI integration', () => {
     wrapper.unmount()
   })
 
+  it('keeps draw viewBox locked during repeated wall length updates in closed room', async () => {
+    setActivePinia(createPinia())
+
+    const wrapper = mount(FloorPlan, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          TopToolbar: true,
+          FooterBar: true,
+        },
+      },
+    })
+
+    await nextTick()
+
+    const wallPolygons = wrapper.findAll('polygon.wall-segment')
+    expect(wallPolygons.length).toBeGreaterThanOrEqual(4)
+    await wallPolygons[3]!.trigger('click')
+
+    const svg = wrapper.find('svg.draw-canvas')
+    expect(svg.exists()).toBe(true)
+    const viewBoxBefore = svg.attributes('viewBox')
+    expect(viewBoxBefore).toBeTruthy()
+
+    const lengthInput = findLengthInput(wrapper)
+    expect(lengthInput).toBeTruthy()
+
+    await lengthInput!.setValue('110')
+    await nextTick()
+    const viewBoxAfterFirst = svg.attributes('viewBox')
+    expect(viewBoxAfterFirst).toBe(viewBoxBefore)
+
+    await lengthInput!.setValue('120')
+    await nextTick()
+    const viewBoxAfterSecond = svg.attributes('viewBox')
+    expect(viewBoxAfterSecond).toBe(viewBoxBefore)
+
+    wrapper.unmount()
+  })
+
   it('keeps wall-2 inner-notch pivot fixed across repeated angle button updates', async () => {
     setActivePinia(createPinia())
     const roomStore = useRoomStore()

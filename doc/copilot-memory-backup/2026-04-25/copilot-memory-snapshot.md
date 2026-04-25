@@ -44,6 +44,6 @@
 
 - Add Wall continuation now uses only the endpoint opposite inside-left anchor ("right" endpoint), and the button is shown only when that endpoint is free; no Add Wall fallback when no wall is selected.
 
-## Source: /memories/session/
+## Source: /memories/session/plan.md
 
-No active session memory files were present in /memories/session/ at backup time.
+Captured in backup file: doc/copilot-memory-backup/2026-04-25/session-plan.md

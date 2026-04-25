@@ -1,114 +1,88 @@
-# Wall Length Growth-Side Implementation Plan
 
-## Goal
-Implement deterministic wall-length growth behavior for all connectivity topologies while preserving geometry continuity and reusing the same draw-canvas viewport locking strategy already used for wall rotation.
+## Plan: Closed Resize With Fixed Neighbor Lengths
 
-## Scope
+Implement closed-room wall-length resizing so only the selected wall length changes, connected wall lengths stay unchanged, connected wall angles/positions may update, and the floor-plan viewport remains visually stable (no jump/drift) during edits.
+
+**Steps**
+
+1. Baseline and lock invariants from your reported case.
+
+   - Reproduce closed 4-wall case where increasing wall 4 currently changes wall 3 length and shifts frame.
+   - Capture baseline invariants for tests:
+     - Selected wall length changes by requested delta.
+     - Non-selected wall lengths remain constant.
+     - Room remains closed after each edit.
+     - Draw frame does not visibly jump during repeated edits.
+2. Refactor closed-loop branch in `src/stores/useRoomStore.ts` to preserve non-selected lengths.
+
+   - Target the `resizeWallLength` looped branches (growth from end/start).
+   - Replace current bridge-wall rebuild behavior (which changes bridge length) with a solver that:
+     - Keeps segment lengths fixed for all non-selected walls.
+     - Solves/moves vertices so endpoint connectivity is preserved.
+     - Updates wall angles/positions from solved vertices.
+   - Maintain deterministic behavior using existing winding/pivot helpers where relevant.
+3. Define solver behavior for infeasible deltas (hard constraints).
+
+   - Add explicit fallback policy when exact fixed-length closed solution is impossible:
+     - Preferred: clamp to max feasible delta while keeping closure and fixed non-selected lengths.
+     - Alternative: reject update (no-op) if clamp is not acceptable.
+   - Keep behavior deterministic and testable; avoid silent topology break.
+4. Keep viewport stable for closed-room length edits.
+
+   - In `src/features/closet/views/FloorPlan.vue`, maintain a stable locked draw frame during repeated closed-room length edits so the scene does not recenter or drift.
+   - Ensure lock lifecycle remains compatible with existing closed-room rotation contract and open-topology behavior.
+   - If a lock refresh is needed, apply it only in a way that does not produce visible jump.
+5. Add/extend tests to encode the new rule set.
+
+   - Store tests (`tests/wallLengthGrowth.test.ts`):
+     - New closed-room increase test asserting non-selected wall lengths are unchanged (including wall 3), closure preserved, selected wall changed.
+     - Symmetric closed-room decrease test with same invariants.
+     - Infeasible-delta test validating clamp/reject policy.
+   - Integration tests (`tests/floorPlan.pivot.integration.test.ts`):
+     - Closed-room repeated length increases keep frame visually stable (no jump across repeated inputs).
+     - Closed-room grow then shrink returns to near-baseline geometry within tolerance.
+6. Verification and regression safety.
+
+   - Run targeted suites:
+     - `wallLengthGrowth`
+     - `floorPlan.pivot.integration`
+     - `roomRotation` + `roomRotation.openBothConnected`
+   - Then run full suite with `npm test`.
+   - Validate no regressions in pivot endpoint stability and closed-room rotation behavior.
+
+**Relevant files**
+
+- `src/stores/useRoomStore.ts` — `resizeWallLength` closed-loop logic; endpoint/chain handling.
+- `src/features/closet/views/FloorPlan.vue` — draw frame lock behavior during closed-room length edits.
+- `tests/wallLengthGrowth.test.ts` — store invariants for closed-room grow/shrink.
+- `tests/floorPlan.pivot.integration.test.ts` — viewport stability and interaction-level assertions.
+- `tests/roomRotation.test.ts` and `tests/roomRotation.openBothConnected.test.ts` — regression guards.
+- `doc/floor_plan/Wall-Length-Implementation.md` and `doc/floor_plan/to_fix.md` — update behavior contract and notes.
+
+**Verification**
+
+1. Automated:
+   - Run targeted tests (store + integration + pivot/rotation).
+   - Then full `npm test`.
+2. Manual:
+   - Closed rectangle preset in Overhead.
+   - Increase wall 4 repeatedly: wall 3 stays at original length; angles may change; room stays closed; frame does not jump.
+   - Decrease wall 4 repeatedly: symmetric correctness.
+   - Grow then shrink back: geometry returns near initial values within tolerance.
+
+**Decisions**
+
 - In scope:
-  - Wall length edit behavior in floor plan draw mode.
-  - Connectivity-safe geometry updates for selected wall and affected neighbors.
-  - Viewport lock/unlock behavior during length edits to prevent recenter drift.
-  - Regression tests for connectivity + viewport stability.
+  - Closed-room resize semantics change: non-selected wall lengths fixed, angles allowed to change.
+  - Closed-room viewport stability during length edits.
 - Out of scope:
-  - Door/window placement rules.
-  - New drawing flow changes unrelated to wall length.
-  - 3D scene behavior.
+  - Reworking open-topology resize semantics.
+  - Altering pivot endpoint stability rules for angle edits.
+  - Footer/canvas redesign unrelated to geometry behavior.
+- Fallback policy recommendation: clamp-to-feasible delta is preferred over breaking closure.
 
-## Existing Contracts To Preserve
-1. No disconnections: any shared endpoint before edit remains shared after edit.
-2. Deterministic behavior: growth side must not depend on click jitter.
-3. Store ownership: geometry mutation stays in room store actions.
-4. Closed room integrity: maintain valid closed loop for closed topologies.
-5. Viewport stability: follow the same lock pattern used by rotation to avoid apparent drift.
+**Further Considerations**
 
-## Topology Rules For Length Growth
-1. Both endpoints connected (closed room or internal attached wall)
-	- Increase selected wall length from configured growth side (default: right-side behavior).
-	- Move affected connected chain(s) rigidly so unselected wall lengths/angles remain unchanged.
-	- Keep all joints connected.
-
-2. One endpoint connected (boundary wall)
-	- Connected endpoint acts as anchor unless growth-side policy requires opposite-side movement.
-	- Free endpoint extends/retracts along selected wall direction.
-	- If edit would otherwise break the connected side, translate connected neighbors rigidly to preserve continuity.
-
-3. No endpoints connected (standalone wall)
-	- Adjust selected wall only, by moving the side dictated by growth direction.
-	- No neighbor compensation needed.
-
-4. Hard constraint
-	- Never create gaps between previously connected walls.
-
-## Viewport Rules (Must Match Rotation Behavior)
-Use the existing draw-canvas frame locking approach already used during rotation:
-
-1. Before applying continuous length updates (drag or repeated +/- controls):
-	- Lock draw viewBox to current frame.
-
-2. During the edit sequence:
-	- Keep locked viewBox unchanged even if geometry bounds change.
-	- Do not auto-fit each incremental update.
-
-3. On edit completion/cancel:
-	- Unlock using the same lifecycle triggers used by rotation/draw-flow transitions.
-	- Preserve current existing unlock points (draw mode switches, clear/remove/undo flow).
-
-4. Rule of consistency:
-	- Length-edit lock/unlock entry points should call the same helper functions already used by rotation, not a duplicate viewport mechanism.
-
-## Implementation Steps
-1. Add/confirm a single room-store action for length updates by wall id and growth-side intent.
-2. In that action, classify selected wall connectivity (both/one/none connected).
-3. Implement topology branches:
-	- Both-connected branch: apply selected wall delta and rigidly move required connected structure.
-	- One-connected branch: anchor connected side, move free side, and compensate if needed.
-	- None-connected branch: local endpoint adjustment only.
-4. Ensure endpoint snapping/precision rules remain consistent with current wall model.
-5. In floor plan view interaction handlers:
-	- Lock viewport at edit start.
-	- Apply incremental length updates.
-	- Unlock on end/cancel using existing viewport lifecycle behavior.
-6. Keep selection/anchor state stable during repeated increments to avoid side flipping.
-
-## Data And API Notes
-1. Keep internal units in centimeters as currently defined.
-2. Convert only at input/output UI boundaries.
-3. Preserve existing public action signatures unless change is required; if changed, update call sites in one pass.
-
-## Regression Test Plan
-1. Store-level tests (new file suggested: tests/wallLengthGrowth.test.ts)
-	- Both-connected: selected wall grows, other walls keep dimensions, connectivity preserved.
-	- One-connected: free side extends correctly, connected side remains attached.
-	- None-connected: only selected wall changes.
-	- Repeated increments: no accumulated disconnections.
-
-2. Integration tests (extend floor plan integration suite)
-	- During repeated length updates, SVG viewBox remains fixed while locked.
-	- After edit completion, normal viewport lifecycle resumes.
-	- No visual recenter drift during incremental edits.
-
-3. Invariants asserted in tests
-	- Shared endpoints remain coincident within epsilon.
-	- Unselected wall lengths unchanged where branch contract requires.
-	- Closed topology remains closed.
-	- ViewBox before/after incremental sequence remains equal while lock is active.
-
-## Verification Commands
-1. npm test
-2. npm run build
-
-## Risks And Mitigations
-1. Risk: branching logic overlaps with rotation topology utilities.
-	- Mitigation: reuse existing connectivity helpers and chain traversal utilities where possible.
-
-2. Risk: viewport lock not released on all exits.
-	- Mitigation: wire lock/unlock through existing helper functions and verify cancel/undo/remove flows.
-
-3. Risk: side selection flips during repeated updates.
-	- Mitigation: store growth-side intent at interaction start and keep it stable until interaction ends.
-
-## Definition Of Done
-1. All three connectivity modes and no-disconnection rule behave deterministically.
-2. Length edits keep canvas framing stable using the same viewport lock rules as rotation.
-3. Tests cover geometry invariants and viewport lock stability.
-4. npm test and npm run build pass.
+1. Solver complexity for arbitrary n-wall concave rooms can be higher than current bridge rebuild; start with robust 4-wall and representative multi-wall tests before full generalization.
+2. If performance degrades during rapid input, apply lightweight batching/debounce in view-layer event handling without changing store invariants.
+3. If clamp-to-feasible is used, include subtle UI feedback so users understand why requested length was not fully applied.

@@ -2067,8 +2067,10 @@ function rotateSelectedWall(deltaDeg: number) {
 
 function setSelectedWallLengthInches(lengthIn: number) {
   if (!selectedWall.value || !Number.isFinite(lengthIn)) return;
-  if (!isClosed.value && !lockedDrawViewBox.value) {
-    // Keep the frame fixed while resizing open/boundary structures.
+  // Ensure the draw frame is locked for this edit so the canvas does not
+  // auto-fit or recenter during the resize. If a locked frame already
+  // exists (e.g. closed-room lock), reuse it to avoid visual jumps.
+  if (!lockedDrawViewBox.value) {
     lockDrawViewBoxToCurrentFrame();
   }
 

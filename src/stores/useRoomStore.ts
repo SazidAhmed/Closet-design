@@ -361,6 +361,89 @@ function translateWall(wall: Room['walls'][number], dx: number, dy: number): voi
   wall.position = [wall.position[0] + dx, wall.position[1] + dy]
 }
 
+function chainReachRange(lengths: number[]): { minReach: number; maxReach: number } {
+  if (lengths.length === 0) return { minReach: 0, maxReach: 0 }
+  const maxReach = lengths.reduce((sum, value) => sum + value, 0)
+  const longest = Math.max(...lengths)
+  const minReach = Math.max(0, longest - (maxReach - longest))
+  return { minReach, maxReach }
+}
+
+function directionOrFallback(from: Vec2, to: Vec2, fallback: Vec2): Vec2 {
+  const dx = to[0] - from[0]
+  const dy = to[1] - from[1]
+  const len = Math.hypot(dx, dy)
+  if (len < 1e-9) return [fallback[0], fallback[1]]
+  return [dx / len, dy / len]
+}
+
+function solveOpenChainFabrik(root: Vec2, target: Vec2, lengths: number[], seedPoints: Vec2[]): Vec2[] {
+  const segmentCount = lengths.length
+  if (segmentCount === 0) return [root, target]
+
+  const points: Vec2[] = seedPoints.map((point) => [point[0], point[1]])
+  if (points.length !== segmentCount + 1) {
+    return [root, ...Array.from({ length: segmentCount - 1 }, () => [root[0], root[1]] as Vec2), target]
+  }
+
+  const baseDir = directionOrFallback(root, target, [1, 0])
+  const rootTargetDist = Math.hypot(target[0] - root[0], target[1] - root[1])
+  const totalLength = lengths.reduce((sum, value) => sum + value, 0)
+
+  // Unreachable chain: lay segments straight from root toward target.
+  if (rootTargetDist >= totalLength - 1e-6) {
+    points[0] = [root[0], root[1]]
+    for (let i = 0; i < segmentCount; i += 1) {
+      const prev = points[i]!
+      points[i + 1] = [
+        prev[0] + baseDir[0] * lengths[i]!,
+        prev[1] + baseDir[1] * lengths[i]!,
+      ]
+    }
+    return points
+  }
+
+  const maxIterations = 72
+  const tolerance = 1e-7
+
+  points[0] = [root[0], root[1]]
+  points[segmentCount] = [target[0], target[1]]
+
+  for (let iter = 0; iter < maxIterations; iter += 1) {
+    // Backward pass: enforce target and backward lengths.
+    points[segmentCount] = [target[0], target[1]]
+    for (let i = segmentCount - 1; i >= 0; i -= 1) {
+      const next = points[i + 1]!
+      const current = points[i]!
+      const dir = directionOrFallback(next, current, [-baseDir[0], -baseDir[1]])
+      points[i] = [
+        next[0] + dir[0] * lengths[i]!,
+        next[1] + dir[1] * lengths[i]!,
+      ]
+    }
+
+    // Forward pass: enforce root and forward lengths.
+    points[0] = [root[0], root[1]]
+    for (let i = 0; i < segmentCount; i += 1) {
+      const current = points[i]!
+      const next = points[i + 1]!
+      const dir = directionOrFallback(current, next, baseDir)
+      points[i + 1] = [
+        current[0] + dir[0] * lengths[i]!,
+        current[1] + dir[1] * lengths[i]!,
+      ]
+    }
+
+    const end = points[segmentCount]!
+    if (Math.hypot(end[0] - target[0], end[1] - target[1]) <= tolerance) {
+      break
+    }
+  }
+
+  points[segmentCount] = [target[0], target[1]]
+  return points
+}
+
 export const useRoomStore = defineStore('room', {
   state: (): Room & { closetOffsetX: number; closetOffsetY: number; closetOffsetZ: number } => ({
     ...createDefaultRoom(),
@@ -505,6 +588,75 @@ export const useRoomStore = defineStore('room', {
       }
 
       const { startConnected, endConnected } = wallEndpointConnectivity(walls, selectedIdx)
+
+      const isClosedLoop = this.roomIsClosed && startConnected && endConnected && walls.length >= 3
+      if (isClosedLoop) {
+        const chainIndices: number[] = []
+        for (let step = 1; step < walls.length; step += 1) {
+          chainIndices.push((selectedIdx + step) % walls.length)
+        }
+
+        const chainLengths = chainIndices.map((idx) => walls[idx]!.length)
+        const { minReach, maxReach } = chainReachRange(chainLengths)
+        const resolvedLength = Math.max(minReach, Math.min(maxReach, nextLength))
+
+        // For closed loops, preserve non-selected wall lengths and solve only
+        // joint positions/angles to reconnect from selected end to start.
+        if (growthSide === 'end') {
+          wall.length = resolvedLength
+          const root = wallEndPoint(wall)
+          const target: Vec2 = [wall.position[0], wall.position[1]]
+          const seedPoints: Vec2[] = [root]
+          for (let i = 1; i < chainIndices.length; i += 1) {
+            const chainWall = walls[chainIndices[i]!]!
+            seedPoints.push([chainWall.position[0], chainWall.position[1]])
+          }
+          seedPoints.push(target)
+
+          const solvedPoints = solveOpenChainFabrik(root, target, chainLengths, seedPoints)
+          for (let i = 0; i < chainIndices.length; i += 1) {
+            const wallIdx = chainIndices[i]!
+            const chainWall = walls[wallIdx]!
+            const start = solvedPoints[i]!
+            const end = solvedPoints[i + 1]!
+            chainWall.position = [start[0], start[1]]
+            chainWall.length = chainLengths[i]!
+            chainWall.angle = normalizeAngle(Math.atan2(end[1] - start[1], end[0] - start[0]))
+          }
+        } else {
+          const fixedEnd = wallEndPoint(wall)
+          wall.length = resolvedLength
+          wall.position = [
+            fixedEnd[0] - ux * resolvedLength,
+            fixedEnd[1] - uy * resolvedLength,
+          ]
+
+          const root: Vec2 = [fixedEnd[0], fixedEnd[1]]
+          const target: Vec2 = [wall.position[0], wall.position[1]]
+          const seedPoints: Vec2[] = [root]
+          for (let i = 1; i < chainIndices.length; i += 1) {
+            const chainWall = walls[chainIndices[i]!]!
+            seedPoints.push([chainWall.position[0], chainWall.position[1]])
+          }
+          seedPoints.push(target)
+
+          const solvedPoints = solveOpenChainFabrik(root, target, chainLengths, seedPoints)
+          for (let i = 0; i < chainIndices.length; i += 1) {
+            const wallIdx = chainIndices[i]!
+            const chainWall = walls[wallIdx]!
+            const start = solvedPoints[i]!
+            const end = solvedPoints[i + 1]!
+            chainWall.position = [start[0], start[1]]
+            chainWall.length = chainLengths[i]!
+            chainWall.angle = normalizeAngle(Math.atan2(end[1] - start[1], end[0] - start[0]))
+          }
+        }
+
+        for (const item of this.items) {
+          recalculateDoorWindowSidePositions(item, this.walls)
+        }
+        return
+      }
 
       if (growthSide === 'end') {
         if (endConnected) {
