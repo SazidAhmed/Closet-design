@@ -97,6 +97,15 @@ function screenToSvg(
 
 onMounted(() => {
   appStore.setStep("floorplan");
+  // If no walls exist (fresh session, nothing in localStorage), apply the
+  // default preset so the room actually matches the highlighted preset button.
+  // If walls already exist (restored from localStorage), clear the preset
+  // selection so a saved layout isn't falsely shown as matching the preset.
+  if (roomStore.walls.length === 0) {
+    applyQuickPreset(DEFAULT_QUICK_ROOM_PRESET_ID);
+  } else {
+    quickPresetId.value = null;
+  }
 });
 
 // ───── Change Room Height dialog ───────────────────────────────────────────
