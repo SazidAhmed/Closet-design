@@ -11,9 +11,7 @@ import {
   QUICK_ROOM_PRESETS,
   createQuickRoomFromPreset,
 } from "../domain/quickRoomPresets";
-import {
-  wallInsideGuideAreaPoints,
-} from "../domain/geometry/insideWallSide";
+import { wallInsideGuideAreaPoints } from "../domain/geometry/insideWallSide";
 import { useHistoryStore } from "../../../stores/useHistoryStore";
 
 const roomStore = useRoomStore();
@@ -278,9 +276,7 @@ function onItemPointerMove(e: PointerEvent) {
   const lengthSq = dx * dx + dy * dy;
   if (lengthSq < 1) return;
 
-  let pos =
-    ((pt.x - start[0]) * dx + (pt.y - start[1]) * dy) /
-    lengthSq;
+  let pos = ((pt.x - start[0]) * dx + (pt.y - start[1]) * dy) / lengthSq;
 
   // Store-level clamping keeps opening width inside wall endpoints.
   pos = Math.max(0, Math.min(1, pos));
@@ -300,16 +296,15 @@ function deleteSelectedItem() {
 
 const selectedDoorWindowItem = computed<PlacedItem | null>(() => {
   if (!selectedItemId.value) return null;
-  const item = roomStore.items.find((entry) => entry.id === selectedItemId.value);
+  const item = roomStore.items.find(
+    (entry) => entry.id === selectedItemId.value,
+  );
   if (!item) return null;
   if (item.category === "door" || item.type === "window") return item;
   return null;
 });
 
-function onSelectedItemSizeInput(
-  dimension: "width" | "height",
-  e: Event,
-) {
+function onSelectedItemSizeInput(dimension: "width" | "height", e: Event) {
   if (!selectedDoorWindowItem.value) return;
   const valueIn = Number((e.target as HTMLInputElement).value);
   if (!Number.isFinite(valueIn)) return;
@@ -386,7 +381,11 @@ const elevationSvgRef = ref<SVGSVGElement | null>(null);
 const ELEVATION_VIEW_WIDTH = 980;
 const ELEVATION_VIEW_HEIGHT = 620;
 
-type ElevationInteractionMode = "move" | "resize-width" | "resize-height" | "resize-both";
+type ElevationInteractionMode =
+  | "move"
+  | "resize-width"
+  | "resize-height"
+  | "resize-both";
 
 const elevationDrag = reactive<{
   active: boolean;
@@ -446,7 +445,9 @@ type ElevationHorizontalBoundsCm = {
 const MAX_ELEVATION_CLOSETS_PER_WALL = 8;
 const ELEVATION_BOUNDS_EPSILON_CM = 0.001;
 const elevationClosetIdCounter = ref(1);
-const elevationClosetBlocksByWall = reactive<Record<string, ElevationClosetBlock[]>>({});
+const elevationClosetBlocksByWall = reactive<
+  Record<string, ElevationClosetBlock[]>
+>({});
 const selectedElevationClosetId = ref<string | null>(null);
 
 const elevationClosetDrag = reactive<{
@@ -477,17 +478,17 @@ const elevationClosetDrag = reactive<{
 
 const elevationWall = computed(() => {
   if (!elevationWallId.value) return null;
-  return roomStore.walls.find((wall) => wall.id === elevationWallId.value) ?? null;
+  return (
+    roomStore.walls.find((wall) => wall.id === elevationWallId.value) ?? null
+  );
 });
 
-function wallConnectivityForWall(
-  wall: {
-    id: string;
-    position: [number, number];
-    angle: number;
-    length: number;
-  },
-): { startConnected: boolean; endConnected: boolean } {
+function wallConnectivityForWall(wall: {
+  id: string;
+  position: [number, number];
+  angle: number;
+  length: number;
+}): { startConnected: boolean; endConnected: boolean } {
   const start: [number, number] = [wall.position[0], wall.position[1]];
   const end = wallEndPoint(wall);
   const tolerance = 1;
@@ -503,11 +504,17 @@ function wallConnectivityForWall(
     const otherStart: [number, number] = [other.position[0], other.position[1]];
     const otherEnd = wallEndPoint(other);
 
-    if (!startConnected && (pointsMatch(start, otherStart) || pointsMatch(start, otherEnd))) {
+    if (
+      !startConnected &&
+      (pointsMatch(start, otherStart) || pointsMatch(start, otherEnd))
+    ) {
       startConnected = true;
     }
 
-    if (!endConnected && (pointsMatch(end, otherStart) || pointsMatch(end, otherEnd))) {
+    if (
+      !endConnected &&
+      (pointsMatch(end, otherStart) || pointsMatch(end, otherEnd))
+    ) {
       endConnected = true;
     }
 
@@ -534,8 +541,12 @@ function elevationHorizontalBoundsForWall(
   }
 
   const connectivity = wallConnectivityForWall(wall);
-  const rawStartMargin = connectivity.startConnected ? Math.max(0, wall.thickness) : 0;
-  const rawEndMargin = connectivity.endConnected ? Math.max(0, wall.thickness) : 0;
+  const rawStartMargin = connectivity.startConnected
+    ? Math.max(0, wall.thickness)
+    : 0;
+  const rawEndMargin = connectivity.endConnected
+    ? Math.max(0, wall.thickness)
+    : 0;
   const startMarginCm = Math.min(rawStartMargin, minLength);
   const endMarginCm = Math.min(rawEndMargin, minLength);
   const minLeftCm = startMarginCm;
@@ -584,8 +595,10 @@ const elevationHorizontalBounds = computed(() => {
 });
 
 const elevationConnectedBandWidthsPx = computed(() => ({
-  start: elevationHorizontalBounds.value.startMarginCm * elevationLayout.value.scale,
-  end: elevationHorizontalBounds.value.endMarginCm * elevationLayout.value.scale,
+  start:
+    elevationHorizontalBounds.value.startMarginCm * elevationLayout.value.scale,
+  end:
+    elevationHorizontalBounds.value.endMarginCm * elevationLayout.value.scale,
 }));
 
 const elevationItems = computed(() => {
@@ -625,8 +638,9 @@ const elevationClosetBlocks = computed(() => {
 const selectedElevationCloset = computed(() => {
   if (!selectedElevationClosetId.value) return null;
   return (
-    elevationClosetBlocks.value.find((block) => block.id === selectedElevationClosetId.value) ??
-    null
+    elevationClosetBlocks.value.find(
+      (block) => block.id === selectedElevationClosetId.value,
+    ) ?? null
   );
 });
 
@@ -634,7 +648,8 @@ const elevationOrderMetrics = computed(() => {
   const wall = elevationWall.value;
   if (!wall || elevationClosetBlocks.value.length === 0) return null;
 
-  const active = selectedElevationCloset.value ?? elevationClosetBlocks.value[0] ?? null;
+  const active =
+    selectedElevationCloset.value ?? elevationClosetBlocks.value[0] ?? null;
   if (!active) return null;
 
   const activeRect: ElevationRectCm = {
@@ -660,8 +675,13 @@ const elevationOrderMetrics = computed(() => {
   const topClearanceCm = Math.max(0, roomStore.height - activeRect.topCm);
   const horizontalBounds = elevationHorizontalBounds.value;
   const leftGapCm = Math.max(0, activeRect.leftCm - horizontalBounds.minLeftCm);
-  const rightGapCm = Math.max(0, horizontalBounds.maxRightCm - activeRect.rightCm);
-  const orderedUnits = [...elevationClosetBlocks.value].sort((a, b) => a.leftCm - b.leftCm);
+  const rightGapCm = Math.max(
+    0,
+    horizontalBounds.maxRightCm - activeRect.rightCm,
+  );
+  const orderedUnits = [...elevationClosetBlocks.value].sort(
+    (a, b) => a.leftCm - b.leftCm,
+  );
 
   return {
     leftGapCm,
@@ -679,7 +699,9 @@ const elevationOpeningMetrics = computed(() => {
   if (!wall || elevationItems.value.length === 0) return null;
 
   const activeOpening =
-    elevationItems.value.find((item) => item.id === selectedItemId.value) ?? elevationItems.value[0] ?? null;
+    elevationItems.value.find((item) => item.id === selectedItemId.value) ??
+    elevationItems.value[0] ??
+    null;
   if (!activeOpening) return null;
 
   const horizontalBounds = elevationHorizontalBounds.value;
@@ -689,7 +711,10 @@ const elevationOpeningMetrics = computed(() => {
     0,
     horizontalBounds.maxRightCm - (geometry.leftCm + geometry.widthCm),
   );
-  const topClearanceCm = Math.max(0, roomStore.height - (geometry.elevationCm + geometry.heightCm));
+  const topClearanceCm = Math.max(
+    0,
+    roomStore.height - (geometry.elevationCm + geometry.heightCm),
+  );
 
   return {
     label: itemLabel(activeOpening.type),
@@ -772,14 +797,18 @@ function elevationItemRect(
     x: layout.wallX + geometry.leftCm * layout.scale,
     y:
       layout.wallY +
-      (layout.roomHeightCm - (geometry.elevationCm + geometry.heightCm)) * layout.scale,
+      (layout.roomHeightCm - (geometry.elevationCm + geometry.heightCm)) *
+        layout.scale,
     width: geometry.widthCm * layout.scale,
     height: geometry.heightCm * layout.scale,
   };
 }
 
 function elevationOpeningRectCm(
-  item: Pick<PlacedItem, "id" | "width" | "height" | "leftPosition" | "elevation">,
+  item: Pick<
+    PlacedItem,
+    "id" | "width" | "height" | "leftPosition" | "elevation"
+  >,
   wallLengthCm: number,
   roomHeightCm: number,
   horizontalBounds?: ElevationHorizontalBoundsCm,
@@ -802,7 +831,10 @@ function elevationOpeningRectCm(
   );
   const bottomCm = Math.max(
     0,
-    Math.min(Math.max(0, roomHeightCm - heightCm), Math.max(0, item.elevation) * CM_PER_INCH),
+    Math.min(
+      Math.max(0, roomHeightCm - heightCm),
+      Math.max(0, item.elevation) * CM_PER_INCH,
+    ),
   );
 
   return {
@@ -818,7 +850,12 @@ function elevationOpeningRectsCmForCurrentWall(): ElevationRectCm[] {
   if (!wall) return [];
   const horizontalBounds = elevationHorizontalBounds.value;
   return elevationItems.value.map((item) =>
-    elevationOpeningRectCm(item, wall.length, roomStore.height, horizontalBounds),
+    elevationOpeningRectCm(
+      item,
+      wall.length,
+      roomStore.height,
+      horizontalBounds,
+    ),
   );
 }
 
@@ -835,7 +872,9 @@ function elevationClosetRect(block: ElevationClosetBlock): ElevationItemRect {
   const layout = elevationLayout.value;
   return {
     x: layout.wallX + block.leftCm * layout.scale,
-    y: layout.wallY + (layout.roomHeightCm - (block.bottomCm + block.heightCm)) * layout.scale,
+    y:
+      layout.wallY +
+      (layout.roomHeightCm - (block.bottomCm + block.heightCm)) * layout.scale,
     width: block.widthCm * layout.scale,
     height: block.heightCm * layout.scale,
   };
@@ -857,11 +896,19 @@ function isClosetPlacementValid(
 ): boolean {
   const wall = roomStore.walls.find((entry) => entry.id === wallId);
   if (!wall) return false;
-  const horizontalBounds = elevationHorizontalBoundsForWall(wallId, wall.length);
+  const horizontalBounds = elevationHorizontalBoundsForWall(
+    wallId,
+    wall.length,
+  );
 
   if (candidate.widthCm < 1 || candidate.heightCm < 1) return false;
-  if (horizontalBounds.usableSpanCm <= ELEVATION_BOUNDS_EPSILON_CM) return false;
-  if (candidate.leftCm < horizontalBounds.minLeftCm - ELEVATION_BOUNDS_EPSILON_CM) return false;
+  if (horizontalBounds.usableSpanCm <= ELEVATION_BOUNDS_EPSILON_CM)
+    return false;
+  if (
+    candidate.leftCm <
+    horizontalBounds.minLeftCm - ELEVATION_BOUNDS_EPSILON_CM
+  )
+    return false;
   if (candidate.bottomCm < 0) return false;
   if (
     candidate.leftCm + candidate.widthCm >
@@ -887,7 +934,8 @@ function isClosetPlacementValid(
   const wallClosets = elevationClosetBlocksByWall[wallId] ?? [];
   for (const block of wallClosets) {
     if (options?.excludeId && block.id === options.excludeId) continue;
-    if (rectsOverlapCm(candidateRect, elevationClosetRectCm(block))) return false;
+    if (rectsOverlapCm(candidateRect, elevationClosetRectCm(block)))
+      return false;
   }
 
   return true;
@@ -921,8 +969,12 @@ function findFirstValidClosetLeftCm(
 ): number | null {
   const wall = roomStore.walls.find((entry) => entry.id === wallId);
   if (!wall) return null;
-  const horizontalBounds = elevationHorizontalBoundsForWall(wallId, wall.length);
-  if (widthCm > horizontalBounds.usableSpanCm + ELEVATION_BOUNDS_EPSILON_CM) return null;
+  const horizontalBounds = elevationHorizontalBoundsForWall(
+    wallId,
+    wall.length,
+  );
+  if (widthCm > horizontalBounds.usableSpanCm + ELEVATION_BOUNDS_EPSILON_CM)
+    return null;
 
   const minLeft = Math.ceil(horizontalBounds.minLeftCm);
   const maxLeft = Math.floor(horizontalBounds.maxRightCm - widthCm);
@@ -949,10 +1001,21 @@ function addElevationClosetBlockForSelectedWall() {
   const existing = elevationClosetBlocksByWall[wall.id] ?? [];
   if (existing.length >= MAX_ELEVATION_CLOSETS_PER_WALL) return;
 
-  const widthCm = Math.max(30, Math.min(wall.length, closetStore.cabinet.width));
-  const heightCm = Math.max(60, Math.min(roomStore.height, closetStore.cabinet.height));
+  const widthCm = Math.max(
+    30,
+    Math.min(wall.length, closetStore.cabinet.width),
+  );
+  const heightCm = Math.max(
+    60,
+    Math.min(roomStore.height, closetStore.cabinet.height),
+  );
   const bottomCm = 0;
-  const leftCm = findFirstValidClosetLeftCm(wall.id, widthCm, heightCm, bottomCm);
+  const leftCm = findFirstValidClosetLeftCm(
+    wall.id,
+    widthCm,
+    heightCm,
+    bottomCm,
+  );
   if (leftCm === null) return;
 
   const next: ElevationClosetBlock = {
@@ -1099,7 +1162,9 @@ function selectElevationCloset(closetId: string, e: MouseEvent | PointerEvent) {
 function startElevationClosetDrag(closetId: string, e: PointerEvent) {
   if (!elevationSvgRef.value || !elevationWall.value) return;
 
-  const block = elevationClosetBlocks.value.find((entry) => entry.id === closetId);
+  const block = elevationClosetBlocks.value.find(
+    (entry) => entry.id === closetId,
+  );
   if (!block) return;
 
   selectElevationCloset(closetId, e);
@@ -1130,7 +1195,9 @@ function startElevationClosetResize(
 ) {
   if (!elevationSvgRef.value || !elevationWall.value) return;
 
-  const block = elevationClosetBlocks.value.find((entry) => entry.id === closetId);
+  const block = elevationClosetBlocks.value.find(
+    (entry) => entry.id === closetId,
+  );
   if (!block) return;
 
   selectElevationCloset(closetId, e);
@@ -1161,29 +1228,47 @@ function onElevationPointerMove(e: PointerEvent) {
 
   if (elevationClosetDrag.active) {
     const closetId = elevationClosetDrag.closetId;
-    const closet = elevationClosetBlocks.value.find((entry) => entry.id === closetId);
+    const closet = elevationClosetBlocks.value.find(
+      (entry) => entry.id === closetId,
+    );
     if (!closet) {
       stopElevationClosetDrag();
       return;
     }
 
-    const pointerPoint = screenToSvg(elevationSvgRef.value, e.clientX, e.clientY);
+    const pointerPoint = screenToSvg(
+      elevationSvgRef.value,
+      e.clientX,
+      e.clientY,
+    );
 
     if (elevationClosetDrag.mode === "move") {
       const heightPx = closet.heightCm * layout.scale;
       const minX = layout.wallX + horizontalBounds.minLeftCm * layout.scale;
       const maxX =
         layout.wallX +
-        Math.max(horizontalBounds.minLeftCm, horizontalBounds.maxRightCm - closet.widthCm) *
+        Math.max(
+          horizontalBounds.minLeftCm,
+          horizontalBounds.maxRightCm - closet.widthCm,
+        ) *
           layout.scale;
       const minY = layout.wallY;
       const maxY = layout.wallY + Math.max(0, layout.wallHeightPx - heightPx);
 
-      const nextX = Math.max(minX, Math.min(maxX, pointerPoint.x - elevationClosetDrag.offsetX));
-      const nextY = Math.max(minY, Math.min(maxY, pointerPoint.y - elevationClosetDrag.offsetY));
+      const nextX = Math.max(
+        minX,
+        Math.min(maxX, pointerPoint.x - elevationClosetDrag.offsetX),
+      );
+      const nextY = Math.max(
+        minY,
+        Math.min(maxY, pointerPoint.y - elevationClosetDrag.offsetY),
+      );
       const nextLeftCm = (nextX - layout.wallX) / layout.scale;
       const topCm = (nextY - layout.wallY) / layout.scale;
-      const nextBottomCm = Math.max(0, layout.roomHeightCm - (topCm + closet.heightCm));
+      const nextBottomCm = Math.max(
+        0,
+        layout.roomHeightCm - (topCm + closet.heightCm),
+      );
 
       const nextCandidate: ElevationClosetBlock = {
         ...closet,
@@ -1191,19 +1276,32 @@ function onElevationPointerMove(e: PointerEvent) {
         bottomCm: nextBottomCm,
       };
 
-      if (isClosetPlacementValid(elevationWall.value.id, nextCandidate, { excludeId: closet.id })) {
-        updateWallClosetBlock(elevationWall.value.id, closet.id, () => nextCandidate);
+      if (
+        isClosetPlacementValid(elevationWall.value.id, nextCandidate, {
+          excludeId: closet.id,
+        })
+      ) {
+        updateWallClosetBlock(
+          elevationWall.value.id,
+          closet.id,
+          () => nextCandidate,
+        );
       }
       return;
     }
 
-    const deltaXcm = (pointerPoint.x - elevationClosetDrag.startPointerX) / layout.scale;
-    const deltaYcm = (pointerPoint.y - elevationClosetDrag.startPointerY) / layout.scale;
+    const deltaXcm =
+      (pointerPoint.x - elevationClosetDrag.startPointerX) / layout.scale;
+    const deltaYcm =
+      (pointerPoint.y - elevationClosetDrag.startPointerY) / layout.scale;
     const maxWidthCm = Math.max(
       1,
       horizontalBounds.maxRightCm - elevationClosetDrag.startLeftCm,
     );
-    const maxHeightCm = Math.max(1, layout.roomHeightCm - elevationClosetDrag.startBottomCm);
+    const maxHeightCm = Math.max(
+      1,
+      layout.roomHeightCm - elevationClosetDrag.startBottomCm,
+    );
 
     let nextWidthCm = elevationClosetDrag.startWidthCm;
     let nextHeightCm = elevationClosetDrag.startHeightCm;
@@ -1212,7 +1310,10 @@ function onElevationPointerMove(e: PointerEvent) {
       elevationClosetDrag.mode === "resize-width" ||
       elevationClosetDrag.mode === "resize-both"
     ) {
-      nextWidthCm = Math.max(1, Math.min(maxWidthCm, elevationClosetDrag.startWidthCm + deltaXcm));
+      nextWidthCm = Math.max(
+        1,
+        Math.min(maxWidthCm, elevationClosetDrag.startWidthCm + deltaXcm),
+      );
     }
 
     if (
@@ -1231,16 +1332,30 @@ function onElevationPointerMove(e: PointerEvent) {
       heightCm: nextHeightCm,
     };
 
-    if (isClosetPlacementValid(elevationWall.value.id, resizedCandidate, { excludeId: closet.id })) {
-      updateWallClosetBlock(elevationWall.value.id, closet.id, () => resizedCandidate);
+    if (
+      isClosetPlacementValid(elevationWall.value.id, resizedCandidate, {
+        excludeId: closet.id,
+      })
+    ) {
+      updateWallClosetBlock(
+        elevationWall.value.id,
+        closet.id,
+        () => resizedCandidate,
+      );
     }
     return;
   }
 
   if (!elevationDrag.active) return;
 
-  const item = roomStore.items.find((entry) => entry.id === elevationDrag.itemId);
-  if (!item || item.wallId !== elevationWall.value.id || !isDoorOrWindowItem(item)) {
+  const item = roomStore.items.find(
+    (entry) => entry.id === elevationDrag.itemId,
+  );
+  if (
+    !item ||
+    item.wallId !== elevationWall.value.id ||
+    !isDoorOrWindowItem(item)
+  ) {
     stopElevationItemDrag();
     return;
   }
@@ -1254,7 +1369,10 @@ function onElevationPointerMove(e: PointerEvent) {
     const minX = layout.wallX + horizontalBounds.minLeftCm * layout.scale;
     const maxX =
       layout.wallX +
-      Math.max(horizontalBounds.minLeftCm, horizontalBounds.maxRightCm - itemWidthCm) *
+      Math.max(
+        horizontalBounds.minLeftCm,
+        horizontalBounds.maxRightCm - itemWidthCm,
+      ) *
         layout.scale;
     const minY = layout.wallY;
     const maxY = layout.wallY + Math.max(0, layout.wallHeightPx - itemHeightPx);
@@ -1274,20 +1392,31 @@ function onElevationPointerMove(e: PointerEvent) {
     roomStore.moveItem(item.id, nextAlong);
 
     const topCm = (nextY - layout.wallY) / layout.scale;
-    const nextElevationCm = Math.max(0, layout.roomHeightCm - (topCm + itemHeightCm));
+    const nextElevationCm = Math.max(
+      0,
+      layout.roomHeightCm - (topCm + itemHeightCm),
+    );
     roomStore.updateItemProps(item.id, {
       elevation: nextElevationCm / CM_PER_INCH,
     });
     return;
   }
 
-  const deltaXcm = (pointerPoint.x - elevationDrag.startPointerX) / layout.scale;
-  const deltaYcm = (pointerPoint.y - elevationDrag.startPointerY) / layout.scale;
+  const deltaXcm =
+    (pointerPoint.x - elevationDrag.startPointerX) / layout.scale;
+  const deltaYcm =
+    (pointerPoint.y - elevationDrag.startPointerY) / layout.scale;
 
   const nextProps: Partial<Pick<PlacedItem, "width" | "height">> = {};
 
-  if (elevationDrag.mode === "resize-width" || elevationDrag.mode === "resize-both") {
-    const maxWidthCm = Math.max(1, horizontalBounds.maxRightCm - elevationDrag.startLeftCm);
+  if (
+    elevationDrag.mode === "resize-width" ||
+    elevationDrag.mode === "resize-both"
+  ) {
+    const maxWidthCm = Math.max(
+      1,
+      horizontalBounds.maxRightCm - elevationDrag.startLeftCm,
+    );
     const nextWidthCm = Math.max(
       1,
       Math.min(maxWidthCm, elevationDrag.startWidthCm + deltaXcm),
@@ -1295,8 +1424,14 @@ function onElevationPointerMove(e: PointerEvent) {
     nextProps.width = nextWidthCm;
   }
 
-  if (elevationDrag.mode === "resize-height" || elevationDrag.mode === "resize-both") {
-    const maxHeightCm = Math.max(1, layout.roomHeightCm - elevationDrag.startElevationCm);
+  if (
+    elevationDrag.mode === "resize-height" ||
+    elevationDrag.mode === "resize-both"
+  ) {
+    const maxHeightCm = Math.max(
+      1,
+      layout.roomHeightCm - elevationDrag.startElevationCm,
+    );
     const nextHeightCm = Math.max(
       1,
       Math.min(maxHeightCm, elevationDrag.startHeightCm - deltaYcm),
@@ -1416,7 +1551,9 @@ function isVerticalWall(wallId: string | null): boolean {
   return Math.abs(Math.sin(wall.angle)) > Math.abs(Math.cos(wall.angle));
 }
 
-function isDoorOrWindowItem(item: Pick<PlacedItem, "category" | "type">): boolean {
+function isDoorOrWindowItem(
+  item: Pick<PlacedItem, "category" | "type">,
+): boolean {
   return item.category === "door" || item.type === "window";
 }
 
@@ -1504,8 +1641,7 @@ function snapPointTo45Direction(
   if (rawLength < 1) return start;
 
   const step = Math.PI / 4;
-  const snappedAngle =
-    Math.round(Math.atan2(dy, dx) / step) * step;
+  const snappedAngle = Math.round(Math.atan2(dy, dx) / step) * step;
   const ux = Math.cos(snappedAngle);
   const uy = Math.sin(snappedAngle);
   const projected = dx * ux + dy * uy;
@@ -1565,7 +1701,9 @@ const drawWalls = computed(() =>
 );
 
 const hasCustomDrawing = computed(
-  () => quickPresetId.value === null && (roomStore.walls.length > 0 || !!pendingStartVertex.value),
+  () =>
+    quickPresetId.value === null &&
+    (roomStore.walls.length > 0 || !!pendingStartVertex.value),
 );
 
 /** Compute all vertices from the wall chain */
@@ -1623,7 +1761,7 @@ function pointInPolygon2D(
 
     const intersects =
       yi > py !== yj > py &&
-      px < ((xj - xi) * (py - yi)) / ((yj - yi) || Number.EPSILON) + xi;
+      px < ((xj - xi) * (py - yi)) / (yj - yi || Number.EPSILON) + xi;
     if (intersects) inside = !inside;
   }
 
@@ -1647,7 +1785,10 @@ function interiorSideForWall(wall: {
     const sideX = Math.cos(wall.angle + Math.PI / 2) * sampleOffset;
     const sideY = Math.sin(wall.angle + Math.PI / 2) * sampleOffset;
 
-    const rightInside = pointInPolygon2D([midX + sideX, midY + sideY], vertices);
+    const rightInside = pointInPolygon2D(
+      [midX + sideX, midY + sideY],
+      vertices,
+    );
     const leftInside = pointInPolygon2D([midX - sideX, midY - sideY], vertices);
 
     if (rightInside !== leftInside) {
@@ -2002,7 +2143,9 @@ const canAddWallFromSelectedWall = computed(() => {
 const selectedElevationClosetForSelectedWall = computed(() => {
   if (!selectedWall.value || !selectedElevationClosetId.value) return null;
   const blocks = elevationClosetBlocksByWall[selectedWall.value.id] ?? [];
-  return blocks.find((block) => block.id === selectedElevationClosetId.value) ?? null;
+  return (
+    blocks.find((block) => block.id === selectedElevationClosetId.value) ?? null
+  );
 });
 
 const canAddElevationClosetForSelectedWall = computed(() => {
@@ -2010,9 +2153,18 @@ const canAddElevationClosetForSelectedWall = computed(() => {
   const blocks = elevationClosetBlocksByWall[selectedWall.value.id] ?? [];
   if (blocks.length >= MAX_ELEVATION_CLOSETS_PER_WALL) return false;
 
-  const widthCm = Math.max(30, Math.min(selectedWall.value.length, closetStore.cabinet.width));
-  const heightCm = Math.max(60, Math.min(roomStore.height, closetStore.cabinet.height));
-  return findFirstValidClosetLeftCm(selectedWall.value.id, widthCm, heightCm, 0) !== null;
+  const widthCm = Math.max(
+    30,
+    Math.min(selectedWall.value.length, closetStore.cabinet.width),
+  );
+  const heightCm = Math.max(
+    60,
+    Math.min(roomStore.height, closetStore.cabinet.height),
+  );
+  return (
+    findFirstValidClosetLeftCm(selectedWall.value.id, widthCm, heightCm, 0) !==
+    null
+  );
 });
 
 /** Computed angle in degrees for display */
@@ -2037,15 +2189,13 @@ function setSelectedWallAngleDeg(angleDeg: number) {
       ? [selectedWall.value.position[0], selectedWall.value.position[1]]
       : wallEndPoint(selectedWall.value);
 
-  roomStore.setWallAngle(
-    selectedWall.value.id,
-    degToRad(angleDeg),
-    anchorType,
-  );
+  roomStore.setWallAngle(selectedWall.value.id, degToRad(angleDeg), anchorType);
 
   // Keep displayed anchor coordinates in sync with updated geometry while
   // preserving the same endpoint type throughout the edit interaction.
-  const updatedWall = drawWalls.value.find((w) => w.id === selectedWall.value!.id);
+  const updatedWall = drawWalls.value.find(
+    (w) => w.id === selectedWall.value!.id,
+  );
   if (updatedWall) {
     selectedWallAnchor.value =
       anchorType === "start"
@@ -2204,11 +2354,13 @@ function dimLinePoints(wall: {
 
           <div class="draw-controls">
             <p class="draw-hint" v-if="!isDrawing && !hasCustomDrawing">
-              Click <span class="draw-hint-accent">Custom Room</span> to begin placing walls.
+              Click <span class="draw-hint-accent">Custom Room</span> to begin
+              placing walls.
             </p>
 
             <p class="draw-hint" v-if="!isDrawing && hasCustomDrawing">
-              Click <span class="draw-hint-accent">Clear Drawing</span> to clear the drawing and start again.
+              Click <span class="draw-hint-accent">Clear Drawing</span> to clear
+              the drawing and start again.
             </p>
 
             <button
@@ -2259,7 +2411,10 @@ function dimLinePoints(wall: {
             xmlns="http://www.w3.org/2000/svg"
             @click="onDrawCanvasClick"
             @mousemove="onDrawMouseMove"
-            @click.self="selectedItemId = null; deselectWall()"
+            @click.self="
+              selectedItemId = null;
+              deselectWall();
+            "
           >
             <!-- Grid pattern -->
             <defs>
@@ -2574,240 +2729,364 @@ function dimLinePoints(wall: {
                 class="elevation-svg"
                 :viewBox="`0 0 ${ELEVATION_VIEW_WIDTH} ${ELEVATION_VIEW_HEIGHT}`"
                 xmlns="http://www.w3.org/2000/svg"
-                @click.self="selectedItemId = null; selectedElevationClosetId = null"
-              >
-              <rect
-                :x="elevationLayout.wallX"
-                :y="elevationLayout.wallY"
-                :width="elevationLayout.wallWidthPx"
-                :height="elevationLayout.wallHeightPx"
-                class="elevation-wall"
-              />
-
-              <rect
-                v-if="elevationWallConnectivity.startConnected"
-                :x="elevationLayout.wallX"
-                :y="elevationLayout.wallY"
-                :width="elevationConnectedBandWidthsPx.start"
-                :height="elevationLayout.wallHeightPx"
-                class="elevation-connected-band"
-              />
-
-              <rect
-                v-if="elevationWallConnectivity.endConnected"
-                :x="elevationLayout.wallX + elevationLayout.wallWidthPx - elevationConnectedBandWidthsPx.end"
-                :y="elevationLayout.wallY"
-                :width="elevationConnectedBandWidthsPx.end"
-                :height="elevationLayout.wallHeightPx"
-                class="elevation-connected-band"
-              />
-
-              <line
-                :x1="elevationLayout.wallX"
-                :y1="elevationLayout.wallY + elevationLayout.wallHeightPx"
-                :x2="elevationLayout.wallX + elevationLayout.wallWidthPx"
-                :y2="elevationLayout.wallY + elevationLayout.wallHeightPx"
-                class="elevation-floor-line"
-              />
-
-              <text
-                :x="elevationLayout.wallX + elevationLayout.wallWidthPx / 2"
-                :y="elevationLayout.wallY - 10"
-                text-anchor="middle"
-                class="elevation-dim"
-              >
-                {{ formatLength(elevationWall.length) }}
-              </text>
-
-              <text
-                :x="elevationLayout.wallX - 10"
-                :y="elevationLayout.wallY + elevationLayout.wallHeightPx / 2"
-                text-anchor="end"
-                dominant-baseline="middle"
-                class="elevation-dim"
-              >
-                {{ formatLength(roomStore.height) }}
-              </text>
-
-              <g
-                v-for="item in elevationItems"
-                :key="`elevation-${item.id}`"
-                class="elevation-item"
-                :class="{ selected: selectedItemId === item.id }"
-                @pointerdown="startElevationItemDrag(item.id, $event)"
-                @click.stop="selectElevationItem(item.id, $event)"
+                @click.self="
+                  selectedItemId = null;
+                  selectedElevationClosetId = null;
+                "
               >
                 <rect
-                  :x="elevationItemRect(item).x"
-                  :y="elevationItemRect(item).y"
-                  :width="elevationItemRect(item).width"
-                  :height="elevationItemRect(item).height"
-                  :data-testid="`elevation-item-${item.id}`"
-                  class="elevation-item-rect"
+                  :x="elevationLayout.wallX"
+                  :y="elevationLayout.wallY"
+                  :width="elevationLayout.wallWidthPx"
+                  :height="elevationLayout.wallHeightPx"
+                  class="elevation-wall"
                 />
-                <text
-                  :x="elevationItemRect(item).x + elevationItemRect(item).width / 2"
-                  :y="elevationItemRect(item).y - 8"
-                  text-anchor="middle"
-                  class="elevation-item-label"
-                >
-                  {{ itemLabel(item.type) }} · {{ formatLength(item.width) }} x {{ formatLength(item.height) }}
-                </text>
-                <text
-                  :x="elevationItemRect(item).x + elevationItemRect(item).width / 2"
-                  :y="elevationItemRect(item).y + elevationItemRect(item).height + 14"
-                  text-anchor="middle"
-                  class="elevation-item-meta"
-                >
-                  L {{ formatPositionInches(item.leftPosition) }}" ·
-                  R {{ formatPositionInches(item.rightPosition) }}" ·
-                  E {{ formatPositionInches(item.elevation) }}"
-                </text>
 
-                <g v-if="selectedItemId === item.id" class="elevation-resize-handles">
-                  <circle
-                    :cx="elevationItemRect(item).x + elevationItemRect(item).width"
-                    :cy="elevationItemRect(item).y + elevationItemRect(item).height / 2"
-                    r="5"
-                    class="elevation-handle elevation-handle-width"
-                    @pointerdown.stop.prevent="startElevationItemResize(item.id, 'resize-width', $event)"
-                  />
-                  <circle
-                    :cx="elevationItemRect(item).x + elevationItemRect(item).width / 2"
-                    :cy="elevationItemRect(item).y"
-                    r="5"
-                    class="elevation-handle elevation-handle-height"
-                    @pointerdown.stop.prevent="startElevationItemResize(item.id, 'resize-height', $event)"
-                  />
-                  <rect
-                    :x="elevationItemRect(item).x + elevationItemRect(item).width - 4"
-                    :y="elevationItemRect(item).y - 4"
-                    width="8"
-                    height="8"
-                    rx="1.5"
-                    class="elevation-handle elevation-handle-corner"
-                    @pointerdown.stop.prevent="startElevationItemResize(item.id, 'resize-both', $event)"
-                  />
-                </g>
-              </g>
-
-              <g
-                v-for="block in elevationClosetBlocks"
-                :key="block.id"
-                class="elevation-closet"
-                :class="{ selected: selectedElevationClosetId === block.id }"
-                @pointerdown="startElevationClosetDrag(block.id, $event)"
-                @click.stop="selectElevationCloset(block.id, $event)"
-              >
                 <rect
-                  :x="elevationClosetRect(block).x"
-                  :y="elevationClosetRect(block).y"
-                  :width="elevationClosetRect(block).width"
-                  :height="elevationClosetRect(block).height"
-                  :data-testid="`elevation-closet-${block.id}`"
-                  class="elevation-closet-rect"
+                  v-if="elevationWallConnectivity.startConnected"
+                  :x="elevationLayout.wallX"
+                  :y="elevationLayout.wallY"
+                  :width="elevationConnectedBandWidthsPx.start"
+                  :height="elevationLayout.wallHeightPx"
+                  class="elevation-connected-band"
                 />
+
+                <rect
+                  v-if="elevationWallConnectivity.endConnected"
+                  :x="
+                    elevationLayout.wallX +
+                    elevationLayout.wallWidthPx -
+                    elevationConnectedBandWidthsPx.end
+                  "
+                  :y="elevationLayout.wallY"
+                  :width="elevationConnectedBandWidthsPx.end"
+                  :height="elevationLayout.wallHeightPx"
+                  class="elevation-connected-band"
+                />
+
+                <line
+                  :x1="elevationLayout.wallX"
+                  :y1="elevationLayout.wallY + elevationLayout.wallHeightPx"
+                  :x2="elevationLayout.wallX + elevationLayout.wallWidthPx"
+                  :y2="elevationLayout.wallY + elevationLayout.wallHeightPx"
+                  class="elevation-floor-line"
+                />
+
                 <text
-                  :x="elevationClosetRect(block).x + elevationClosetRect(block).width / 2"
-                  :y="elevationClosetRect(block).y - 8"
+                  :x="elevationLayout.wallX + elevationLayout.wallWidthPx / 2"
+                  :y="elevationLayout.wallY - 10"
                   text-anchor="middle"
-                  class="elevation-closet-label"
+                  class="elevation-dim"
                 >
-                  Closet · {{ formatLength(block.widthCm) }} x {{ formatLength(block.heightCm) }}
+                  {{ formatLength(elevationWall.length) }}
+                </text>
+
+                <text
+                  :x="elevationLayout.wallX - 10"
+                  :y="elevationLayout.wallY + elevationLayout.wallHeightPx / 2"
+                  text-anchor="end"
+                  dominant-baseline="middle"
+                  class="elevation-dim"
+                >
+                  {{ formatLength(roomStore.height) }}
                 </text>
 
                 <g
-                  v-if="selectedElevationClosetId === block.id"
-                  class="elevation-closet-handles"
+                  v-for="item in elevationItems"
+                  :key="`elevation-${item.id}`"
+                  class="elevation-item"
+                  :class="{ selected: selectedItemId === item.id }"
+                  @pointerdown="startElevationItemDrag(item.id, $event)"
+                  @click.stop="selectElevationItem(item.id, $event)"
                 >
-                  <circle
-                    :cx="elevationClosetRect(block).x + elevationClosetRect(block).width"
-                    :cy="elevationClosetRect(block).y + elevationClosetRect(block).height / 2"
-                    r="5"
-                    class="elevation-closet-handle elevation-closet-handle-width"
-                    @pointerdown.stop.prevent="startElevationClosetResize(block.id, 'resize-width', $event)"
-                  />
-                  <circle
-                    :cx="elevationClosetRect(block).x + elevationClosetRect(block).width / 2"
-                    :cy="elevationClosetRect(block).y"
-                    r="5"
-                    class="elevation-closet-handle elevation-closet-handle-height"
-                    @pointerdown.stop.prevent="startElevationClosetResize(block.id, 'resize-height', $event)"
-                  />
                   <rect
-                    :x="elevationClosetRect(block).x + elevationClosetRect(block).width - 4"
-                    :y="elevationClosetRect(block).y - 4"
-                    width="8"
-                    height="8"
-                    rx="1.5"
-                    class="elevation-closet-handle elevation-closet-handle-corner"
-                    @pointerdown.stop.prevent="startElevationClosetResize(block.id, 'resize-both', $event)"
+                    :x="elevationItemRect(item).x"
+                    :y="elevationItemRect(item).y"
+                    :width="elevationItemRect(item).width"
+                    :height="elevationItemRect(item).height"
+                    :data-testid="`elevation-item-${item.id}`"
+                    class="elevation-item-rect"
                   />
+                  <text
+                    :x="
+                      elevationItemRect(item).x +
+                      elevationItemRect(item).width / 2
+                    "
+                    :y="elevationItemRect(item).y - 8"
+                    text-anchor="middle"
+                    class="elevation-item-label"
+                  >
+                    {{ itemLabel(item.type) }} ·
+                    {{ formatLength(item.width) }} x
+                    {{ formatLength(item.height) }}
+                  </text>
+                  <text
+                    :x="
+                      elevationItemRect(item).x +
+                      elevationItemRect(item).width / 2
+                    "
+                    :y="
+                      elevationItemRect(item).y +
+                      elevationItemRect(item).height +
+                      14
+                    "
+                    text-anchor="middle"
+                    class="elevation-item-meta"
+                  >
+                    L {{ formatPositionInches(item.leftPosition) }}" · R
+                    {{ formatPositionInches(item.rightPosition) }}" · E
+                    {{ formatPositionInches(item.elevation) }}"
+                  </text>
+
+                  <g
+                    v-if="selectedItemId === item.id"
+                    class="elevation-resize-handles"
+                  >
+                    <circle
+                      :cx="
+                        elevationItemRect(item).x +
+                        elevationItemRect(item).width
+                      "
+                      :cy="
+                        elevationItemRect(item).y +
+                        elevationItemRect(item).height / 2
+                      "
+                      r="5"
+                      class="elevation-handle elevation-handle-width"
+                      @pointerdown.stop.prevent="
+                        startElevationItemResize(
+                          item.id,
+                          'resize-width',
+                          $event,
+                        )
+                      "
+                    />
+                    <circle
+                      :cx="
+                        elevationItemRect(item).x +
+                        elevationItemRect(item).width / 2
+                      "
+                      :cy="elevationItemRect(item).y"
+                      r="5"
+                      class="elevation-handle elevation-handle-height"
+                      @pointerdown.stop.prevent="
+                        startElevationItemResize(
+                          item.id,
+                          'resize-height',
+                          $event,
+                        )
+                      "
+                    />
+                    <rect
+                      :x="
+                        elevationItemRect(item).x +
+                        elevationItemRect(item).width -
+                        4
+                      "
+                      :y="elevationItemRect(item).y - 4"
+                      width="8"
+                      height="8"
+                      rx="1.5"
+                      class="elevation-handle elevation-handle-corner"
+                      @pointerdown.stop.prevent="
+                        startElevationItemResize(item.id, 'resize-both', $event)
+                      "
+                    />
+                  </g>
                 </g>
-              </g>
+
+                <g
+                  v-for="block in elevationClosetBlocks"
+                  :key="block.id"
+                  class="elevation-closet"
+                  :class="{ selected: selectedElevationClosetId === block.id }"
+                  @pointerdown="startElevationClosetDrag(block.id, $event)"
+                  @click.stop="selectElevationCloset(block.id, $event)"
+                >
+                  <rect
+                    :x="elevationClosetRect(block).x"
+                    :y="elevationClosetRect(block).y"
+                    :width="elevationClosetRect(block).width"
+                    :height="elevationClosetRect(block).height"
+                    :data-testid="`elevation-closet-${block.id}`"
+                    class="elevation-closet-rect"
+                  />
+                  <text
+                    :x="
+                      elevationClosetRect(block).x +
+                      elevationClosetRect(block).width / 2
+                    "
+                    :y="elevationClosetRect(block).y - 8"
+                    text-anchor="middle"
+                    class="elevation-closet-label"
+                  >
+                    Closet · {{ formatLength(block.widthCm) }} x
+                    {{ formatLength(block.heightCm) }}
+                  </text>
+
+                  <g
+                    v-if="selectedElevationClosetId === block.id"
+                    class="elevation-closet-handles"
+                  >
+                    <circle
+                      :cx="
+                        elevationClosetRect(block).x +
+                        elevationClosetRect(block).width
+                      "
+                      :cy="
+                        elevationClosetRect(block).y +
+                        elevationClosetRect(block).height / 2
+                      "
+                      r="5"
+                      class="elevation-closet-handle elevation-closet-handle-width"
+                      @pointerdown.stop.prevent="
+                        startElevationClosetResize(
+                          block.id,
+                          'resize-width',
+                          $event,
+                        )
+                      "
+                    />
+                    <circle
+                      :cx="
+                        elevationClosetRect(block).x +
+                        elevationClosetRect(block).width / 2
+                      "
+                      :cy="elevationClosetRect(block).y"
+                      r="5"
+                      class="elevation-closet-handle elevation-closet-handle-height"
+                      @pointerdown.stop.prevent="
+                        startElevationClosetResize(
+                          block.id,
+                          'resize-height',
+                          $event,
+                        )
+                      "
+                    />
+                    <rect
+                      :x="
+                        elevationClosetRect(block).x +
+                        elevationClosetRect(block).width -
+                        4
+                      "
+                      :y="elevationClosetRect(block).y - 4"
+                      width="8"
+                      height="8"
+                      rx="1.5"
+                      class="elevation-closet-handle elevation-closet-handle-corner"
+                      @pointerdown.stop.prevent="
+                        startElevationClosetResize(
+                          block.id,
+                          'resize-both',
+                          $event,
+                        )
+                      "
+                    />
+                  </g>
+                </g>
               </svg>
 
-              <div class="elevation-measurements-panel" data-testid="elevation-measurements-panel">
+              <div
+                class="elevation-measurements-panel"
+                data-testid="elevation-measurements-panel"
+              >
                 <template v-if="elevationOrderMetrics">
-                  <h5 class="elevation-measurements-title">Order Measurements</h5>
+                  <h5 class="elevation-measurements-title">
+                    Order Measurements
+                  </h5>
                   <p class="elevation-measurements-row">
-                    Left Gap: {{ formatLength(elevationOrderMetrics.leftGapCm) }}
+                    Left Gap:
+                    {{ formatLength(elevationOrderMetrics.leftGapCm) }}
                   </p>
                   <p class="elevation-measurements-row">
-                    Right Gap: {{ formatLength(elevationOrderMetrics.rightGapCm) }}
+                    Right Gap:
+                    {{ formatLength(elevationOrderMetrics.rightGapCm) }}
                   </p>
                   <p class="elevation-measurements-row">
-                    Nearest Opening: {{ elevationOrderMetrics.nearestOpeningGapCm === null ? 'N/A' : formatLength(elevationOrderMetrics.nearestOpeningGapCm) }}
+                    Nearest Opening:
+                    {{
+                      elevationOrderMetrics.nearestOpeningGapCm === null
+                        ? "N/A"
+                        : formatLength(
+                            elevationOrderMetrics.nearestOpeningGapCm,
+                          )
+                    }}
                   </p>
                   <p class="elevation-measurements-row">
-                    Total Closet Width: {{ formatLength(elevationOrderMetrics.totalWidthCm) }}
+                    Total Closet Width:
+                    {{ formatLength(elevationOrderMetrics.totalWidthCm) }}
                   </p>
                   <p class="elevation-measurements-row">
-                    Unit Widths: {{ elevationOrderMetrics.unitWidthsCm.map((v) => formatLength(v)).join(' | ') }}
+                    Unit Widths:
+                    {{
+                      elevationOrderMetrics.unitWidthsCm
+                        .map((v) => formatLength(v))
+                        .join(" | ")
+                    }}
                   </p>
                   <p class="elevation-measurements-row">
-                    Top Clearance: {{ formatLength(elevationOrderMetrics.topClearanceCm) }}
+                    Top Clearance:
+                    {{ formatLength(elevationOrderMetrics.topClearanceCm) }}
                   </p>
                   <p class="elevation-measurements-row">
-                    Bottom Elevation: {{ formatLength(elevationOrderMetrics.bottomCm) }}
+                    Bottom Elevation:
+                    {{ formatLength(elevationOrderMetrics.bottomCm) }}
                   </p>
                 </template>
 
                 <template v-else-if="elevationOpeningMetrics">
-                  <h5 class="elevation-measurements-title">Opening Measurements</h5>
+                  <h5 class="elevation-measurements-title">
+                    Opening Measurements
+                  </h5>
                   <p class="elevation-measurements-row">
                     Type: {{ elevationOpeningMetrics.label }}
                   </p>
                   <p class="elevation-measurements-row">
-                    Width x Height: {{ formatLength(elevationOpeningMetrics.widthCm) }} x {{ formatLength(elevationOpeningMetrics.heightCm) }}
+                    Width x Height:
+                    {{ formatLength(elevationOpeningMetrics.widthCm) }} x
+                    {{ formatLength(elevationOpeningMetrics.heightCm) }}
                   </p>
                   <p class="elevation-measurements-row">
-                    Left Gap: {{ formatLength(elevationOpeningMetrics.leftGapCm) }}
+                    Left Gap:
+                    {{ formatLength(elevationOpeningMetrics.leftGapCm) }}
                   </p>
                   <p class="elevation-measurements-row">
-                    Right Gap: {{ formatLength(elevationOpeningMetrics.rightGapCm) }}
+                    Right Gap:
+                    {{ formatLength(elevationOpeningMetrics.rightGapCm) }}
                   </p>
                   <p class="elevation-measurements-row">
-                    Top Clearance: {{ formatLength(elevationOpeningMetrics.topClearanceCm) }}
+                    Top Clearance:
+                    {{ formatLength(elevationOpeningMetrics.topClearanceCm) }}
                   </p>
                   <p class="elevation-measurements-row">
-                    Bottom Elevation: {{ formatLength(elevationOpeningMetrics.bottomCm) }}
+                    Bottom Elevation:
+                    {{ formatLength(elevationOpeningMetrics.bottomCm) }}
                   </p>
                 </template>
 
                 <template v-else-if="elevationWallContextMetrics">
                   <h5 class="elevation-measurements-title">Wall Context</h5>
                   <p class="elevation-measurements-row">
-                    Wall Width: {{ formatLength(elevationWallContextMetrics.wallLengthCm) }}
+                    Wall Width:
+                    {{ formatLength(elevationWallContextMetrics.wallLengthCm) }}
                   </p>
                   <p class="elevation-measurements-row">
-                    Usable Width: {{ formatLength(elevationWallContextMetrics.usableWidthCm) }}
+                    Usable Width:
+                    {{
+                      formatLength(elevationWallContextMetrics.usableWidthCm)
+                    }}
                   </p>
                   <p class="elevation-measurements-row">
-                    Blocked Left: {{ formatLength(elevationWallContextMetrics.blockedLeftCm) }}
+                    Blocked Left:
+                    {{
+                      formatLength(elevationWallContextMetrics.blockedLeftCm)
+                    }}
                   </p>
                   <p class="elevation-measurements-row">
-                    Blocked Right: {{ formatLength(elevationWallContextMetrics.blockedRightCm) }}
+                    Blocked Right:
+                    {{
+                      formatLength(elevationWallContextMetrics.blockedRightCm)
+                    }}
                   </p>
                   <p class="elevation-measurements-row">
                     Openings: {{ elevationWallContextMetrics.openingCount }}
@@ -2851,7 +3130,7 @@ function dimLinePoints(wall: {
                 :value="cmToInches(roomStore.height)"
                 :min="cmToInches(ROOM_CONSTRAINTS.height.min)"
                 :max="cmToInches(ROOM_CONSTRAINTS.height.max)"
-                @input="onDrawHeightInput"
+                @change="onDrawHeightInput"
               />
             </div>
 
@@ -2863,7 +3142,7 @@ function dimLinePoints(wall: {
                 :value="drawWallThicknessInput"
                 min="1"
                 max="30"
-                @input="onDrawThicknessInput"
+                @change="onDrawThicknessInput"
               />
             </div>
           </div>
@@ -2871,28 +3150,26 @@ function dimLinePoints(wall: {
           <div v-if="selectedWall" class="wall-props">
             <h4 class="sidebar-subheading">Wall {{ selectedWall.label }}</h4>
 
-              <p
-                v-if="canAddWallFromSelectedWall"
-                class="draw-hint"
-              >
-                Click <strong>Add Wall</strong> to continue from the selected wall endpoint.
-              </p>
+            <p v-if="canAddWallFromSelectedWall" class="draw-hint">
+              Click <strong>Add Wall</strong> to continue from the selected wall
+              endpoint.
+            </p>
 
-              <button
-                v-if="canAddWallFromSelectedWall"
-                type="button"
-                class="sidebar-action-btn draw-btn"
-                @click="continueDrawing"
-              >
-                Add Wall
-              </button>
+            <button
+              v-if="canAddWallFromSelectedWall"
+              type="button"
+              class="sidebar-action-btn draw-btn"
+              @click="continueDrawing"
+            >
+              Add Wall
+            </button>
 
             <div class="prop-row">
               <label class="prop-label">Label</label>
               <input
                 class="prop-input"
                 :value="selectedWall.label"
-                @input="
+                @change="
                   (e: Event) =>
                     roomStore.updateWallProps(selectedWall!.id, {
                       label: (e.target as HTMLInputElement).value,
@@ -2907,7 +3184,7 @@ function dimLinePoints(wall: {
                 class="prop-input"
                 type="number"
                 :value="cmToInches(selectedWall.length)"
-                @input="onSelectedWallLengthInput"
+                @change="onSelectedWallLengthInput"
               />
             </div>
 
@@ -2917,7 +3194,7 @@ function dimLinePoints(wall: {
                 class="prop-input"
                 type="number"
                 :value="cmToInches(roomStore.height)"
-                @input="
+                @change="
                   (e: Event) =>
                     roomStore.setHeight(
                       inchesToCm(Number((e.target as HTMLInputElement).value)),
@@ -2932,7 +3209,7 @@ function dimLinePoints(wall: {
                 class="prop-input"
                 type="number"
                 :value="selectedWall.thickness"
-                @input="
+                @change="
                   (e: Event) =>
                     roomStore.updateWallProps(selectedWall!.id, {
                       thickness: Number((e.target as HTMLInputElement).value),
@@ -2942,7 +3219,9 @@ function dimLinePoints(wall: {
             </div>
 
             <div class="prop-row">
-              <label class="prop-label">{{ isClosed ? "Rotate Room" : "Angle" }}</label>
+              <label class="prop-label">{{
+                isClosed ? "Rotate Room" : "Angle"
+              }}</label>
               <div class="angle-controls">
                 <button
                   type="button"
@@ -2957,7 +3236,7 @@ function dimLinePoints(wall: {
                   type="number"
                   step="1"
                   :value="selectedWallAngleDeg"
-                  @input="onSelectedWallAngleInput"
+                  @change="onSelectedWallAngleInput"
                 />
                 <button
                   type="button"
@@ -3036,17 +3315,11 @@ function dimLinePoints(wall: {
 
           <h4 class="sidebar-subheading">Add Options</h4>
           <div class="item-grid">
-            <button
-              class="item-card"
-              @click="addArchItem(DOOR_ITEMS[0]!)"
-            >
+            <button class="item-card" @click="addArchItem(DOOR_ITEMS[0]!)">
               <div class="item-icon">🚪</div>
               <span class="item-label">Add Door</span>
             </button>
-            <button
-              class="item-card"
-              @click="addArchItem(DECO_ITEMS[0]!)"
-            >
+            <button class="item-card" @click="addArchItem(DECO_ITEMS[0]!)">
               <div class="item-icon">🪟</div>
               <span class="item-label">Add Window</span>
             </button>
@@ -3064,7 +3337,7 @@ function dimLinePoints(wall: {
                 type="number"
                 min="1"
                 :value="cmToInches(selectedDoorWindowItem.width)"
-                @input="onSelectedItemSizeInput('width', $event)"
+                @change="onSelectedItemSizeInput('width', $event)"
               />
             </div>
 
@@ -3075,7 +3348,7 @@ function dimLinePoints(wall: {
                 type="number"
                 min="1"
                 :value="cmToInches(selectedDoorWindowItem.height)"
-                @input="onSelectedItemSizeInput('height', $event)"
+                @change="onSelectedItemSizeInput('height', $event)"
               />
             </div>
 
@@ -3088,7 +3361,7 @@ function dimLinePoints(wall: {
                 step="0.1"
                 data-testid="left-position-input"
                 :value="selectedDoorWindowItem.leftPosition"
-                @input="onSelectedItemSideInput('leftPosition', $event)"
+                @change="onSelectedItemSideInput('leftPosition', $event)"
               />
             </div>
 
@@ -3101,7 +3374,7 @@ function dimLinePoints(wall: {
                 step="0.1"
                 data-testid="right-position-input"
                 :value="selectedDoorWindowItem.rightPosition"
-                @input="onSelectedItemSideInput('rightPosition', $event)"
+                @change="onSelectedItemSideInput('rightPosition', $event)"
               />
             </div>
 
@@ -3112,13 +3385,12 @@ function dimLinePoints(wall: {
                 type="number"
                 min="0"
                 :value="selectedDoorWindowItem.elevation"
-                @input="onSelectedItemElevationInput($event)"
+                @change="onSelectedItemElevationInput($event)"
               />
             </div>
           </div>
         </div>
       </aside>
-
     </div>
 
     <Teleport to="body">
@@ -3135,10 +3407,16 @@ function dimLinePoints(wall: {
           </p>
 
           <div class="dialog-actions">
-            <button class="dialog-btn cancel" @click="cancelQuickPresetReplacement">
+            <button
+              class="dialog-btn cancel"
+              @click="cancelQuickPresetReplacement"
+            >
               Cancel
             </button>
-            <button class="dialog-btn apply" @click="confirmQuickPresetReplacement">
+            <button
+              class="dialog-btn apply"
+              @click="confirmQuickPresetReplacement"
+            >
               Replace Layout
             </button>
           </div>
@@ -3418,7 +3696,11 @@ function dimLinePoints(wall: {
   padding: 10px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 12px;
-  background: linear-gradient(180deg, rgba(2, 6, 23, 0.96) 0%, rgba(15, 23, 42, 0.96) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(2, 6, 23, 0.96) 0%,
+    rgba(15, 23, 42, 0.96) 100%
+  );
 }
 
 .elevation-header {
