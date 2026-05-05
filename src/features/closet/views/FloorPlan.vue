@@ -226,6 +226,11 @@ function addArchItem(def: ItemDef) {
     roomStore.walls.find((wall) => wall.id === selectedWallId.value)?.id ??
     roomStore.walls[0]?.id ??
     null;
+  // Clamp item width to the target wall length so it always fits inside.
+  const targetWall = roomStore.walls.find((w) => w.id === wallId);
+  const clampedWidth = targetWall
+    ? Math.min(def.width, targetWall.length)
+    : def.width;
   // Default elevation: 0 for doors, 42 for windows
   const defaultElevation = def.type === "window" ? 42 : 0;
   const createdItemId = roomStore.addItem({
@@ -233,7 +238,7 @@ function addArchItem(def: ItemDef) {
     category: def.category,
     wallId,
     positionAlongWall: 0.5,
-    width: def.width,
+    width: clampedWidth,
     height: def.height,
     leftPosition: 0,
     rightPosition: 0,
@@ -2667,7 +2672,15 @@ function dimLinePoints(wall: {
               />
               <text
                 x="0"
-                :y="selectedItemId === item.id ? -10 : 16"
+                :y="
+                  selectedItemId === item.id
+                    ? isVerticalWall(item.wallId)
+                      ? 10
+                      : -10
+                    : isVerticalWall(item.wallId)
+                      ? -16
+                      : 16
+                "
                 text-anchor="middle"
                 :fill="itemColor(item.category)"
                 font-size="8"
@@ -2678,7 +2691,15 @@ function dimLinePoints(wall: {
               <text
                 v-if="isDoorOrWindowItem(item)"
                 x="0"
-                :y="selectedItemId === item.id ? -19 : 25"
+                :y="
+                  selectedItemId === item.id
+                    ? isVerticalWall(item.wallId)
+                      ? 19
+                      : -19
+                    : isVerticalWall(item.wallId)
+                      ? -25
+                      : 25
+                "
                 text-anchor="middle"
                 fill="#cbd5e1"
                 font-size="7"
@@ -3367,9 +3388,9 @@ function dimLinePoints(wall: {
                 class="prop-input"
                 type="number"
                 min="0"
-                step="0.1"
+                step="0.001"
                 data-testid="left-position-input"
-                :value="selectedDoorWindowItem.leftPosition"
+                :value="Number(selectedDoorWindowItem.leftPosition).toFixed(3)"
                 @change="onSelectedItemSideInput('leftPosition', $event)"
               />
             </div>
@@ -3380,9 +3401,9 @@ function dimLinePoints(wall: {
                 class="prop-input"
                 type="number"
                 min="0"
-                step="0.1"
+                step="0.001"
                 data-testid="right-position-input"
-                :value="selectedDoorWindowItem.rightPosition"
+                :value="Number(selectedDoorWindowItem.rightPosition).toFixed(3)"
                 @change="onSelectedItemSideInput('rightPosition', $event)"
               />
             </div>
@@ -3393,7 +3414,8 @@ function dimLinePoints(wall: {
                 class="prop-input"
                 type="number"
                 min="0"
-                :value="selectedDoorWindowItem.elevation"
+                step="0.001"
+                :value="Number(selectedDoorWindowItem.elevation).toFixed(3)"
                 @change="onSelectedItemElevationInput($event)"
               />
             </div>
