@@ -2812,7 +2812,7 @@ function dimLinePoints(wall: {
                 >
                   <path
                     d="M40 310 L60 295 L60 305 L100 305 L100 315 L60 315 L60 325 Z"
-                    fill="#ef4444"
+                    fill="#93c5fd"
                   />
                 </g>
 
@@ -2824,7 +2824,7 @@ function dimLinePoints(wall: {
                 >
                   <path
                     d="M940 310 L920 295 L920 305 L880 305 L880 315 L920 315 L920 325 Z"
-                    fill="#ef4444"
+                    fill="#93c5fd"
                   />
                 </g>
                 <rect
