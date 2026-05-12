@@ -1106,6 +1106,46 @@ function closeElevationOverlay() {
   stopElevationClosetDrag();
 }
 
+const elevationWallIndex = computed(() => {
+  return roomStore.walls.findIndex((w) => w.id === elevationWallId.value);
+});
+
+const hasPrevElevationWall = computed(() => {
+  if (elevationWallIndex.value === -1) return false;
+  if (roomStore.roomIsClosed && roomStore.walls.length > 1) return true;
+  return elevationWallIndex.value > 0;
+});
+
+const hasNextElevationWall = computed(() => {
+  if (elevationWallIndex.value === -1) return false;
+  if (roomStore.roomIsClosed && roomStore.walls.length > 1) return true;
+  return elevationWallIndex.value < roomStore.walls.length - 1;
+});
+
+function goPrevElevationWall() {
+  if (!hasPrevElevationWall.value) return;
+  let prevIndex = elevationWallIndex.value - 1;
+  if (prevIndex < 0 && roomStore.roomIsClosed) {
+    prevIndex = roomStore.walls.length - 1;
+  }
+  const prevWall = roomStore.walls[prevIndex];
+  if (prevWall) {
+    elevationWallId.value = prevWall.id;
+  }
+}
+
+function goNextElevationWall() {
+  if (!hasNextElevationWall.value) return;
+  let nextIndex = elevationWallIndex.value + 1;
+  if (nextIndex >= roomStore.walls.length && roomStore.roomIsClosed) {
+    nextIndex = 0;
+  }
+  const nextWall = roomStore.walls[nextIndex];
+  if (nextWall) {
+    elevationWallId.value = nextWall.id;
+  }
+}
+
 function selectElevationItem(itemId: string, e: MouseEvent | PointerEvent) {
   e.stopPropagation();
   selectedItemId.value = itemId;
@@ -2764,6 +2804,29 @@ function dimLinePoints(wall: {
                   selectedElevationClosetId = null;
                 "
               >
+                <g
+                  v-if="hasPrevElevationWall"
+                  class="elevation-nav-arrow"
+                  @click.stop="goPrevElevationWall"
+                  style="cursor: pointer"
+                >
+                  <path
+                    d="M40 310 L60 295 L60 305 L100 305 L100 315 L60 315 L60 325 Z"
+                    fill="#ef4444"
+                  />
+                </g>
+
+                <g
+                  v-if="hasNextElevationWall"
+                  class="elevation-nav-arrow"
+                  @click.stop="goNextElevationWall"
+                  style="cursor: pointer"
+                >
+                  <path
+                    d="M940 310 L920 295 L920 305 L880 305 L880 315 L920 315 L920 325 Z"
+                    fill="#ef4444"
+                  />
+                </g>
                 <rect
                   :x="elevationLayout.wallX"
                   :y="elevationLayout.wallY"
