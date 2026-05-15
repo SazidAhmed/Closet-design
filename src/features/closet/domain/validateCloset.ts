@@ -4,6 +4,7 @@
 
 import type { ClosetStateV2 } from './schema'
 import { CABINET_CONSTRAINTS, TOWER_CONSTRAINTS, ACCESSORY_CONSTRAINTS } from './constraints'
+import { getCategoryLimits } from './closetCatalogs'
 
 export type ViolationSeverity = 'error' | 'warning'
 
@@ -160,6 +161,65 @@ export function validateCloset(state: ClosetStateV2): ClosetViolation[] {
         code: 'TOWER_WIDTH_OUT_OF_RANGE',
         path: `${prefix}.width`,
         message: `${tower.label}: width must be between ${TOWER_CONSTRAINTS.width.min} and ${TOWER_CONSTRAINTS.width.max} cm.`,
+      })
+    }
+
+    if (tower.doorMode && tower.categoryCode) {
+      let limits: ReturnType<typeof getCategoryLimits> | null = null
+      try {
+        limits = getCategoryLimits(tower.doorMode, tower.categoryCode)
+      } catch {
+        v.push({
+          severity: 'error',
+          code: 'TOWER_CATALOG_CATEGORY_UNKNOWN',
+          path: prefix,
+          message: `${tower.label}: catalog category is unknown.`,
+        })
+      }
+
+      if (limits) {
+        if (tower.catalogId === undefined) {
+          v.push({
+            severity: 'error',
+            code: 'TOWER_CATALOG_MISSING',
+            path: `${prefix}.catalogId`,
+            message: `${tower.label}: active catalog ID is required for pricing.`,
+          })
+        }
+
+        if (!inRange(tower.width, limits.minW, limits.maxW)) {
+          v.push({
+            severity: 'error',
+            code: 'TOWER_CATALOG_WIDTH_OUT_OF_RANGE',
+            path: `${prefix}.width`,
+            message: `${tower.label}: width is outside the selected category range.`,
+          })
+        }
+
+        if (!inRange(tower.depth, limits.minD, limits.maxD)) {
+          v.push({
+            severity: 'error',
+            code: 'TOWER_CATALOG_DEPTH_OUT_OF_RANGE',
+            path: `${prefix}.depth`,
+            message: `${tower.label}: depth is outside the selected category range.`,
+          })
+        }
+
+        if (!inRange(tower.height, limits.minH, limits.maxH)) {
+          v.push({
+            severity: 'error',
+            code: 'TOWER_CATALOG_HEIGHT_OUT_OF_RANGE',
+            path: `${prefix}.height`,
+            message: `${tower.label}: height is outside the selected category range.`,
+          })
+        }
+      }
+    } else {
+      v.push({
+        severity: 'warning',
+        code: 'TOWER_CATALOG_METADATA_MISSING',
+        path: prefix,
+        message: `${tower.label}: catalog metadata is missing; pricing may treat this as a legacy tower.`,
       })
     }
 

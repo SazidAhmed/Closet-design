@@ -84,6 +84,12 @@ export function exportForBackend(state: ClosetStateV2) {
     towers: state.towers.map((t) => ({
       id: t.id,
       label: t.label,
+      doorMode: t.doorMode,
+      categoryCode: t.categoryCode,
+      categoryName: t.categoryName,
+      catalogId: t.catalogId,
+      catalogCode: t.catalogCode,
+      isCorner: t.isCorner ?? false,
       width: clamp(Number(t.width) || 0, 20, 200),
       depth: clamp(Number(t.depth) || 0, 20, 100),
       height: clamp(Number(t.height) || 0, 50, 300),

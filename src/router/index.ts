@@ -23,6 +23,11 @@ export const router = createRouter({
       component: () => import('../features/closet/views/DesignCloset.vue'),
     },
     {
+      path: '/closet/build',
+      name: 'BuildCloset',
+      component: () => import('../features/closet/views/BuildCloset.vue'),
+    },
+    {
       path: '/closet/review',
       name: 'Review',
       component: () => import('../features/closet/views/ReviewPage.vue'),

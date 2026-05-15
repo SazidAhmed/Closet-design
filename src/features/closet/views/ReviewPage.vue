@@ -112,6 +112,10 @@ function downloadJSON() {
                   {{ Math.round(tower.depth) }} cm</span
                 >
               </div>
+              <div v-if="tower.catalogId" class="tower-catalog">
+                {{ tower.categoryName }} ({{ tower.categoryCode }}) - Catalog
+                {{ tower.catalogId }}
+              </div>
               <ul class="accessory-list">
                 <li v-for="(acc, i) in tower.accessories" :key="i">
                   <span v-if="acc.type === 'shelf_set'"
@@ -291,6 +295,13 @@ function downloadJSON() {
 .tower-summary-header span {
   color: #64748b;
   font-size: 12px;
+}
+
+.tower-catalog {
+  color: #fbbf24;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
 }
 
 .accessory-list {

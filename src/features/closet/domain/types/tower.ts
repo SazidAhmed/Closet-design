@@ -2,6 +2,11 @@
 // Tower & Accessory domain types
 // ---------------------------------------------------------------------------
 
+import type {
+  ClosetCatalogCategoryCode,
+  ClosetDoorMode,
+} from '../closetCatalogs'
+
 /** An accessory placed inside a tower. */
 export type RodAccessory = {
   type: 'rod'
@@ -58,6 +63,18 @@ export type Tower = {
   depth: number
   /** Height override (if different from the overall cabinet height). */
   height: number
+  /** Door mode used for catalog-driven closet pricing. */
+  doorMode?: ClosetDoorMode
+  /** Customer-facing catalog category code, e.g. CAS or CDH. */
+  categoryCode?: ClosetCatalogCategoryCode
+  /** Customer-facing catalog category name, e.g. Shelves. */
+  categoryName?: string
+  /** Active catalog ID resolved for this tower's dimensions. */
+  catalogId?: number
+  /** Active catalog code resolved for this tower's dimensions. */
+  catalogCode?: string
+  /** Whether this tower is using a corner cabinet catalog/category. */
+  isCorner?: boolean
   /** Accessories placed inside this tower. */
   accessories: Accessory[]
 }

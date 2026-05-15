@@ -12,6 +12,15 @@ import {
 import { validateCloset } from '../features/closet/domain/validateCloset'
 import type { Tower, Accessory } from '../features/closet/domain/types/tower'
 import { createDefaultTower } from '../features/closet/domain/types/tower'
+import {
+  clampTowerDepth,
+  clampTowerHeight,
+  clampTowerWidth,
+  createTowerFromCategory,
+  refreshTowerCatalog,
+  type ClosetCatalogCategoryCode,
+  type ClosetDoorMode,
+} from '../features/closet/domain/closetCatalogs'
 import type { ClosetMaterials, ArchitecturalDoorOptions } from '../features/closet/domain/types/material'
 import type { ClosetTypeName } from '../features/closet/domain/closetTypes'
 import { getClosetType } from '../features/closet/domain/closetTypes'
@@ -65,6 +74,11 @@ export const useClosetStore = defineStore('closet', {
       this.towers = allTowers
     },
 
+    addTowerFromCatalog(doorMode: ClosetDoorMode, categoryCode: ClosetCatalogCategoryCode) {
+      const idx = this.towers.length + 1
+      this.towers.push(createTowerFromCategory(doorMode, categoryCode, idx))
+    },
+
     removeTower(towerId: string) {
       const idx = this.towers.findIndex((t) => t.id === towerId)
       if (idx !== -1) this.towers.splice(idx, 1)
@@ -87,17 +101,19 @@ export const useClosetStore = defineStore('closet', {
 
     setTowerWidth(towerId: string, width: number) {
       const tower = this.towers.find((t) => t.id === towerId)
-      if (tower) tower.width = width
+      if (tower) tower.width = clampTowerWidth(tower, width)
     },
 
     setTowerDepth(towerId: string, depth: number) {
       const tower = this.towers.find((t) => t.id === towerId)
-      if (tower) tower.depth = depth
+      if (!tower) return
+      tower.depth = clampTowerDepth(tower, depth)
+      refreshTowerCatalog(tower)
     },
 
     setTowerHeight(towerId: string, height: number) {
       const tower = this.towers.find((t) => t.id === towerId)
-      if (tower) tower.height = height
+      if (tower) tower.height = clampTowerHeight(tower, height)
     },
 
     // ── Accessories ───────────────────────────────────────────────────────

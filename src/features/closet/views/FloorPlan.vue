@@ -2442,6 +2442,10 @@ function dimLinePoints(wall: {
               />
             </div>
 
+            <a class="build-closet-btn" href="/closet/build">
+              Build Closet
+            </a>
+
             <p class="draw-hint" v-if="isDrawing">
               Click on the canvas to place wall vertices.<br />
               Click near the <strong>first point</strong> to close the room.<br />
@@ -4168,6 +4172,30 @@ function dimLinePoints(wall: {
 .draw-btn:hover {
   background: rgba(96, 165, 250, 0.2) !important;
   border-color: rgba(96, 165, 250, 0.35) !important;
+}
+
+.build-closet-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 8px;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+
+.build-closet-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(251, 191, 36, 0.18);
 }
 
 .undo-btn {
