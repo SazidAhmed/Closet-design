@@ -25,6 +25,8 @@ onMounted(() => {
   history.loadFromLocalStorage();
   // Start recording undo history + auto-saving
   history.startWatching();
+  // Sync state from other open tabs in real-time
+  history.startCrossTabSync();
   document.addEventListener("keydown", onKeydown);
 });
 

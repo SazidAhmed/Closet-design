@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import TopToolbar from "../../../components/TopToolbar.vue";
 import FooterBar from "../../../components/FooterBar.vue";
+import RoomPlanPreview from "../../../components/RoomPlanPreview.vue";
 import { useAppStore } from "../../../stores/useAppStore";
 import { useClosetStore } from "../../../stores/useClosetStore";
 import { useSelectionStore } from "../../../stores/useSelectionStore";
@@ -166,11 +167,11 @@ function towerSubtitle(tower: {
           </div>
         </div>
 
-        <div v-if="closet.towers.length === 0" class="empty-state">
-          Select a door mode and add a category to start building the closet.
+        <div class="preview-section" style="flex: 1; min-height: 200px; display: flex; flex-direction: column; margin-bottom: 24px;">
+          <RoomPlanPreview />
         </div>
 
-        <div v-else class="tower-grid">
+        <div v-if="closet.towers.length > 0" class="tower-grid">
           <button
             v-for="tower in closet.towers"
             :key="tower.id"
@@ -416,8 +417,11 @@ function towerSubtitle(tower: {
 
 .builder-workspace {
   min-width: 0;
-  overflow-y: auto;
   padding: 28px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
 
 .workspace-header {

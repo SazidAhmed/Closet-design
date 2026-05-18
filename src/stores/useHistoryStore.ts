@@ -31,6 +31,8 @@ export const useHistoryStore = defineStore('history', {
     _replaying: false,
     /** Debounce timer for auto-save */
     _saveTimer: null as ReturnType<typeof setTimeout> | null,
+    /** Suppress echo-back when a cross-tab sync event applied a snapshot */
+    _syncInFlight: false,
     /** Named design slots */
     slots: [] as DesignSlot[],
     /** Currently active design slot ID */
@@ -185,11 +187,41 @@ export const useHistoryStore = defineStore('history', {
 
     // ── Auto-save with debounce ──────────────────────────────────────────
     scheduleAutoSave() {
+      // Do NOT echo back data received from another tab — prevents the
+      // "one-change-behind" loop where each tab bounces saves off each other.
+      if (this._syncInFlight) return
       if (this._saveTimer !== null) clearTimeout(this._saveTimer)
       this._saveTimer = setTimeout(() => {
         this.saveToLocalStorage()
         this._saveTimer = null
       }, 1500)
+    },
+
+    // ── Cross-tab sync ───────────────────────────────────────────────────
+    /**
+     * Listen for localStorage writes from OTHER browser tabs and immediately
+     * re-hydrate the room + closet stores so all open tabs stay in sync.
+     * Call once from App.vue alongside startWatching().
+     */
+    startCrossTabSync() {
+      window.addEventListener('storage', (e: StorageEvent) => {
+        if (e.key !== STORAGE_KEY || e.newValue === null || e.storageArea !== localStorage) return
+        if (this._replaying) return
+        try {
+          const snap: Snapshot = JSON.parse(e.newValue)
+          if (snap.closet && snap.room) {
+            // Mark that we are applying data FROM another tab so that the
+            // reactive watcher does not echo it back via scheduleAutoSave.
+            this._syncInFlight = true
+            this._applySnapshot(snap)
+            // Clear the flag after Vue's async watchers have had a chance to
+            // run (one rAF is enough — watchers flush before paint).
+            requestAnimationFrame(() => {
+              this._syncInFlight = false
+            })
+          }
+        } catch { /* malformed data — ignore */ }
+      })
     },
 
     // ── Watch stores for changes ─────────────────────────────────────────

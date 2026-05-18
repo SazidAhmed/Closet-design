@@ -5,6 +5,7 @@ import { useRoomStore } from "../../../stores/useRoomStore";
 import { useAppStore } from "../../../stores/useAppStore";
 import { useClosetStore } from "../../../stores/useClosetStore";
 import { onMounted, onUnmounted, computed, ref, reactive, watch } from "vue";
+import { useRouter } from "vue-router";
 import { ROOM_CONSTRAINTS } from "../domain/constraints";
 import {
   DEFAULT_QUICK_ROOM_PRESET_ID,
@@ -18,6 +19,14 @@ const roomStore = useRoomStore();
 const appStore = useAppStore();
 const historyStore = useHistoryStore();
 const closetStore = useClosetStore();
+const router = useRouter();
+
+/** Flush pending autosave then navigate via Vue Router so the Build Closet
+ *  always sees the latest store state without a full page reload. */
+function navigateToBuild() {
+  historyStore.saveToLocalStorage();
+  router.push('/closet/build');
+}
 
 const quickPresetId = ref<string | null>(DEFAULT_QUICK_ROOM_PRESET_ID);
 const showPresetReplaceDialog = ref(false);
@@ -2442,9 +2451,9 @@ function dimLinePoints(wall: {
               />
             </div>
 
-            <a class="build-closet-btn" href="/closet/build">
+            <button class="build-closet-btn" @click="navigateToBuild">
               Build Closet
-            </a>
+            </button>
 
             <p class="draw-hint" v-if="isDrawing">
               Click on the canvas to place wall vertices.<br />
