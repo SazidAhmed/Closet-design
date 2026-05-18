@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import TopToolbar from "../../../components/TopToolbar.vue";
 import FooterBar from "../../../components/FooterBar.vue";
 import RoomPlanPreview from "../../../components/RoomPlanPreview.vue";
+import FloorPlan from "./FloorPlan.vue";
 import { useAppStore } from "../../../stores/useAppStore";
 import { useClosetStore } from "../../../stores/useClosetStore";
 import { useSelectionStore } from "../../../stores/useSelectionStore";
@@ -23,6 +24,7 @@ const selection = useSelectionStore();
 const { fmt } = useUnit();
 
 const selectedDoorMode = ref<ClosetDoorMode>("without_doors");
+const showElevation = ref(false);
 
 const visibleCategories = computed(() =>
   getCategoriesForDoorMode(selectedDoorMode.value),
@@ -165,13 +167,19 @@ function towerSubtitle(tower: {
             <h1>Closet Towers</h1>
             <p>{{ closet.towers.length }} tower{{ closet.towers.length === 1 ? "" : "s" }} configured</p>
           </div>
+          <button v-if="!showElevation" class="elevation-open-btn" @click="showElevation = true">
+            Elevation
+          </button>
         </div>
 
-        <div class="preview-section" style="flex: 1; min-height: 200px; display: flex; flex-direction: column; margin-bottom: 24px;">
+        <div v-if="showElevation" class="elevation-inline-container" style="flex: 1; display: flex; flex-direction: column; position: relative;">
+          <FloorPlan :elevation-only="true" @close="showElevation = false" />
+        </div>
+        <div v-show="!showElevation" class="preview-section" style="flex: 1; min-height: 200px; display: flex; flex-direction: column; margin-bottom: 24px;">
           <RoomPlanPreview />
         </div>
 
-        <div v-if="closet.towers.length > 0" class="tower-grid">
+        <div v-show="!showElevation && closet.towers.length > 0" class="tower-grid">
           <button
             v-for="tower in closet.towers"
             :key="tower.id"
@@ -292,6 +300,8 @@ function towerSubtitle(tower: {
       forward-route="/closet/review"
       :show-view-toggle="false"
     />
+
+    
   </div>
 </template>
 
@@ -562,4 +572,20 @@ function towerSubtitle(tower: {
     border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   }
 }
+
+.elevation-open-btn {
+  padding: 8px 16px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.elevation-open-btn:hover {
+  background: #2563eb;
+}
+
+
 </style>

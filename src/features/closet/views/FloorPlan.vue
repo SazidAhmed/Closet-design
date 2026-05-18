@@ -1,4 +1,24 @@
+<script lang="ts">
+import { ref as _ref, reactive as _reactive } from "vue";
+
+export type SharedElevationClosetBlock = {
+  id: string;
+  widthCm: number;
+  heightCm: number;
+  leftCm: number;
+  bottomCm: number;
+};
+
+const sharedElevationClosetIdCounter = _ref(1);
+const sharedElevationClosetBlocksByWall = _reactive<
+  Record<string, SharedElevationClosetBlock[]>
+>({});
+const sharedSelectedElevationClosetId = _ref<string | null>(null);
+</script>
+
 <script setup lang="ts">
+const props = defineProps<{ elevationOnly?: boolean }>();
+const emit = defineEmits<{ (e: "close"): void }>();
 import TopToolbar from "../../../components/TopToolbar.vue";
 import FooterBar from "../../../components/FooterBar.vue";
 import { useRoomStore } from "../../../stores/useRoomStore";
@@ -25,7 +45,7 @@ const router = useRouter();
  *  always sees the latest store state without a full page reload. */
 function navigateToBuild() {
   historyStore.saveToLocalStorage();
-  router.push('/closet/build');
+  router.push("/closet/build");
 }
 
 const quickPresetId = ref<string | null>(DEFAULT_QUICK_ROOM_PRESET_ID);
@@ -105,6 +125,17 @@ function screenToSvg(
 }
 
 onMounted(() => {
+  if (props.elevationOnly) {
+    if (roomStore.walls.length > 0) {
+      const firstWall = roomStore.walls[0];
+      elevationWallId.value = firstWall.id;
+      if (!elevationClosetBlocksByWall[firstWall.id]) {
+        elevationClosetBlocksByWall[firstWall.id] = [];
+      }
+      showElevationOverlay.value = true;
+    }
+    return;
+  }
   appStore.setStep("floorplan");
   // If no walls exist (fresh session, nothing in localStorage), apply the
   // default preset so the room actually matches the highlighted preset button.
@@ -436,13 +467,7 @@ const elevationDrag = reactive<{
   startPointerY: 0,
 });
 
-type ElevationClosetBlock = {
-  id: string;
-  leftCm: number;
-  bottomCm: number;
-  widthCm: number;
-  heightCm: number;
-};
+type ElevationClosetBlock = SharedElevationClosetBlock;
 
 type ElevationClosetInteractionMode =
   | "move"
@@ -467,11 +492,9 @@ type ElevationHorizontalBoundsCm = {
 
 const MAX_ELEVATION_CLOSETS_PER_WALL = 8;
 const ELEVATION_BOUNDS_EPSILON_CM = 0.001;
-const elevationClosetIdCounter = ref(1);
-const elevationClosetBlocksByWall = reactive<
-  Record<string, ElevationClosetBlock[]>
->({});
-const selectedElevationClosetId = ref<string | null>(null);
+const elevationClosetIdCounter = sharedElevationClosetIdCounter;
+const elevationClosetBlocksByWall = sharedElevationClosetBlocksByWall;
+const selectedElevationClosetId = sharedSelectedElevationClosetId;
 
 const elevationClosetDrag = reactive<{
   active: boolean;
@@ -1113,6 +1136,7 @@ function closeElevationOverlay() {
   elevationWallId.value = null;
   stopElevationItemDrag();
   stopElevationClosetDrag();
+  if (props.elevationOnly) emit("close");
 }
 
 const elevationWallIndex = computed(() => {
@@ -2382,8 +2406,9 @@ function dimLinePoints(wall: {
 </script>
 
 <template>
-  <div class="floorplan-page">
+  <div class="floorplan-page" :class="{ 'elevation-only-page': props.elevationOnly }">
     <TopToolbar
+      v-if="!props.elevationOnly"
       @undo="historyStore.undo()"
       @redo="historyStore.redo()"
       @save="historyStore.saveToLocalStorage()"
@@ -2393,9 +2418,9 @@ function dimLinePoints(wall: {
       <template #title>Floor Plan</template>
     </TopToolbar>
 
-    <div class="floorplan-body">
+    <div :class="['floorplan-body', { 'elevation-only': props.elevationOnly }]">
       <!-- Left Sidebar: Add Architecture -->
-      <aside class="sidebar sidebar-left">
+      <aside v-if="!props.elevationOnly" class="sidebar sidebar-left">
         <div class="sidebar-section">
           <h3 class="sidebar-heading">Layout Tools</h3>
 
@@ -2472,7 +2497,7 @@ function dimLinePoints(wall: {
         >
           <svg
             ref="svgRef"
-            v-show="!showElevationOverlay"
+            v-show="!props.elevationOnly && !showElevationOverlay"
             :viewBox="drawViewBox"
             class="floorplan-svg draw-canvas"
             xmlns="http://www.w3.org/2000/svg"
@@ -3211,19 +3236,28 @@ function dimLinePoints(wall: {
         </div>
 
         <!-- Hint overlay -->
-        <div class="canvas-hint" v-if="!showElevationOverlay && isDrawing">
+        <div
+          class="canvas-hint"
+          v-if="!showElevationOverlay && !props.elevationOnly && isDrawing"
+        >
           Click to place vertices · Click near first point to close · Esc to
           finish
         </div>
-        <div class="canvas-hint" v-else-if="!showElevationOverlay && isClosed">
+        <div
+          class="canvas-hint"
+          v-else-if="!showElevationOverlay && !props.elevationOnly && isClosed"
+        >
           Click a wall to select and edit · Click empty area to deselect
         </div>
-        <div class="canvas-hint" v-else-if="!showElevationOverlay">
+        <div
+          class="canvas-hint"
+          v-else-if="!showElevationOverlay && !props.elevationOnly"
+        >
           Select a preset or click Custom Room to redraw the room
         </div>
       </main>
 
-      <aside class="sidebar sidebar-right">
+      <aside v-if="!props.elevationOnly" class="sidebar sidebar-right">
         <div class="sidebar-section">
           <h3 class="sidebar-heading">Wall Options</h3>
 
@@ -3532,6 +3566,7 @@ function dimLinePoints(wall: {
     </Teleport>
 
     <FooterBar
+      v-if="!props.elevationOnly"
       back-label="Back to Select Closet Type"
       back-route="/closet/type"
       forward-label="Design Closet"
@@ -4403,8 +4438,26 @@ function dimLinePoints(wall: {
     opacity: 0.4;
   }
 }
-</style>
 
+.floorplan-body.elevation-only {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+.floorplan-body.elevation-only .floorplan-canvas-area {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+}
+
+.floorplan-page.elevation-only-page {
+  background: transparent;
+  height: 100%;
+}
+.floorplan-body.elevation-only .floorplan-canvas-area {
+  background: transparent;
+}
+</style>
 <!-- Unscoped for Teleport -->
 <style>
 .dialog-overlay {
