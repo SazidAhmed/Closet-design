@@ -1,0 +1,29 @@
+# Build Closet UI Tasks
+
+- `[/]` Phase 1: Database, Schema, and Domain Types
+  - `[ ]` Define catalog schema types in `src/features/closet/domain/types/catalog.ts`
+  - `[ ]` Extend `Tower` interface to create `PlacedCabinet` in `src/features/closet/domain/types/tower.ts`
+- `[ ]` Phase 2: Pinia Store Upgrades
+  - `[ ]` Update `useClosetStore.ts` state with `placedCabinets` and `catalogRegistry`
+  - `[ ]` Implement store actions: `addCabinet`, `updateCabinetDimensions`, `removeCabinet`, etc.
+  - `[ ]` Implement store getters: `cabinetsByWallId`, `clearancesForCabinet`, `resolvedCatalogForCabinet`
+- `[ ]` Phase 3: UI Layout & Double Viewport Integration
+  - `[ ]` Update `DesignCloset.vue` for side-by-side or toggled views
+  - `[ ]` Create `OverheadDesigner.vue`
+  - `[ ]` Create `ElevationDesigner.vue`
+- `[ ]` Phase 4: Left-Sidebar Catalog Component
+  - `[ ]` Create `CatalogSidebar.vue` with tree structure and placement handlers
+- `[ ]` Phase 5: Cabinet Internal SVG Templates
+  - `[ ]` Create `CabinetShelvesSvg.vue`
+  - `[ ]` Create `CabinetDoubleHangingSvg.vue`
+  - `[ ]` Create `CabinetLongHangingSvg.vue`
+  - `[ ]` Create `CabinetRodDrawersSvg.vue`
+  - `[ ]` Create `CabinetShoeShelvesSvg.vue`
+- `[ ]` Phase 6 & 7: Properties Panels
+  - `[ ]` Create `CabinetPropertiesPanel.vue`
+  - `[ ]` Create `WallPropertiesPanel.vue`
+- `[ ]` Phase 8: Quote and Validation Integration
+  - `[ ]` Update `useQuoteStore.ts` to sync with cabinet placements
+  - `[ ]` Implement validation checks
+- `[ ]` Phase 9: Product Editor Dialog
+  - `[ ]` Create `ProductEditorDialog.vue`
