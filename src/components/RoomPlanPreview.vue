@@ -142,7 +142,7 @@ const placedTowerPolygons = computed(() => {
       const cy_inner = cy + py * tHalf;
 
       const d = tower.depth;
-      const corners: [number, number][] = [
+      const corners: [[number, number], [number, number], [number, number], [number, number]] = [
         [cx_inner - wx * halfW,          cy_inner - wy * halfW],
         [cx_inner + wx * halfW,          cy_inner + wy * halfW],
         [cx_inner + wx * halfW + px * d, cy_inner + wy * halfW + py * d],

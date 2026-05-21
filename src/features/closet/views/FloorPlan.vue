@@ -17,8 +17,6 @@ const sharedSelectedElevationClosetId = _ref<string | null>(null);
 </script>
 
 <script setup lang="ts">
-const props = defineProps<{ elevationOnly?: boolean }>();
-const emit = defineEmits<{ (e: "close"): void }>();
 import TopToolbar from "../../../components/TopToolbar.vue";
 import FooterBar from "../../../components/FooterBar.vue";
 import { useRoomStore } from "../../../stores/useRoomStore";
@@ -34,11 +32,22 @@ import {
 } from "../domain/quickRoomPresets";
 import { wallInsideGuideAreaPoints } from "../domain/geometry/insideWallSide";
 import { useHistoryStore } from "../../../stores/useHistoryStore";
+import { useSelectionStore } from "../../../stores/useSelectionStore";
+import type { Tower } from "../domain/types/tower";
+import type {
+  PlacedItemType,
+  PlacedItemCategory,
+  PlacedItem,
+} from "../domain/types/room";
+
+const props = defineProps<{ elevationOnly?: boolean }>();
+const emit = defineEmits<{ (e: "close"): void }>();
 
 const roomStore = useRoomStore();
 const appStore = useAppStore();
 const historyStore = useHistoryStore();
 const closetStore = useClosetStore();
+const selectionStore = useSelectionStore();
 const router = useRouter();
 
 /** Flush pending autosave then navigate via Vue Router so the Build Closet
@@ -128,11 +137,13 @@ onMounted(() => {
   if (props.elevationOnly) {
     if (roomStore.walls.length > 0) {
       const firstWall = roomStore.walls[0];
-      elevationWallId.value = firstWall.id;
-      if (!elevationClosetBlocksByWall[firstWall.id]) {
-        elevationClosetBlocksByWall[firstWall.id] = [];
+      if (firstWall) {
+        elevationWallId.value = firstWall.id;
+        if (!elevationClosetBlocksByWall[firstWall.id]) {
+          elevationClosetBlocksByWall[firstWall.id] = [];
+        }
+        showElevationOverlay.value = true;
       }
-      showElevationOverlay.value = true;
     }
     return;
   }
@@ -164,11 +175,6 @@ function formatInches(cm: number): string {
 }
 
 // ───── Architecture item catalog ───────────────────────────────────────────
-import type {
-  PlacedItemType,
-  PlacedItemCategory,
-  PlacedItem,
-} from "../domain/types/room";
 
 type ItemDef = {
   type: PlacedItemType;
@@ -521,6 +527,196 @@ const elevationClosetDrag = reactive<{
   startPointerX: 0,
   startPointerY: 0,
 });
+
+const elevationTowerDrag = reactive({
+  active: false,
+  towerId: "",
+  offsetX: 0,
+  startPointerX: 0,
+});
+
+const activeElevationTowers = computed(() => {
+  if (!elevationWallId.value) return [];
+  return closetStore.towers.filter((t) => t.wallId === elevationWallId.value);
+});
+
+function towerElevationGeometryCm(tower: Tower) {
+  const wall = roomStore.walls.find((w) => w.id === tower.wallId);
+  const wallLength = wall ? wall.length : 100;
+  const pos = tower.positionAlongWall ?? 0.5;
+  const widthCm = Number(tower.width) || 0;
+  const heightCm = Number(tower.height) || 0;
+  return {
+    leftCm: pos * wallLength - widthCm / 2,
+    bottomCm: 0,
+    widthCm,
+    heightCm,
+  };
+}
+
+function towerElevationRect(tower: Tower): ElevationItemRect {
+  const layout = elevationLayout.value;
+  const geometry = towerElevationGeometryCm(tower);
+  return {
+    x: layout.wallX + geometry.leftCm * layout.scale,
+    y:
+      layout.wallY +
+      (layout.roomHeightCm - (geometry.bottomCm + geometry.heightCm)) *
+        layout.scale,
+    width: geometry.widthCm * layout.scale,
+    height: geometry.heightCm * layout.scale,
+  };
+}
+
+function getTowerAccessoriesLayout(tower: Tower) {
+  const geom = towerElevationGeometryCm(tower);
+  const T = closetStore.cabinet?.thickness ?? 2;
+  const innerLeft = geom.leftCm + T;
+  const innerRight = geom.leftCm + geom.widthCm - T;
+  const innerWidth = geom.widthCm - T * 2;
+  const innerBottom = T;
+  const innerTop = geom.heightCm - T;
+  const innerHeight = geom.heightCm - T * 2;
+
+  const shelves: Array<{ x: number; y: number; w: number; h: number }> = [];
+  const rods: Array<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    brackets: Array<{ x: number; y: number; w: number; h: number }>;
+  }> = [];
+  const drawers: Array<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    handle: { x: number; y: number; w: number; h: number };
+  }> = [];
+  const shoeShelves: Array<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    guardrailY: number;
+  }> = [];
+
+  for (const acc of tower.accessories) {
+    if (acc.type === "shelf_set") {
+      const count = acc.count;
+      if (count > 0) {
+        const gap = innerHeight / (count + 1);
+        for (let i = 0; i < count; i++) {
+          const y = innerBottom + gap * (i + 1);
+          shelves.push({
+            x: innerLeft,
+            y: y - T / 2,
+            w: innerWidth,
+            h: T,
+          });
+        }
+      }
+    } else if (acc.type === "rod") {
+      const positionFractions: Record<string, number> = {
+        high: 0.8,
+        medium: 0.5,
+        low: 0.25,
+      };
+      const fraction = positionFractions[acc.position] ?? 0.5;
+      const baseY = innerBottom + innerHeight * fraction;
+      const rodRadius = 1.2;
+      for (let r = 0; r < acc.count; r++) {
+        const y = baseY - r * 40;
+        rods.push({
+          x: innerLeft + 1,
+          y: y - rodRadius,
+          w: innerWidth - 2,
+          h: rodRadius * 2,
+          brackets: [
+            { x: innerLeft, y: y - 2, w: 1, h: 4 },
+            { x: innerRight - 1, y: y - 2, w: 1, h: 4 },
+          ],
+        });
+      }
+    } else if (acc.type === "drawer") {
+      const count = acc.count;
+      const drawerHeight = acc.drawerHeight || 20;
+      const gap = 1;
+      for (let i = 0; i < count; i++) {
+        const bottom = innerBottom + i * (drawerHeight + gap);
+        drawers.push({
+          x: innerLeft + 1,
+          y: bottom,
+          w: innerWidth - 2,
+          h: drawerHeight,
+          handle: {
+            x: innerLeft + 1 + (innerWidth - 2) * 0.3,
+            y: bottom + drawerHeight / 2 - 0.5,
+            w: (innerWidth - 2) * 0.4,
+            h: 1,
+          },
+        });
+      }
+    } else if (acc.type === "shoe_shelf") {
+      const count = acc.count;
+      if (count > 0) {
+        const shelfSpacing = Math.min(20, innerHeight / (count + 1));
+        for (let i = 0; i < count; i++) {
+          const y = innerBottom + shelfSpacing * (i + 1);
+          shoeShelves.push({
+            x: innerLeft,
+            y: y,
+            w: innerWidth,
+            h: T,
+            guardrailY: y + 3,
+          });
+        }
+      }
+    }
+  }
+
+  return {
+    geom,
+    T,
+    innerLeft,
+    innerRight,
+    innerWidth,
+    innerBottom,
+    innerTop,
+    innerHeight,
+    shelves,
+    rods,
+    drawers,
+    shoeShelves,
+  };
+}
+
+function startElevationTowerDrag(towerId: string, e: PointerEvent) {
+  if (!elevationSvgRef.value || !elevationWall.value) return;
+
+  const tower = closetStore.towers.find((t) => t.id === towerId);
+  if (!tower) return;
+
+  selectionStore.selectTower(towerId);
+  e.preventDefault();
+
+  const pointerPoint = screenToSvg(elevationSvgRef.value, e.clientX, e.clientY);
+  const rect = towerElevationRect(tower);
+
+  elevationTowerDrag.active = true;
+  elevationTowerDrag.towerId = towerId;
+  elevationTowerDrag.offsetX = pointerPoint.x - rect.x;
+  elevationTowerDrag.startPointerX = pointerPoint.x;
+
+  (e.currentTarget as Element | null)?.setPointerCapture?.(e.pointerId);
+}
+
+function stopElevationTowerDrag() {
+  elevationTowerDrag.active = false;
+  elevationTowerDrag.towerId = "";
+  elevationTowerDrag.offsetX = 0;
+  elevationTowerDrag.startPointerX = 0;
+}
 
 const elevationWall = computed(() => {
   if (!elevationWallId.value) return null;
@@ -1136,6 +1332,7 @@ function closeElevationOverlay() {
   elevationWallId.value = null;
   stopElevationItemDrag();
   stopElevationClosetDrag();
+  stopElevationTowerDrag();
   if (props.elevationOnly) emit("close");
 }
 
@@ -1312,6 +1509,41 @@ function onElevationPointerMove(e: PointerEvent) {
   if (layout.scale <= 0) return;
   const horizontalBounds = elevationHorizontalBounds.value;
   if (horizontalBounds.usableSpanCm <= ELEVATION_BOUNDS_EPSILON_CM) return;
+
+  if (elevationTowerDrag.active) {
+    const tower = closetStore.towers.find(
+      (t) => t.id === elevationTowerDrag.towerId,
+    );
+    if (!tower) {
+      stopElevationTowerDrag();
+      return;
+    }
+
+    const pointerPoint = screenToSvg(
+      elevationSvgRef.value,
+      e.clientX,
+      e.clientY,
+    );
+    const minX = layout.wallX + horizontalBounds.minLeftCm * layout.scale;
+    const maxX =
+      layout.wallX +
+      Math.max(
+        horizontalBounds.minLeftCm,
+        horizontalBounds.maxRightCm - tower.width,
+      ) *
+        layout.scale;
+
+    const nextX = Math.max(
+      minX,
+      Math.min(maxX, pointerPoint.x - elevationTowerDrag.offsetX),
+    );
+    const nextLeftCm = (nextX - layout.wallX) / layout.scale;
+    const centerCm = nextLeftCm + tower.width / 2;
+    const nextAlong = Math.max(0, Math.min(1, centerCm / layout.wallLengthCm));
+
+    closetStore.updateTower(tower.id, { positionAlongWall: nextAlong });
+    return;
+  }
 
   if (elevationClosetDrag.active) {
     const closetId = elevationClosetDrag.closetId;
@@ -1534,6 +1766,7 @@ function onElevationPointerMove(e: PointerEvent) {
 function onElevationPointerUp() {
   stopElevationItemDrag();
   stopElevationClosetDrag();
+  stopElevationTowerDrag();
 }
 
 watch(
@@ -1562,6 +1795,7 @@ watch(
     if (!open) {
       stopElevationItemDrag();
       stopElevationClosetDrag();
+      stopElevationTowerDrag();
     }
   },
 );
@@ -2842,6 +3076,24 @@ function dimLinePoints(wall: {
                   selectedElevationClosetId = null;
                 "
               >
+                <defs>
+                  <!-- Premium Chrome linear gradient for hanging rods and handles -->
+                  <linearGradient id="chrome-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#f8fafc" />
+                    <stop offset="30%" stop-color="#cbd5e1" />
+                    <stop offset="50%" stop-color="#94a3b8" />
+                    <stop offset="70%" stop-color="#cbd5e1" />
+                    <stop offset="100%" stop-color="#475569" />
+                  </linearGradient>
+
+                  <!-- Premium wood linear gradient for shelves and carcass -->
+                  <linearGradient id="wood-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#a16207" />
+                    <stop offset="50%" stop-color="#ca8a04" />
+                    <stop offset="100%" stop-color="#854d0e" />
+                  </linearGradient>
+                </defs>
+
                 <g
                   v-if="hasPrevElevationWall"
                   class="elevation-nav-arrow"
@@ -3042,6 +3294,18 @@ function dimLinePoints(wall: {
                     :data-testid="`elevation-closet-${block.id}`"
                     class="elevation-closet-rect"
                   />
+                  <!-- Dashed horizontal lines to make placeholder draft blocks look authentic -->
+                  <line
+                    v-for="i in 4"
+                    :key="`dash-${i}`"
+                    :x1="elevationClosetRect(block).x"
+                    :y1="elevationClosetRect(block).y + (elevationClosetRect(block).height / 5) * i"
+                    :x2="elevationClosetRect(block).x + elevationClosetRect(block).width"
+                    :y2="elevationClosetRect(block).y + (elevationClosetRect(block).height / 5) * i"
+                    stroke="rgba(255, 255, 255, 0.25)"
+                    stroke-width="1"
+                    stroke-dasharray="3,3"
+                  />
                   <text
                     :x="
                       elevationClosetRect(block).x +
@@ -3114,6 +3378,125 @@ function dimLinePoints(wall: {
                       "
                     />
                   </g>
+                </g>
+
+                <!-- Active Elevation Towers (Shelves, Rods, Drawers, Shoe Shelves, Selection Highlight) -->
+                <g
+                  v-for="tower in activeElevationTowers"
+                  :key="tower.id"
+                  class="elevation-tower"
+                  :class="{ selected: selectionStore.selectedTowerId === tower.id }"
+                  @pointerdown="startElevationTowerDrag(tower.id, $event)"
+                  @click.stop="selectionStore.selectTower(tower.id)"
+                  style="cursor: grab"
+                >
+                  <!-- 3D style high-fidelity Carcass Background and side panels -->
+                  <rect
+                    :x="towerElevationRect(tower).x"
+                    :y="towerElevationRect(tower).y"
+                    :width="towerElevationRect(tower).width"
+                    :height="towerElevationRect(tower).height"
+                    class="elevation-tower-carcass"
+                  />
+                  <!-- Interior backing box -->
+                  <rect
+                    :x="towerElevationRect(tower).x + (closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
+                    :y="towerElevationRect(tower).y + (closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
+                    :width="towerElevationRect(tower).width - (closetStore.cabinet?.thickness ?? 2) * 2 * elevationLayout.scale"
+                    :height="towerElevationRect(tower).height - (closetStore.cabinet?.thickness ?? 2) * 2 * elevationLayout.scale"
+                    class="elevation-tower-interior"
+                  />
+
+                  <!-- Shelves -->
+                  <g v-for="(shelf, sIdx) in getTowerAccessoriesLayout(tower).shelves" :key="`shelf-${sIdx}`">
+                    <rect
+                      :x="elevationLayout.wallX + shelf.x * elevationLayout.scale"
+                      :y="elevationLayout.wallY + (elevationLayout.roomHeightCm - (shelf.y + shelf.h)) * elevationLayout.scale"
+                      :width="shelf.w * elevationLayout.scale"
+                      :height="shelf.h * elevationLayout.scale"
+                      class="elevation-shelf"
+                    />
+                  </g>
+
+                  <!-- Hanging Rods with realistic chrome look and wall brackets -->
+                  <g v-for="(rod, rIdx) in getTowerAccessoriesLayout(tower).rods" :key="`rod-${rIdx}`">
+                    <!-- Brackets -->
+                    <rect
+                      v-for="(bracket, bIdx) in rod.brackets"
+                      :key="`bracket-${bIdx}`"
+                      :x="elevationLayout.wallX + bracket.x * elevationLayout.scale"
+                      :y="elevationLayout.wallY + (elevationLayout.roomHeightCm - (bracket.y + bracket.h)) * elevationLayout.scale"
+                      :width="bracket.w * elevationLayout.scale"
+                      :height="bracket.h * elevationLayout.scale"
+                      class="elevation-rod-bracket"
+                    />
+                    <!-- Rod bar -->
+                    <rect
+                      :x="elevationLayout.wallX + rod.x * elevationLayout.scale"
+                      :y="elevationLayout.wallY + (elevationLayout.roomHeightCm - (rod.y + rod.h)) * elevationLayout.scale"
+                      :width="rod.w * elevationLayout.scale"
+                      :height="rod.h * elevationLayout.scale"
+                      class="elevation-rod-bar"
+                    />
+                  </g>
+
+                  <!-- Drawers with warm wood fronts and polished chrome handle strips -->
+                  <g v-for="(drawer, dIdx) in getTowerAccessoriesLayout(tower).drawers" :key="`drawer-${dIdx}`">
+                    <!-- Drawer Face -->
+                    <rect
+                      :x="elevationLayout.wallX + drawer.x * elevationLayout.scale"
+                      :y="elevationLayout.wallY + (elevationLayout.roomHeightCm - (drawer.y + drawer.h)) * elevationLayout.scale"
+                      :width="drawer.w * elevationLayout.scale"
+                      :height="drawer.h * elevationLayout.scale"
+                      class="elevation-drawer-face"
+                    />
+                    <!-- Drawer Handle -->
+                    <rect
+                      :x="elevationLayout.wallX + drawer.handle.x * elevationLayout.scale"
+                      :y="elevationLayout.wallY + (elevationLayout.roomHeightCm - (drawer.handle.y + drawer.handle.h)) * elevationLayout.scale"
+                      :width="drawer.handle.w * elevationLayout.scale"
+                      :height="drawer.handle.h * elevationLayout.scale"
+                      class="elevation-drawer-handle"
+                    />
+                  </g>
+
+                  <!-- Shoe shelves with safety guardrails -->
+                  <g v-for="(shoe, shIdx) in getTowerAccessoriesLayout(tower).shoeShelves" :key="`shoe-${shIdx}`">
+                    <rect
+                      :x="elevationLayout.wallX + shoe.x * elevationLayout.scale"
+                      :y="elevationLayout.wallY + (elevationLayout.roomHeightCm - (shoe.y + shoe.h)) * elevationLayout.scale"
+                      :width="shoe.w * elevationLayout.scale"
+                      :height="shoe.h * elevationLayout.scale"
+                      class="elevation-shoe-shelf"
+                    />
+                    <line
+                      :x1="elevationLayout.wallX + shoe.x * elevationLayout.scale"
+                      :y1="elevationLayout.wallY + (elevationLayout.roomHeightCm - shoe.guardrailY) * elevationLayout.scale"
+                      :x2="elevationLayout.wallX + (shoe.x + shoe.w) * elevationLayout.scale"
+                      :y2="elevationLayout.wallY + (elevationLayout.roomHeightCm - shoe.guardrailY) * elevationLayout.scale"
+                      class="elevation-shoe-guardrail"
+                    />
+                  </g>
+
+                  <!-- Selection Highlight -->
+                  <rect
+                    v-if="selectionStore.selectedTowerId === tower.id"
+                    :x="towerElevationRect(tower).x - 2"
+                    :y="towerElevationRect(tower).y - 2"
+                    :width="towerElevationRect(tower).width + 4"
+                    :height="towerElevationRect(tower).height + 4"
+                    class="elevation-tower-selection-highlight"
+                  />
+
+                  <!-- Tower label showing width -->
+                  <text
+                    :x="towerElevationRect(tower).x + towerElevationRect(tower).width / 2"
+                    :y="towerElevationRect(tower).y + towerElevationRect(tower).height + 15"
+                    text-anchor="middle"
+                    class="elevation-tower-label"
+                  >
+                    Tower · {{ formatLength(tower.width) }}
+                  </text>
                 </g>
               </svg>
 
@@ -4456,6 +4839,93 @@ function dimLinePoints(wall: {
 }
 .floorplan-body.elevation-only .floorplan-canvas-area {
   background: transparent;
+}
+
+/* Carcass and interior backing */
+.elevation-tower-carcass {
+  fill: url(#wood-gradient);
+  stroke: #451a03;
+  stroke-width: 1.5px;
+  rx: 3px;
+}
+
+.elevation-tower-interior {
+  fill: rgba(0, 0, 0, 0.08);
+  stroke: none;
+}
+
+/* Accessory items */
+.elevation-shelf {
+  fill: url(#wood-gradient);
+  stroke: #451a03;
+  stroke-width: 1px;
+}
+
+.elevation-rod-bracket {
+  fill: #64748b;
+  stroke: #334155;
+  stroke-width: 0.8px;
+}
+
+.elevation-rod-bar {
+  fill: url(#chrome-gradient);
+  stroke: #334155;
+  stroke-width: 0.8px;
+  rx: 1px;
+}
+
+.elevation-drawer-face {
+  fill: url(#wood-gradient);
+  stroke: #451a03;
+  stroke-width: 1px;
+  rx: 2px;
+}
+
+.elevation-drawer-handle {
+  fill: url(#chrome-gradient);
+  stroke: #334155;
+  stroke-width: 0.8px;
+  rx: 1px;
+}
+
+.elevation-shoe-shelf {
+  fill: url(#wood-gradient);
+  stroke: #451a03;
+  stroke-width: 1px;
+}
+
+.elevation-shoe-guardrail {
+  stroke: #94a3b8;
+  stroke-width: 1px;
+}
+
+/* Selection Highlight */
+.elevation-tower-selection-highlight {
+  fill: none;
+  stroke: #fbbf24;
+  stroke-width: 2.5px;
+  stroke-dasharray: 4, 3;
+  rx: 5px;
+  animation: elevation-highlight-pulse 2s infinite ease-in-out;
+}
+
+@keyframes elevation-highlight-pulse {
+  0% {
+    stroke-opacity: 0.6;
+  }
+  50% {
+    stroke-opacity: 1;
+  }
+  100% {
+    stroke-opacity: 0.6;
+  }
+}
+
+/* Labels */
+.elevation-tower-label {
+  fill: #cbd5e1;
+  font-size: 10px;
+  font-weight: 600;
 }
 </style>
 <!-- Unscoped for Teleport -->
