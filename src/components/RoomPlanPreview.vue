@@ -136,20 +136,25 @@ const placedTowerPolygons = computed(() => {
       const px = -Math.sin(wall.angle);
       const py = Math.cos(wall.angle);
 
+      // Offset by half wall thickness so the back edge of the tower sits on the wall's inside face
+      const tHalf = (wall.thickness ?? 6) / 2;
+      const cx_inner = cx + px * tHalf;
+      const cy_inner = cy + py * tHalf;
+
       const d = tower.depth;
       const corners: [number, number][] = [
-        [cx - wx * halfW,          cy - wy * halfW],
-        [cx + wx * halfW,          cy + wy * halfW],
-        [cx + wx * halfW + px * d, cy + wy * halfW + py * d],
-        [cx - wx * halfW + px * d, cy - wy * halfW + py * d],
+        [cx_inner - wx * halfW,          cy_inner - wy * halfW],
+        [cx_inner + wx * halfW,          cy_inner + wy * halfW],
+        [cx_inner + wx * halfW + px * d, cy_inner + wy * halfW + py * d],
+        [cx_inner - wx * halfW + px * d, cy_inner - wy * halfW + py * d],
       ];
 
       return {
         id: tower.id,
         label: tower.label,
         points: corners.map((c) => c.join(",")).join(" "),
-        labelX: cx + (px * d) / 2,
-        labelY: cy + (py * d) / 2,
+        labelX: cx_inner + (px * d) / 2,
+        labelY: cy_inner + (py * d) / 2,
         selected: selectionStore.selectedTowerId === tower.id,
       };
     })
