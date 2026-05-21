@@ -77,6 +77,16 @@ export type Tower = {
   isCorner?: boolean
   /** Accessories placed inside this tower. */
   accessories: Accessory[]
+  /**
+   * Wall ID this tower is placed against (null/undefined = unplaced).
+   * References a Wall.id from the room store.
+   */
+  wallId?: string | null
+  /**
+   * Fractional position of the tower's centre along the wall (0 = wall start, 1 = wall end).
+   * Clamped at render/move time so the tower stays fully within the wall.
+   */
+  positionAlongWall?: number
 }
 
 // ---- Factory helpers ------------------------------------------------------

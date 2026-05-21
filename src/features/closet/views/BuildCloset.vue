@@ -6,6 +6,7 @@ import RoomPlanPreview from "../../../components/RoomPlanPreview.vue";
 import FloorPlan from "./FloorPlan.vue";
 import { useAppStore } from "../../../stores/useAppStore";
 import { useClosetStore } from "../../../stores/useClosetStore";
+import { useRoomStore } from "../../../stores/useRoomStore";
 import { useSelectionStore } from "../../../stores/useSelectionStore";
 import { useUnit } from "../../../composables/useUnit";
 import {
@@ -20,6 +21,7 @@ import { Plus, Trash2 } from "lucide-vue-next";
 
 const appStore = useAppStore();
 const closet = useClosetStore();
+const room = useRoomStore();
 const selection = useSelectionStore();
 const { fmt } = useUnit();
 
@@ -38,6 +40,13 @@ const selectedTowerLimits = computed<ClosetCatalogLimits | null>(() => {
   const tower = selectedTower.value;
   if (!tower?.doorMode || !tower.categoryCode) return null;
   return getCategoryLimits(tower.doorMode, tower.categoryCode);
+});
+
+/** Wall the selected tower is placed on */
+const selectedTowerWall = computed(() => {
+  const tower = selectedTower.value;
+  if (!tower?.wallId) return null;
+  return room.walls.find((w) => w.id === tower.wallId) ?? null;
 });
 
 onMounted(() => {
@@ -59,7 +68,28 @@ onMounted(() => {
 function addCategoryTower(category: ClosetCatalogCategory) {
   closet.addTowerFromCatalog(category.doorMode, category.categoryCode);
   const added = closet.towers[closet.towers.length - 1];
-  selection.selectTower(added?.id ?? null);
+  if (!added) return;
+  selection.selectTower(added.id);
+
+  // Place on the selected wall, or fall back to the closet wall
+  const wallId = selection.selectedWallId ?? room.closetWall?.id ?? null;
+  if (wallId) {
+    closet.setTowerWall(added.id, wallId, 0.5);
+  }
+}
+
+function moveTowerLeft() {
+  const tower = selectedTower.value;
+  const wall = selectedTowerWall.value;
+  if (!tower || !wall) return;
+  closet.moveTowerAlongWall(tower.id, -0.05, wall.length);
+}
+
+function moveTowerRight() {
+  const tower = selectedTower.value;
+  const wall = selectedTowerWall.value;
+  if (!tower || !wall) return;
+  closet.moveTowerAlongWall(tower.id, 0.05, wall.length);
 }
 
 function setDoorMode(mode: ClosetDoorMode) {
@@ -211,6 +241,31 @@ function towerSubtitle(tower: {
           <div class="selected-summary">
             <strong>{{ selectedTower.label }}</strong>
             <span>{{ towerSubtitle(selectedTower) }}</span>
+          </div>
+
+          <!-- Wall placement info + move controls -->
+          <div v-if="selectedTowerWall" class="wall-placement-section">
+            <div class="wall-placement-label">
+              <span class="wall-tag">Wall {{ selectedTowerWall.label }}</span>
+              <span class="placement-hint">Drag in plan or use arrows</span>
+            </div>
+            <div class="move-controls">
+              <button class="move-btn" title="Move left along wall" @click="moveTowerLeft">
+                &#8592;
+              </button>
+              <div class="position-bar">
+                <div
+                  class="position-thumb"
+                  :style="{ left: `${(selectedTower.positionAlongWall ?? 0.5) * 100}%` }"
+                />
+              </div>
+              <button class="move-btn" title="Move right along wall" @click="moveTowerRight">
+                &#8594;
+              </button>
+            </div>
+          </div>
+          <div v-else class="wall-placement-section muted">
+            <span>Not placed on a wall yet.</span>
           </div>
 
           <div class="dimension-control">
@@ -587,5 +642,101 @@ function towerSubtitle(tower: {
   background: #2563eb;
 }
 
+/* ── Wall placement controls ──────────────────────────────────────────────── */
+
+.wall-placement-section {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.46);
+  border: 1px solid rgba(251, 191, 36, 0.18);
+}
+
+.wall-placement-section.muted {
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.wall-placement-section.muted span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.wall-placement-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wall-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: #fbbf24;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.placement-hint {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.move-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.move-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 6px;
+  background: rgba(251, 191, 36, 0.1);
+  color: #fbbf24;
+  font-size: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+  font: inherit;
+}
+
+.move-btn:hover {
+  background: rgba(251, 191, 36, 0.22);
+  border-color: rgba(251, 191, 36, 0.55);
+}
+
+.move-btn:active {
+  background: rgba(251, 191, 36, 0.32);
+}
+
+.position-bar {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: visible;
+}
+
+.position-thumb {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fbbf24;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.5);
+  pointer-events: none;
+  transition: left 0.1s;
+}
 
 </style>

@@ -94,6 +94,33 @@ export const useClosetStore = defineStore('closet', {
       if (removed) this.towers.splice(target, 0, removed)
     },
 
+    /**
+     * Assign a tower to a specific wall, placing its centre at `positionAlongWall`
+     * (fractional, 0 = wall start, 1 = wall end; defaults to 0.5 = centred).
+     */
+    setTowerWall(towerId: string, wallId: string | null, positionAlongWall = 0.5) {
+      const tower = this.towers.find((t) => t.id === towerId)
+      if (tower) {
+        tower.wallId = wallId
+        tower.positionAlongWall = positionAlongWall
+      }
+    },
+
+    /**
+     * Shift a tower's centre along its wall by `delta` (fractional units).
+     * `wallLengthCm` is used to clamp so the tower stays within wall bounds.
+     */
+    moveTowerAlongWall(towerId: string, delta: number, wallLengthCm: number) {
+      const tower = this.towers.find((t) => t.id === towerId)
+      if (!tower || tower.wallId == null) return
+
+      const halfRatio = wallLengthCm > 0 ? (tower.width / 2) / wallLengthCm : 0
+      const min = Math.max(0, halfRatio)
+      const max = Math.min(1, 1 - halfRatio)
+      const current = tower.positionAlongWall ?? 0.5
+      tower.positionAlongWall = Math.max(min, Math.min(max, current + delta))
+    },
+
     updateTower(towerId: string, partial: Partial<Omit<Tower, 'id' | 'accessories'>>) {
       const tower = this.towers.find((t) => t.id === towerId)
       if (tower) Object.assign(tower, partial)

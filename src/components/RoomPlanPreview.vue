@@ -2,13 +2,15 @@
 import { computed } from "vue";
 import { useRoomStore } from "../stores/useRoomStore";
 import { useSelectionStore } from "../stores/useSelectionStore";
+import { useClosetStore } from "../stores/useClosetStore";
 
 const roomStore = useRoomStore();
 const selectionStore = useSelectionStore();
+const closetStore = useClosetStore();
 
 const GRID_SIZE = 10;
 
-/** Compute all wall vertices (same as FloorPlan.vue wallVertices) */
+/** Compute all wall vertices */
 const wallVertices = computed((): [number, number][] => {
   const walls = roomStore.walls;
   if (walls.length === 0) return [];
@@ -21,7 +23,6 @@ const wallVertices = computed((): [number, number][] => {
   return verts;
 });
 
-/** Match FloorPlan.vue drawViewBoxFromPoints exactly */
 const viewBox = computed(() => {
   const verts = wallVertices.value;
   if (verts.length === 0) return "-240 -240 480 480";
@@ -108,6 +109,122 @@ function dimLinePoints(wall: {
 function selectWall(id: string) {
   selectionStore.selectWall(id);
 }
+
+// ── Tower plan rendering ─────────────────────────────────────────────────────
+
+/**
+ * For each placed tower, compute the four corners of its plan-space footprint.
+ * The tower is centred along the wall at `positionAlongWall` and extruded
+ * inward (perpendicular into the room) by `tower.depth`.
+ */
+const placedTowerPolygons = computed(() => {
+  return closetStore.towers
+    .filter((t) => t.wallId)
+    .map((tower) => {
+      const wall = roomStore.walls.find((w) => w.id === tower.wallId);
+      if (!wall) return null;
+
+      const pos = tower.positionAlongWall ?? 0.5;
+      const halfW = tower.width / 2;
+      const cx = wall.position[0] + Math.cos(wall.angle) * wall.length * pos;
+      const cy = wall.position[1] + Math.sin(wall.angle) * wall.length * pos;
+
+      // Wall direction unit vector
+      const wx = Math.cos(wall.angle);
+      const wy = Math.sin(wall.angle);
+      // Perpendicular pointing inward (left of wall direction = into room)
+      const px = -Math.sin(wall.angle);
+      const py = Math.cos(wall.angle);
+
+      const d = tower.depth;
+      const corners: [number, number][] = [
+        [cx - wx * halfW,          cy - wy * halfW],
+        [cx + wx * halfW,          cy + wy * halfW],
+        [cx + wx * halfW + px * d, cy + wy * halfW + py * d],
+        [cx - wx * halfW + px * d, cy - wy * halfW + py * d],
+      ];
+
+      return {
+        id: tower.id,
+        label: tower.label,
+        points: corners.map((c) => c.join(",")).join(" "),
+        labelX: cx + (px * d) / 2,
+        labelY: cy + (py * d) / 2,
+        selected: selectionStore.selectedTowerId === tower.id,
+      };
+    })
+    .filter((t): t is NonNullable<typeof t> => t !== null);
+});
+
+function selectTowerInPlan(towerId: string) {
+  selectionStore.selectTower(towerId);
+}
+
+// ── Drag-to-move tower along wall ────────────────────────────────────────────
+
+let dragState: {
+  towerId: string;
+  wallLength: number;
+  startSvgX: number;
+  startSvgY: number;
+  startPos: number;
+  wallAngle: number;
+} | null = null;
+
+function onTowerPointerDown(e: PointerEvent, towerId: string) {
+  e.stopPropagation();
+  selectionStore.selectTower(towerId);
+  const tower = closetStore.towers.find((t) => t.id === towerId);
+  const wall = tower?.wallId ? roomStore.walls.find((w) => w.id === tower.wallId) : null;
+  if (!wall || !tower) return;
+
+  const svg = (e.currentTarget as SVGElement).closest("svg") as SVGSVGElement | null;
+  if (!svg) return;
+
+  const pt = svg.createSVGPoint();
+  pt.x = e.clientX;
+  pt.y = e.clientY;
+  const svgPt = pt.matrixTransform(svg.getScreenCTM()!.inverse());
+
+  dragState = {
+    towerId,
+    wallLength: wall.length,
+    startSvgX: svgPt.x,
+    startSvgY: svgPt.y,
+    startPos: tower.positionAlongWall ?? 0.5,
+    wallAngle: wall.angle,
+  };
+  (e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
+}
+
+function onSvgPointerMove(e: PointerEvent) {
+  if (!dragState) return;
+  const tower = closetStore.towers.find((t) => t.id === dragState!.towerId);
+  const wall = tower?.wallId ? roomStore.walls.find((w) => w.id === tower.wallId) : null;
+  if (!wall || !tower) return;
+
+  const svg = e.currentTarget as SVGSVGElement;
+  const pt = svg.createSVGPoint();
+  pt.x = e.clientX;
+  pt.y = e.clientY;
+  const svgPt = pt.matrixTransform(svg.getScreenCTM()!.inverse());
+
+  const dx = svgPt.x - dragState.startSvgX;
+  const dy = svgPt.y - dragState.startSvgY;
+  const wallDx = Math.cos(dragState.wallAngle);
+  const wallDy = Math.sin(dragState.wallAngle);
+  const projected = dx * wallDx + dy * wallDy;
+  const delta = projected / dragState.wallLength;
+
+  const halfRatio = dragState.wallLength > 0 ? (tower.width / 2) / dragState.wallLength : 0;
+  const min = Math.max(0, halfRatio);
+  const max = Math.min(1, 1 - halfRatio);
+  tower.positionAlongWall = Math.max(min, Math.min(max, dragState.startPos + delta));
+}
+
+function onSvgPointerUp() {
+  dragState = null;
+}
 </script>
 
 <template>
@@ -117,6 +234,9 @@ function selectWall(id: string) {
       preserveAspectRatio="xMidYMid meet"
       class="room-preview-svg"
       xmlns="http://www.w3.org/2000/svg"
+      @pointermove="onSvgPointerMove"
+      @pointerup="onSvgPointerUp"
+      @pointerleave="onSvgPointerUp"
     >
       <!-- Grid pattern -->
       <defs>
@@ -254,6 +374,37 @@ function selectWall(id: string) {
         </text>
       </g>
 
+      <!-- Placed towers (footprint rectangles) -->
+      <g
+        v-for="tower in placedTowerPolygons"
+        :key="tower.id"
+        class="tower-footprint-group"
+        @pointerdown="(e) => onTowerPointerDown(e, tower.id)"
+        @click.stop="selectTowerInPlan(tower.id)"
+      >
+        <polygon
+          :points="tower.points"
+          :fill="tower.selected ? 'rgba(251,191,36,0.35)' : 'rgba(251,191,36,0.15)'"
+          :stroke="tower.selected ? '#fbbf24' : '#f59e0b'"
+          :stroke-width="tower.selected ? 2 : 1"
+          stroke-linejoin="round"
+          class="tower-footprint"
+        />
+        <!-- Tower label at centre of footprint -->
+        <text
+          :x="tower.labelX"
+          :y="tower.labelY"
+          text-anchor="middle"
+          dominant-baseline="central"
+          fill="#fbbf24"
+          font-size="7"
+          font-weight="700"
+          pointer-events="none"
+        >
+          {{ tower.label }}
+        </text>
+      </g>
+
       <!-- Vertices (dots at each corner) -->
       <circle
         v-for="(v, i) in wallVertices"
@@ -282,7 +433,7 @@ function selectWall(id: string) {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: transparent; /* Changed from solid background to blend with container */
+  background: transparent;
   border-radius: 8px;
   overflow: hidden;
   position: relative;
@@ -304,6 +455,24 @@ function selectWall(id: string) {
 .wall-polygon:hover {
   fill: #e8c88a;
   opacity: 0.8;
+}
+
+.tower-footprint-group {
+  cursor: grab;
+}
+
+.tower-footprint-group:active {
+  cursor: grabbing;
+}
+
+.tower-footprint {
+  transition:
+    fill 0.15s,
+    stroke 0.15s;
+}
+
+.tower-footprint-group:hover .tower-footprint {
+  fill: rgba(251, 191, 36, 0.45);
 }
 
 .vertex-dot {
