@@ -156,6 +156,7 @@ const placedTowerPolygons = computed(() => {
         labelX: cx_inner + (px * d) / 2,
         labelY: cy_inner + (py * d) / 2,
         selected: selectionStore.selectedTowerId === tower.id,
+        corners,
       };
     })
     .filter((t): t is NonNullable<typeof t> => t !== null);
@@ -165,15 +166,19 @@ function selectTowerInPlan(towerId: string) {
   selectionStore.selectTower(towerId);
 }
 
-// ── Drag-to-move tower along wall ────────────────────────────────────────────
+// ── Drag-to-move/resize tower along wall ─────────────────────────────────────
 
 let dragState: {
+  mode: "move" | "depth" | "width-start" | "width-end";
   towerId: string;
   wallLength: number;
   startSvgX: number;
   startSvgY: number;
   startPos: number;
+  startWidth: number;
+  startDepth: number;
   wallAngle: number;
+  wallThickness: number;
 } | null = null;
 
 function onTowerPointerDown(e: PointerEvent, towerId: string) {
@@ -192,12 +197,50 @@ function onTowerPointerDown(e: PointerEvent, towerId: string) {
   const svgPt = pt.matrixTransform(svg.getScreenCTM()!.inverse());
 
   dragState = {
+    mode: "move",
     towerId,
     wallLength: wall.length,
     startSvgX: svgPt.x,
     startSvgY: svgPt.y,
     startPos: tower.positionAlongWall ?? 0.5,
+    startWidth: tower.width,
+    startDepth: tower.depth,
     wallAngle: wall.angle,
+    wallThickness: wall.thickness ?? 6,
+  };
+  (e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
+}
+
+function onHandlePointerDown(
+  e: PointerEvent,
+  towerId: string,
+  mode: "depth" | "width-start" | "width-end",
+) {
+  e.stopPropagation();
+  selectionStore.selectTower(towerId);
+  const tower = closetStore.towers.find((t) => t.id === towerId);
+  const wall = tower?.wallId ? roomStore.walls.find((w) => w.id === tower.wallId) : null;
+  if (!wall || !tower) return;
+
+  const svg = (e.currentTarget as SVGElement).closest("svg") as SVGSVGElement | null;
+  if (!svg) return;
+
+  const pt = svg.createSVGPoint();
+  pt.x = e.clientX;
+  pt.y = e.clientY;
+  const svgPt = pt.matrixTransform(svg.getScreenCTM()!.inverse());
+
+  dragState = {
+    mode,
+    towerId,
+    wallLength: wall.length,
+    startSvgX: svgPt.x,
+    startSvgY: svgPt.y,
+    startPos: tower.positionAlongWall ?? 0.5,
+    startWidth: tower.width,
+    startDepth: tower.depth,
+    wallAngle: wall.angle,
+    wallThickness: wall.thickness ?? 6,
   };
   (e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
 }
@@ -216,15 +259,69 @@ function onSvgPointerMove(e: PointerEvent) {
 
   const dx = svgPt.x - dragState.startSvgX;
   const dy = svgPt.y - dragState.startSvgY;
-  const wallDx = Math.cos(dragState.wallAngle);
-  const wallDy = Math.sin(dragState.wallAngle);
-  const projected = dx * wallDx + dy * wallDy;
-  const delta = projected / dragState.wallLength;
 
-  const halfRatio = dragState.wallLength > 0 ? (tower.width / 2) / dragState.wallLength : 0;
-  const min = Math.max(0, halfRatio);
-  const max = Math.min(1, 1 - halfRatio);
-  tower.positionAlongWall = Math.max(min, Math.min(max, dragState.startPos + delta));
+  if (dragState.mode === "move") {
+    const wallDx = Math.cos(dragState.wallAngle);
+    const wallDy = Math.sin(dragState.wallAngle);
+    const projected = dx * wallDx + dy * wallDy;
+    const delta = projected / dragState.wallLength;
+
+    const halfRatio = dragState.wallLength > 0 ? (tower.width / 2) / dragState.wallLength : 0;
+    const min = Math.max(0, halfRatio);
+    const max = Math.min(1, 1 - halfRatio);
+    closetStore.updateTower(tower.id, {
+      positionAlongWall: Math.max(min, Math.min(max, dragState.startPos + delta)),
+    });
+  } else if (dragState.mode === "depth") {
+    const px = -Math.sin(dragState.wallAngle);
+    const py = Math.cos(dragState.wallAngle);
+    const projectedChange = dx * px + dy * py;
+    const requestedDepth = dragState.startDepth + projectedChange;
+
+    closetStore.setTowerDepth(tower.id, requestedDepth);
+  } else if (dragState.mode === "width-start") {
+    const wx = Math.cos(dragState.wallAngle);
+    const wy = Math.sin(dragState.wallAngle);
+    const projectedChange = dx * wx + dy * wy;
+
+    const pinnedPosCm = dragState.startPos * dragState.wallLength + dragState.startWidth / 2;
+    const draggedPosCm = (dragState.startPos * dragState.wallLength - dragState.startWidth / 2) + projectedChange;
+    const requestedWidth = pinnedPosCm - draggedPosCm;
+
+    closetStore.setTowerWidth(tower.id, requestedWidth);
+    const actualWidth = tower.width;
+
+    const newCenterCm = pinnedPosCm - actualWidth / 2;
+    const newPos = newCenterCm / dragState.wallLength;
+
+    const halfRatio = dragState.wallLength > 0 ? (actualWidth / 2) / dragState.wallLength : 0;
+    const min = Math.max(0, halfRatio);
+    const max = Math.min(1, 1 - halfRatio);
+    closetStore.updateTower(tower.id, {
+      positionAlongWall: Math.max(min, Math.min(max, newPos)),
+    });
+  } else if (dragState.mode === "width-end") {
+    const wx = Math.cos(dragState.wallAngle);
+    const wy = Math.sin(dragState.wallAngle);
+    const projectedChange = dx * wx + dy * wy;
+
+    const pinnedPosCm = dragState.startPos * dragState.wallLength - dragState.startWidth / 2;
+    const draggedPosCm = (dragState.startPos * dragState.wallLength + dragState.startWidth / 2) + projectedChange;
+    const requestedWidth = draggedPosCm - pinnedPosCm;
+
+    closetStore.setTowerWidth(tower.id, requestedWidth);
+    const actualWidth = tower.width;
+
+    const newCenterCm = pinnedPosCm + actualWidth / 2;
+    const newPos = newCenterCm / dragState.wallLength;
+
+    const halfRatio = dragState.wallLength > 0 ? (actualWidth / 2) / dragState.wallLength : 0;
+    const min = Math.max(0, halfRatio);
+    const max = Math.min(1, 1 - halfRatio);
+    closetStore.updateTower(tower.id, {
+      positionAlongWall: Math.max(min, Math.min(max, newPos)),
+    });
+  }
 }
 
 function onSvgPointerUp() {
@@ -408,6 +505,39 @@ function onSvgPointerUp() {
         >
           {{ tower.label }}
         </text>
+
+        <!-- Resize Handles (Only for selected tower) -->
+        <g v-if="tower.selected" class="resize-edges-group">
+          <!-- Width Start Edge Handle (Left) -->
+          <line
+            :x1="tower.corners[0][0]"
+            :y1="tower.corners[0][1]"
+            :x2="tower.corners[3][0]"
+            :y2="tower.corners[3][1]"
+            class="resize-edge width-edge"
+            @pointerdown="(e) => onHandlePointerDown(e, tower.id, 'width-start')"
+          />
+
+          <!-- Width End Edge Handle (Right) -->
+          <line
+            :x1="tower.corners[1][0]"
+            :y1="tower.corners[1][1]"
+            :x2="tower.corners[2][0]"
+            :y2="tower.corners[2][1]"
+            class="resize-edge width-edge"
+            @pointerdown="(e) => onHandlePointerDown(e, tower.id, 'width-end')"
+          />
+
+          <!-- Depth Edge Handle (Front) -->
+          <line
+            :x1="tower.corners[3][0]"
+            :y1="tower.corners[3][1]"
+            :x2="tower.corners[2][0]"
+            :y2="tower.corners[2][1]"
+            class="resize-edge depth-edge"
+            @pointerdown="(e) => onHandlePointerDown(e, tower.id, 'depth')"
+          />
+        </g>
       </g>
 
       <!-- Vertices (dots at each corner) -->
@@ -493,5 +623,25 @@ function onSvgPointerUp() {
   font-size: 12px;
   color: #94a3b8;
   pointer-events: none;
+}
+
+.resize-edge {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 8;
+  transition: stroke 0.15s ease;
+}
+
+.resize-edge:hover {
+  stroke: rgba(251, 191, 36, 0.45);
+  cursor: pointer;
+}
+
+.resize-edge.width-edge {
+  cursor: col-resize;
+}
+
+.resize-edge.depth-edge {
+  cursor: row-resize;
 }
 </style>
