@@ -260,41 +260,6 @@ function towerSubtitle(tower: {
             <span>{{ towerSubtitle(selectedTower) }}</span>
           </div>
 
-          <!-- Wall placement info + move controls -->
-          <div v-if="selectedTowerWall" class="wall-placement-section">
-            <div class="wall-placement-label">
-              <span class="wall-tag">Wall {{ selectedTowerWall.label }}</span>
-              <span class="placement-hint">Drag in plan or use arrows</span>
-            </div>
-            <div class="move-controls">
-              <button
-                class="move-btn"
-                title="Move left along wall"
-                @click="moveTowerLeft"
-              >
-                &#8592;
-              </button>
-              <div class="position-bar">
-                <div
-                  class="position-thumb"
-                  :style="{
-                    left: `${(selectedTower.positionAlongWall ?? 0.5) * 100}%`,
-                  }"
-                />
-              </div>
-              <button
-                class="move-btn"
-                title="Move right along wall"
-                @click="moveTowerRight"
-              >
-                &#8594;
-              </button>
-            </div>
-          </div>
-          <div v-else class="wall-placement-section muted">
-            <span>Not placed on a wall yet.</span>
-          </div>
-
           <div class="dimension-control">
             <div class="dimension-head">
               <label>Width</label>
