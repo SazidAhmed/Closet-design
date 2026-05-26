@@ -33,7 +33,9 @@ const visibleCategories = computed(() =>
 );
 
 const selectedTower = computed(
-  () => closet.towers.find((tower) => tower.id === selection.selectedTowerId) ?? null,
+  () =>
+    closet.towers.find((tower) => tower.id === selection.selectedTowerId) ??
+    null,
 );
 
 const selectedTowerLimits = computed<ClosetCatalogLimits | null>(() => {
@@ -195,51 +197,66 @@ function towerSubtitle(tower: {
         <div class="workspace-header">
           <div>
             <h1>Closet Towers</h1>
-            <p>{{ closet.towers.length }} tower{{ closet.towers.length === 1 ? "" : "s" }} configured</p>
+            <p>
+              {{ closet.towers.length }} tower{{
+                closet.towers.length === 1 ? "" : "s"
+              }}
+              configured
+            </p>
           </div>
-          <button v-if="!showElevation" class="elevation-open-btn" @click="showElevation = true">
+          <button
+            v-if="!showElevation"
+            class="elevation-open-btn"
+            @click="showElevation = true"
+          >
             Elevation
           </button>
         </div>
 
-        <div v-if="showElevation" class="elevation-inline-container" style="flex: 1; display: flex; flex-direction: column; position: relative;">
+        <div
+          v-if="showElevation"
+          class="elevation-inline-container"
+          style="
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+          "
+        >
           <FloorPlan :elevation-only="true" @close="showElevation = false" />
         </div>
-        <div v-show="!showElevation" class="preview-section" style="flex: 1; min-height: 200px; display: flex; flex-direction: column; margin-bottom: 24px;">
+        <div
+          v-show="!showElevation"
+          class="preview-section"
+          style="
+            flex: 1;
+            min-height: 200px;
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 24px;
+          "
+        >
           <RoomPlanPreview />
-        </div>
-
-        <div v-show="!showElevation && closet.towers.length > 0" class="tower-grid">
-          <button
-            v-for="tower in closet.towers"
-            :key="tower.id"
-            class="tower-card"
-            :class="{ selected: selection.selectedTowerId === tower.id }"
-            @click="selection.selectTower(tower.id)"
-          >
-            <div class="tower-card-top">
-              <strong>{{ tower.label }}</strong>
-              <button
-                class="icon-btn"
-                title="Remove tower"
-                @click.stop="removeTower(tower.id)"
-              >
-                <Trash2 :size="14" />
-              </button>
-            </div>
-            <span>{{ towerSubtitle(tower) }}</span>
-            <div class="tower-dims">
-              {{ fmt(tower.width) }} W x {{ fmt(tower.depth) }} D x {{ fmt(tower.height) }} H
-            </div>
-          </button>
         </div>
       </main>
 
       <aside class="builder-panel edit-panel">
-        <section v-if="selectedTower && selectedTowerLimits" class="panel-section">
+        <section
+          v-if="selectedTower && selectedTowerLimits"
+          class="panel-section"
+        >
           <h2 class="section-title">Selected Tower</h2>
           <div class="selected-summary">
-            <strong>{{ selectedTower.label }}</strong>
+            <div class="selected-summary-header">
+              <strong>{{ selectedTower.label }}</strong>
+              <button
+                class="icon-btn delete-btn-large"
+                title="Remove tower"
+                @click="removeTower(selectedTower.id)"
+              >
+                <Trash2 :size="20" />
+              </button>
+            </div>
             <span>{{ towerSubtitle(selectedTower) }}</span>
           </div>
 
@@ -250,16 +267,26 @@ function towerSubtitle(tower: {
               <span class="placement-hint">Drag in plan or use arrows</span>
             </div>
             <div class="move-controls">
-              <button class="move-btn" title="Move left along wall" @click="moveTowerLeft">
+              <button
+                class="move-btn"
+                title="Move left along wall"
+                @click="moveTowerLeft"
+              >
                 &#8592;
               </button>
               <div class="position-bar">
                 <div
                   class="position-thumb"
-                  :style="{ left: `${(selectedTower.positionAlongWall ?? 0.5) * 100}%` }"
+                  :style="{
+                    left: `${(selectedTower.positionAlongWall ?? 0.5) * 100}%`,
+                  }"
                 />
               </div>
-              <button class="move-btn" title="Move right along wall" @click="moveTowerRight">
+              <button
+                class="move-btn"
+                title="Move right along wall"
+                @click="moveTowerRight"
+              >
                 &#8594;
               </button>
             </div>
@@ -355,8 +382,6 @@ function towerSubtitle(tower: {
       forward-route="/closet/review"
       :show-view-toggle="false"
     />
-
-    
   </div>
 </template>
 
@@ -576,12 +601,29 @@ function towerSubtitle(tower: {
   color: #f87171;
 }
 
+.delete-btn-large {
+  color: #ef4444;
+  width: 32px;
+  height: 32px;
+}
+
+.delete-btn-large:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
 .selected-summary {
   display: grid;
   gap: 4px;
   padding: 12px;
   border-radius: 8px;
   background: rgba(30, 41, 59, 0.46);
+}
+
+.selected-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .selected-summary span {
@@ -704,7 +746,9 @@ function towerSubtitle(tower: {
   font-size: 16px;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
   font: inherit;
 }
 
@@ -738,5 +782,4 @@ function towerSubtitle(tower: {
   pointer-events: none;
   transition: left 0.1s;
 }
-
 </style>
