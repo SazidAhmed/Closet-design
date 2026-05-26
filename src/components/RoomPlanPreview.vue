@@ -3,7 +3,10 @@ import { computed } from "vue";
 import { useRoomStore } from "../stores/useRoomStore";
 import { useSelectionStore } from "../stores/useSelectionStore";
 import { useClosetStore } from "../stores/useClosetStore";
-import type { PlacedItem, PlacedItemCategory } from "../features/closet/domain/types/room";
+import type {
+  PlacedItem,
+  PlacedItemCategory,
+} from "../features/closet/domain/types/room";
 
 const roomStore = useRoomStore();
 const selectionStore = useSelectionStore();
@@ -143,9 +146,14 @@ const placedTowerPolygons = computed(() => {
       const cy_inner = cy + py * tHalf;
 
       const d = tower.depth;
-      const corners: [[number, number], [number, number], [number, number], [number, number]] = [
-        [cx_inner - wx * halfW,          cy_inner - wy * halfW],
-        [cx_inner + wx * halfW,          cy_inner + wy * halfW],
+      const corners: [
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+      ] = [
+        [cx_inner - wx * halfW, cy_inner - wy * halfW],
+        [cx_inner + wx * halfW, cy_inner + wy * halfW],
         [cx_inner + wx * halfW + px * d, cy_inner + wy * halfW + py * d],
         [cx_inner - wx * halfW + px * d, cy_inner - wy * halfW + py * d],
       ];
@@ -200,9 +208,12 @@ function itemBandThickness(item: PlacedItem): number {
 /** Color per category. */
 function itemColor(category: PlacedItemCategory): string {
   switch (category) {
-    case "door": return "#f97316";
-    case "wall_decorator": return "#06b6d4";
-    default: return "#8b5cf6";
+    case "door":
+      return "#f97316";
+    case "wall_decorator":
+      return "#06b6d4";
+    default:
+      return "#8b5cf6";
   }
 }
 
@@ -218,6 +229,76 @@ const placedDoorWindowItems = computed(() =>
 );
 
 // ── Drag-to-move/resize tower along wall ─────────────────────────────────────
+
+/**
+ * Returns the clamped positionAlongWall (0-1) for a tower centre, ensuring
+ * the tower [centerCm - halfW, centerCm + halfW] does not overlap any door or
+ * window interval on the same wall.
+ *
+ * Key invariant: the returned position, after normal wall-boundary clamping
+ * (min = halfW/wallLength, max = 1 - halfW/wallLength), must still be clear
+ * of all obstructions. So we only accept an escape direction when the tower
+ * actually fits on that side within the wall bounds.
+ *
+ * @param proposed   proposed fractional position (0..1)
+ * @param halfW      half of the tower width in cm
+ * @param wallLength wall length in cm
+ * @param wallId     ID of the wall the tower is on
+ * @param prevPos    last known good position (returned if no room on either side)
+ */
+function clampTowerAwayFromObstructions(
+  proposed: number,
+  halfW: number,
+  wallLength: number,
+  wallId: string,
+  prevPos: number,
+): number {
+  if (wallLength <= 0) return proposed;
+
+  // Collect blocked intervals in cm from all doors/windows on the same wall
+  const blocked: Array<[number, number]> = roomStore.items
+    .filter((item) => item.wallId === wallId && isDoorOrWindowItem(item))
+    .map((item) => {
+      const centerCm = item.positionAlongWall * wallLength;
+      const hw = item.width / 2;
+      return [centerCm - hw, centerCm + hw] as [number, number];
+    });
+
+  if (blocked.length === 0) return proposed;
+
+  const proposedCm = proposed * wallLength;
+  const towerLeft = proposedCm - halfW;
+  const towerRight = proposedCm + halfW;
+
+  for (const [bLeft, bRight] of blocked) {
+    // Check if the tower overlaps this interval
+    if (towerRight > bLeft && towerLeft < bRight) {
+      // Candidate escape positions (cm for the tower centre)
+      const pushLeftCm = bLeft - halfW; // right edge touches bLeft
+      const pushRightCm = bRight + halfW; // left  edge touches bRight
+
+      // Validate: the escape must fit within the wall
+      const leftFits = pushLeftCm >= halfW; // tower start >= 0
+      const rightFits = pushRightCm <= wallLength - halfW; // tower end   <= wallLength
+
+      if (leftFits && rightFits) {
+        // Both fit — pick the side that needs less movement
+        const distLeft = Math.abs(proposedCm - pushLeftCm);
+        const distRight = Math.abs(proposedCm - pushRightCm);
+        return (distLeft <= distRight ? pushLeftCm : pushRightCm) / wallLength;
+      } else if (leftFits) {
+        return pushLeftCm / wallLength;
+      } else if (rightFits) {
+        return pushRightCm / wallLength;
+      } else {
+        // Tower is wider than any available gap — block the move
+        return prevPos;
+      }
+    }
+  }
+
+  return proposed;
+}
 
 let dragState: {
   mode: "move" | "depth" | "width-start" | "width-end";
@@ -236,10 +317,14 @@ function onTowerPointerDown(e: PointerEvent, towerId: string) {
   e.stopPropagation();
   selectionStore.selectTower(towerId);
   const tower = closetStore.towers.find((t) => t.id === towerId);
-  const wall = tower?.wallId ? roomStore.walls.find((w) => w.id === tower.wallId) : null;
+  const wall = tower?.wallId
+    ? roomStore.walls.find((w) => w.id === tower.wallId)
+    : null;
   if (!wall || !tower) return;
 
-  const svg = (e.currentTarget as SVGElement).closest("svg") as SVGSVGElement | null;
+  const svg = (e.currentTarget as SVGElement).closest(
+    "svg",
+  ) as SVGSVGElement | null;
   if (!svg) return;
 
   const pt = svg.createSVGPoint();
@@ -270,10 +355,14 @@ function onHandlePointerDown(
   e.stopPropagation();
   selectionStore.selectTower(towerId);
   const tower = closetStore.towers.find((t) => t.id === towerId);
-  const wall = tower?.wallId ? roomStore.walls.find((w) => w.id === tower.wallId) : null;
+  const wall = tower?.wallId
+    ? roomStore.walls.find((w) => w.id === tower.wallId)
+    : null;
   if (!wall || !tower) return;
 
-  const svg = (e.currentTarget as SVGElement).closest("svg") as SVGSVGElement | null;
+  const svg = (e.currentTarget as SVGElement).closest(
+    "svg",
+  ) as SVGSVGElement | null;
   if (!svg) return;
 
   const pt = svg.createSVGPoint();
@@ -299,7 +388,9 @@ function onHandlePointerDown(
 function onSvgPointerMove(e: PointerEvent) {
   if (!dragState) return;
   const tower = closetStore.towers.find((t) => t.id === dragState!.towerId);
-  const wall = tower?.wallId ? roomStore.walls.find((w) => w.id === tower.wallId) : null;
+  const wall = tower?.wallId
+    ? roomStore.walls.find((w) => w.id === tower.wallId)
+    : null;
   if (!wall || !tower) return;
 
   const svg = e.currentTarget as SVGSVGElement;
@@ -317,11 +408,22 @@ function onSvgPointerMove(e: PointerEvent) {
     const projected = dx * wallDx + dy * wallDy;
     const delta = projected / dragState.wallLength;
 
-    const halfRatio = dragState.wallLength > 0 ? (tower.width / 2) / dragState.wallLength : 0;
+    const halfW = tower.width / 2;
+    const halfRatio =
+      dragState.wallLength > 0 ? halfW / dragState.wallLength : 0;
     const min = Math.max(0, halfRatio);
     const max = Math.min(1, 1 - halfRatio);
+    const rawPos = Math.max(min, Math.min(max, dragState.startPos + delta));
+    const prevPos = tower.positionAlongWall ?? 0.5;
+    const clampedPos = clampTowerAwayFromObstructions(
+      rawPos,
+      halfW,
+      dragState.wallLength,
+      wall.id,
+      prevPos,
+    );
     closetStore.updateTower(tower.id, {
-      positionAlongWall: Math.max(min, Math.min(max, dragState.startPos + delta)),
+      positionAlongWall: Math.max(min, Math.min(max, clampedPos)),
     });
   } else if (dragState.mode === "depth") {
     const px = -Math.sin(dragState.wallAngle);
@@ -335,42 +437,68 @@ function onSvgPointerMove(e: PointerEvent) {
     const wy = Math.sin(dragState.wallAngle);
     const projectedChange = dx * wx + dy * wy;
 
-    const pinnedPosCm = dragState.startPos * dragState.wallLength + dragState.startWidth / 2;
-    const draggedPosCm = (dragState.startPos * dragState.wallLength - dragState.startWidth / 2) + projectedChange;
+    const pinnedPosCm =
+      dragState.startPos * dragState.wallLength + dragState.startWidth / 2;
+    const draggedPosCm =
+      dragState.startPos * dragState.wallLength -
+      dragState.startWidth / 2 +
+      projectedChange;
     const requestedWidth = pinnedPosCm - draggedPosCm;
 
     closetStore.setTowerWidth(tower.id, requestedWidth);
     const actualWidth = tower.width;
 
     const newCenterCm = pinnedPosCm - actualWidth / 2;
-    const newPos = newCenterCm / dragState.wallLength;
+    const rawPos = newCenterCm / dragState.wallLength;
 
-    const halfRatio = dragState.wallLength > 0 ? (actualWidth / 2) / dragState.wallLength : 0;
+    const halfRatio =
+      dragState.wallLength > 0 ? actualWidth / 2 / dragState.wallLength : 0;
     const min = Math.max(0, halfRatio);
     const max = Math.min(1, 1 - halfRatio);
+    const prevPos = tower.positionAlongWall ?? 0.5;
+    const clampedPos = clampTowerAwayFromObstructions(
+      rawPos,
+      actualWidth / 2,
+      dragState.wallLength,
+      wall.id,
+      prevPos,
+    );
     closetStore.updateTower(tower.id, {
-      positionAlongWall: Math.max(min, Math.min(max, newPos)),
+      positionAlongWall: Math.max(min, Math.min(max, clampedPos)),
     });
   } else if (dragState.mode === "width-end") {
     const wx = Math.cos(dragState.wallAngle);
     const wy = Math.sin(dragState.wallAngle);
     const projectedChange = dx * wx + dy * wy;
 
-    const pinnedPosCm = dragState.startPos * dragState.wallLength - dragState.startWidth / 2;
-    const draggedPosCm = (dragState.startPos * dragState.wallLength + dragState.startWidth / 2) + projectedChange;
+    const pinnedPosCm =
+      dragState.startPos * dragState.wallLength - dragState.startWidth / 2;
+    const draggedPosCm =
+      dragState.startPos * dragState.wallLength +
+      dragState.startWidth / 2 +
+      projectedChange;
     const requestedWidth = draggedPosCm - pinnedPosCm;
 
     closetStore.setTowerWidth(tower.id, requestedWidth);
     const actualWidth = tower.width;
 
     const newCenterCm = pinnedPosCm + actualWidth / 2;
-    const newPos = newCenterCm / dragState.wallLength;
+    const rawPos = newCenterCm / dragState.wallLength;
 
-    const halfRatio = dragState.wallLength > 0 ? (actualWidth / 2) / dragState.wallLength : 0;
+    const halfRatio =
+      dragState.wallLength > 0 ? actualWidth / 2 / dragState.wallLength : 0;
     const min = Math.max(0, halfRatio);
     const max = Math.min(1, 1 - halfRatio);
+    const prevPos = tower.positionAlongWall ?? 0.5;
+    const clampedPos = clampTowerAwayFromObstructions(
+      rawPos,
+      actualWidth / 2,
+      dragState.wallLength,
+      wall.id,
+      prevPos,
+    );
     closetStore.updateTower(tower.id, {
-      positionAlongWall: Math.max(min, Math.min(max, newPos)),
+      positionAlongWall: Math.max(min, Math.min(max, clampedPos)),
     });
   }
 }
@@ -580,7 +708,7 @@ function onSvgPointerUp() {
           font-size="6"
           font-weight="700"
         >
-          {{ item.type === 'window' ? 'WIN' : 'DOOR' }}
+          {{ item.type === "window" ? "WIN" : "DOOR" }}
         </text>
       </g>
 
@@ -594,7 +722,9 @@ function onSvgPointerUp() {
       >
         <polygon
           :points="tower.points"
-          :fill="tower.selected ? 'rgba(251,191,36,0.35)' : 'rgba(251,191,36,0.15)'"
+          :fill="
+            tower.selected ? 'rgba(251,191,36,0.35)' : 'rgba(251,191,36,0.15)'
+          "
           :stroke="tower.selected ? '#fbbf24' : '#f59e0b'"
           :stroke-width="tower.selected ? 2 : 1"
           stroke-linejoin="round"
@@ -623,7 +753,9 @@ function onSvgPointerUp() {
             :x2="tower.corners[3][0]"
             :y2="tower.corners[3][1]"
             class="resize-edge width-edge"
-            @pointerdown="(e) => onHandlePointerDown(e, tower.id, 'width-start')"
+            @pointerdown="
+              (e) => onHandlePointerDown(e, tower.id, 'width-start')
+            "
           />
 
           <!-- Width End Edge Handle (Right) -->
