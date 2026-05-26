@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { useRoomStore } from "../stores/useRoomStore";
 import { useSelectionStore } from "../stores/useSelectionStore";
 import { useClosetStore } from "../stores/useClosetStore";
+import type { PlacedItem, PlacedItemCategory } from "../features/closet/domain/types/room";
 
 const roomStore = useRoomStore();
 const selectionStore = useSelectionStore();
@@ -165,6 +166,56 @@ const placedTowerPolygons = computed(() => {
 function selectTowerInPlan(towerId: string) {
   selectionStore.selectTower(towerId);
 }
+
+// ── Placed door/window item rendering ────────────────────────────────────────
+
+/** Compute SVG x,y for the CENTER of a placed item along its wall. */
+function itemSvgPos(item: PlacedItem): { x: number; y: number } {
+  const wall = roomStore.walls.find((w) => w.id === item.wallId);
+  if (!wall) {
+    const b = roomStore.planBounds;
+    return { x: b.centerX, y: b.centerY };
+  }
+  const end = wallEndPoint(wall);
+  const t = Math.max(0, Math.min(1, item.positionAlongWall));
+  return {
+    x: wall.position[0] + (end[0] - wall.position[0]) * t,
+    y: wall.position[1] + (end[1] - wall.position[1]) * t,
+  };
+}
+
+/** Wall angle in degrees for SVG rotate() transform. */
+function itemRotateDeg(item: PlacedItem): number {
+  const wall = roomStore.walls.find((w) => w.id === item.wallId);
+  if (!wall) return 0;
+  return (wall.angle * 180) / Math.PI;
+}
+
+/** Wall thickness to size the item band (same as FloorPlan.vue). */
+function itemBandThickness(item: PlacedItem): number {
+  const wall = roomStore.walls.find((w) => w.id === item.wallId);
+  return wall ? Math.max(1, wall.thickness - 1) : 6;
+}
+
+/** Color per category. */
+function itemColor(category: PlacedItemCategory): string {
+  switch (category) {
+    case "door": return "#f97316";
+    case "wall_decorator": return "#06b6d4";
+    default: return "#8b5cf6";
+  }
+}
+
+function isDoorOrWindowItem(item: PlacedItem): boolean {
+  return item.category === "door" || item.type === "window";
+}
+
+/** All items that have a wallId and are door/window types. */
+const placedDoorWindowItems = computed(() =>
+  roomStore.items.filter(
+    (item) => item.wallId !== null && isDoorOrWindowItem(item),
+  ),
+);
 
 // ── Drag-to-move/resize tower along wall ─────────────────────────────────────
 
@@ -424,18 +475,6 @@ function onSvgPointerUp() {
           @click="selectWall(wall.id)"
         />
 
-        <!-- Wall center line (for visual clarity) -->
-        <line
-          :x1="wall.position[0]"
-          :y1="wall.position[1]"
-          :x2="wallEndPoint(wall)[0]"
-          :y2="wallEndPoint(wall)[1]"
-          stroke="#6b5c45"
-          stroke-width="0.5"
-          stroke-dasharray="3,3"
-          pointer-events="none"
-        />
-
         <!-- Wall label (number) -->
         <g
           :transform="`translate(${wallMidpoint(wall)[0]}, ${wallMidpoint(wall)[1]})`"
@@ -473,6 +512,75 @@ function onSvgPointerUp() {
           font-weight="600"
         >
           {{ formatLength(wall.length) }}
+        </text>
+      </g>
+
+      <!-- Placed door/window items -->
+      <g
+        v-for="item in placedDoorWindowItems"
+        :key="item.id"
+        :transform="`translate(${itemSvgPos(item).x}, ${itemSvgPos(item).y}) rotate(${itemRotateDeg(item)})`"
+        pointer-events="none"
+      >
+        <!-- Wall-band gap / opening strip -->
+        <rect
+          :x="-item.width / 2"
+          :y="-itemBandThickness(item) / 2"
+          :width="item.width"
+          :height="itemBandThickness(item)"
+          :fill="item.category === 'door' ? '#07111f' : 'rgba(6,182,212,0.18)'"
+          rx="1"
+        />
+        <!-- Door: hinge line -->
+        <g v-if="item.category === 'door'">
+          <line
+            :x1="-item.width / 2"
+            :y1="-itemBandThickness(item) / 2"
+            :x2="-item.width / 2"
+            :y2="itemBandThickness(item) / 2"
+            :stroke="itemColor(item.category)"
+            stroke-width="1.5"
+          />
+        </g>
+        <!-- Window: glass lines -->
+        <g v-else-if="item.type === 'window'">
+          <line
+            :x1="-item.width / 2"
+            y1="0"
+            :x2="item.width / 2"
+            y2="0"
+            :stroke="itemColor(item.category)"
+            stroke-width="1.5"
+          />
+          <line
+            :x1="-item.width / 4"
+            :y1="-itemBandThickness(item) / 2"
+            :x2="-item.width / 4"
+            :y2="itemBandThickness(item) / 2"
+            :stroke="itemColor(item.category)"
+            stroke-width="0.8"
+            opacity="0.6"
+          />
+          <line
+            :x1="item.width / 4"
+            :y1="-itemBandThickness(item) / 2"
+            :x2="item.width / 4"
+            :y2="itemBandThickness(item) / 2"
+            :stroke="itemColor(item.category)"
+            stroke-width="0.8"
+            opacity="0.6"
+          />
+        </g>
+        <!-- Label above the item -->
+        <text
+          x="0"
+          :y="-itemBandThickness(item) / 2 - 5"
+          text-anchor="middle"
+          :fill="itemColor(item.category)"
+          font-size="6"
+          font-weight="700"
+        >
+          {{ item.type === 'window' ? 'WIN' : 'DOOR' }}
         </text>
       </g>
 
