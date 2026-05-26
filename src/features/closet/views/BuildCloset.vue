@@ -266,14 +266,6 @@ function towerSubtitle(tower: {
               <span>{{ fmt(selectedTower.width) }}</span>
             </div>
             <input
-              type="range"
-              :min="selectedTowerLimits.minW"
-              :max="selectedTowerLimits.maxW"
-              step="0.1"
-              :value="selectedTower.width"
-              @input="onDimensionInput('width', $event)"
-            />
-            <input
               class="number-input"
               type="number"
               step="0.1"
@@ -290,14 +282,6 @@ function towerSubtitle(tower: {
               <span>{{ fmt(selectedTower.depth) }}</span>
             </div>
             <input
-              type="range"
-              :min="selectedTowerLimits.minD"
-              :max="selectedTowerLimits.maxD"
-              step="0.1"
-              :value="selectedTower.depth"
-              @input="onDimensionInput('depth', $event)"
-            />
-            <input
               class="number-input"
               type="number"
               step="0.1"
@@ -313,14 +297,6 @@ function towerSubtitle(tower: {
               <label>Height</label>
               <span>{{ fmt(selectedTower.height) }}</span>
             </div>
-            <input
-              type="range"
-              :min="selectedTowerLimits.minH"
-              :max="selectedTowerLimits.maxH"
-              step="0.1"
-              :value="selectedTower.height"
-              @input="onDimensionInput('height', $event)"
-            />
             <input
               class="number-input"
               type="number"
