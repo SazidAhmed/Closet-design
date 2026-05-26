@@ -117,10 +117,127 @@ function selectWall(id: string) {
 // ── Tower plan rendering ─────────────────────────────────────────────────────
 
 /**
- * For each placed tower, compute the four corners of its plan-space footprint.
+/**
+ * Returns the four corners of a tower's plan-space footprint.
  * The tower is centred along the wall at `positionAlongWall` and extruded
  * inward (perpendicular into the room) by `tower.depth`.
  */
+function getTowerCorners(
+  tower: { depth: number },
+  wall: {
+    position: [number, number];
+    angle: number;
+    length: number;
+    thickness: number;
+  },
+  positionAlongWall: number,
+  width: number,
+): [[number, number], [number, number], [number, number], [number, number]] {
+  const halfW = width / 2;
+  const pos = positionAlongWall;
+  const cx = wall.position[0] + Math.cos(wall.angle) * wall.length * pos;
+  const cy = wall.position[1] + Math.sin(wall.angle) * wall.length * pos;
+
+  // Wall direction unit vector
+  const wx = Math.cos(wall.angle);
+  const wy = Math.sin(wall.angle);
+  // Perpendicular pointing inward (left of wall direction = into room)
+  const px = -Math.sin(wall.angle);
+  const py = Math.cos(wall.angle);
+
+  // Offset by half wall thickness so the back edge of the tower sits on the wall's inside face
+  const tHalf = (wall.thickness ?? 6) / 2;
+  const cx_inner = cx + px * tHalf;
+  const cy_inner = cy + py * tHalf;
+
+  const d = tower.depth;
+  return [
+    [cx_inner - wx * halfW, cy_inner - wy * halfW],
+    [cx_inner + wx * halfW, cy_inner + wy * halfW],
+    [cx_inner + wx * halfW + px * d, cy_inner + wy * halfW + py * d],
+    [cx_inner - wx * halfW + px * d, cy_inner - wy * halfW + py * d],
+  ];
+}
+
+type Polygon = Array<[number, number]>;
+
+/**
+ * Checks if two convex polygons overlap using the Separating Axis Theorem (SAT).
+ */
+function polygonsOverlap(polyA: Polygon, polyB: Polygon): boolean {
+  const polygons = [polyA, polyB];
+  for (let i = 0; i < polygons.length; i++) {
+    const polygon = polygons[i]!;
+    for (let i1 = 0; i1 < polygon.length; i1++) {
+      const i2 = (i1 + 1) % polygon.length;
+      const p1 = polygon[i1]!;
+      const p2 = polygon[i2]!;
+
+      // Normal to the edge (perpendicular vector)
+      const normal = [-(p2[1] - p1[1]), p2[0] - p1[0]] as [number, number];
+
+      // Project A and B onto the normal axis
+      let minA = Infinity,
+        maxA = -Infinity;
+      for (const p of polyA) {
+        const projection = p[0] * normal[0] + p[1] * normal[1];
+        minA = Math.min(minA, projection);
+        maxA = Math.max(maxA, projection);
+      }
+
+      let minB = Infinity,
+        maxB = -Infinity;
+      for (const p of polyB) {
+        const projection = p[0] * normal[0] + p[1] * normal[1];
+        minB = Math.min(minB, projection);
+        maxB = Math.max(maxB, projection);
+      }
+
+      // Check for gap (using a small epsilon to tolerate perfect touching edge-to-edge/corner-to-corner)
+      const EPSILON = 0.05;
+      if (maxA < minB + EPSILON || maxB < minA + EPSILON) {
+        return false; // There is a separating axis, no overlap!
+      }
+    }
+  }
+  return true; // Overlaps on all axes
+}
+
+/**
+ * Checks if a proposed tower position/width would cause it to overlap with any other tower.
+ */
+function willTowerOverlapOthers(
+  towerId: string,
+  wallId: string,
+  pos: number,
+  width: number,
+): boolean {
+  const wall = roomStore.walls.find((w) => w.id === wallId);
+  if (!wall) return false;
+
+  const targetTower = closetStore.towers.find((t) => t.id === towerId);
+  if (!targetTower) return false;
+
+  const proposedPoly = getTowerCorners(targetTower, wall, pos, width);
+
+  for (const other of closetStore.towers) {
+    if (other.id === towerId || !other.wallId) continue;
+    const otherWall = roomStore.walls.find((w) => w.id === other.wallId);
+    if (!otherWall) continue;
+
+    const otherPoly = getTowerCorners(
+      other,
+      otherWall,
+      other.positionAlongWall ?? 0.5,
+      other.width,
+    );
+    if (polygonsOverlap(proposedPoly, otherPoly)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 const placedTowerPolygons = computed(() => {
   return closetStore.towers
     .filter((t) => t.wallId)
@@ -129,34 +246,20 @@ const placedTowerPolygons = computed(() => {
       if (!wall) return null;
 
       const pos = tower.positionAlongWall ?? 0.5;
-      const halfW = tower.width / 2;
-      const cx = wall.position[0] + Math.cos(wall.angle) * wall.length * pos;
-      const cy = wall.position[1] + Math.sin(wall.angle) * wall.length * pos;
+      const corners = getTowerCorners(tower, wall, pos, tower.width);
 
-      // Wall direction unit vector
-      const wx = Math.cos(wall.angle);
-      const wy = Math.sin(wall.angle);
       // Perpendicular pointing inward (left of wall direction = into room)
       const px = -Math.sin(wall.angle);
       const py = Math.cos(wall.angle);
 
-      // Offset by half wall thickness so the back edge of the tower sits on the wall's inside face
+      // Offset by half wall thickness
+      const cx = wall.position[0] + Math.cos(wall.angle) * wall.length * pos;
+      const cy = wall.position[1] + Math.sin(wall.angle) * wall.length * pos;
       const tHalf = (wall.thickness ?? 6) / 2;
       const cx_inner = cx + px * tHalf;
       const cy_inner = cy + py * tHalf;
 
       const d = tower.depth;
-      const corners: [
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-      ] = [
-        [cx_inner - wx * halfW, cy_inner - wy * halfW],
-        [cx_inner + wx * halfW, cy_inner + wy * halfW],
-        [cx_inner + wx * halfW + px * d, cy_inner + wy * halfW + py * d],
-        [cx_inner - wx * halfW + px * d, cy_inner - wy * halfW + py * d],
-      ];
 
       return {
         id: tower.id,
@@ -415,13 +518,19 @@ function onSvgPointerMove(e: PointerEvent) {
     const max = Math.min(1, 1 - halfRatio);
     const rawPos = Math.max(min, Math.min(max, dragState.startPos + delta));
     const prevPos = tower.positionAlongWall ?? 0.5;
-    const clampedPos = clampTowerAwayFromObstructions(
+    let clampedPos = clampTowerAwayFromObstructions(
       rawPos,
       halfW,
       dragState.wallLength,
       wall.id,
       prevPos,
     );
+
+    // Prevent overlapping other towers
+    if (willTowerOverlapOthers(tower.id, wall.id, clampedPos, tower.width)) {
+      clampedPos = prevPos;
+    }
+
     closetStore.updateTower(tower.id, {
       positionAlongWall: Math.max(min, Math.min(max, clampedPos)),
     });
@@ -432,6 +541,18 @@ function onSvgPointerMove(e: PointerEvent) {
     const requestedDepth = dragState.startDepth + projectedChange;
 
     closetStore.setTowerDepth(tower.id, requestedDepth);
+
+    // If it overlaps other towers, revert depth change!
+    if (
+      willTowerOverlapOthers(
+        tower.id,
+        wall.id,
+        tower.positionAlongWall ?? 0.5,
+        tower.width,
+      )
+    ) {
+      closetStore.setTowerDepth(tower.id, dragState.startDepth);
+    }
   } else if (dragState.mode === "width-start") {
     const wx = Math.cos(dragState.wallAngle);
     const wy = Math.sin(dragState.wallAngle);
@@ -456,13 +577,20 @@ function onSvgPointerMove(e: PointerEvent) {
     const min = Math.max(0, halfRatio);
     const max = Math.min(1, 1 - halfRatio);
     const prevPos = tower.positionAlongWall ?? 0.5;
-    const clampedPos = clampTowerAwayFromObstructions(
+    let clampedPos = clampTowerAwayFromObstructions(
       rawPos,
       actualWidth / 2,
       dragState.wallLength,
       wall.id,
       prevPos,
     );
+
+    // If it overlaps other towers, revert width!
+    if (willTowerOverlapOthers(tower.id, wall.id, clampedPos, actualWidth)) {
+      closetStore.setTowerWidth(tower.id, dragState.startWidth);
+      clampedPos = prevPos;
+    }
+
     closetStore.updateTower(tower.id, {
       positionAlongWall: Math.max(min, Math.min(max, clampedPos)),
     });
@@ -490,13 +618,20 @@ function onSvgPointerMove(e: PointerEvent) {
     const min = Math.max(0, halfRatio);
     const max = Math.min(1, 1 - halfRatio);
     const prevPos = tower.positionAlongWall ?? 0.5;
-    const clampedPos = clampTowerAwayFromObstructions(
+    let clampedPos = clampTowerAwayFromObstructions(
       rawPos,
       actualWidth / 2,
       dragState.wallLength,
       wall.id,
       prevPos,
     );
+
+    // If it overlaps other towers, revert width!
+    if (willTowerOverlapOthers(tower.id, wall.id, clampedPos, actualWidth)) {
+      closetStore.setTowerWidth(tower.id, dragState.startWidth);
+      clampedPos = prevPos;
+    }
+
     closetStore.updateTower(tower.id, {
       positionAlongWall: Math.max(min, Math.min(max, clampedPos)),
     });
