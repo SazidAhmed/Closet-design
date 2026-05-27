@@ -23,7 +23,11 @@ const appStore = useAppStore();
 const closet = useClosetStore();
 const room = useRoomStore();
 const selection = useSelectionStore();
-const { fmt } = useUnit();
+const { fmt, fromCm, toCm } = useUnit();
+
+function fromCmDisplay(cm: number): number {
+  return Math.round(fromCm(cm) * 10) / 10;
+}
 
 const selectedDoorMode = ref<ClosetDoorMode>("without_doors");
 const showElevation = ref(false);
@@ -107,17 +111,19 @@ function onDimensionInput(
   const value = Number((event.target as HTMLInputElement).value);
   if (!Number.isFinite(value)) return;
 
+  const valueCm = toCm(value);
+
   if (dimension === "width") {
-    closet.setTowerWidth(tower.id, value);
+    closet.setTowerWidth(tower.id, valueCm);
     return;
   }
 
   if (dimension === "depth") {
-    closet.setTowerDepth(tower.id, value);
+    closet.setTowerDepth(tower.id, valueCm);
     return;
   }
 
-  closet.setTowerHeight(tower.id, value);
+  closet.setTowerHeight(tower.id, valueCm);
 }
 
 function removeTower(towerId: string) {
@@ -269,9 +275,9 @@ function towerSubtitle(tower: {
               class="number-input"
               type="number"
               step="0.1"
-              :min="selectedTowerLimits.minW"
-              :max="selectedTowerLimits.maxW"
-              :value="selectedTower.width"
+              :min="fromCmDisplay(selectedTowerLimits.minW)"
+              :max="fromCmDisplay(selectedTowerLimits.maxW)"
+              :value="fromCmDisplay(selectedTower.width)"
               @change="onDimensionInput('width', $event)"
             />
           </div>
@@ -285,9 +291,9 @@ function towerSubtitle(tower: {
               class="number-input"
               type="number"
               step="0.1"
-              :min="selectedTowerLimits.minD"
-              :max="selectedTowerLimits.maxD"
-              :value="selectedTower.depth"
+              :min="fromCmDisplay(selectedTowerLimits.minD)"
+              :max="fromCmDisplay(selectedTowerLimits.maxD)"
+              :value="fromCmDisplay(selectedTower.depth)"
               @change="onDimensionInput('depth', $event)"
             />
           </div>
@@ -301,9 +307,9 @@ function towerSubtitle(tower: {
               class="number-input"
               type="number"
               step="0.1"
-              :min="selectedTowerLimits.minH"
-              :max="selectedTowerLimits.maxH"
-              :value="selectedTower.height"
+              :min="fromCmDisplay(selectedTowerLimits.minH)"
+              :max="fromCmDisplay(selectedTowerLimits.maxH)"
+              :value="fromCmDisplay(selectedTower.height)"
               @change="onDimensionInput('height', $event)"
             />
           </div>
