@@ -543,9 +543,19 @@ const activeElevationTowers = computed(() => {
 function towerElevationGeometryCm(tower: Tower) {
   const wall = roomStore.walls.find((w) => w.id === tower.wallId);
   const wallLength = wall ? wall.length : 100;
-  const pos = tower.positionAlongWall ?? 0.5;
-  const widthCm = Number(tower.width) || 0;
-  const heightCm = Number(tower.height) || 0;
+  const pos =
+    typeof tower.positionAlongWall === "number" &&
+    !isNaN(tower.positionAlongWall)
+      ? tower.positionAlongWall
+      : 0.5;
+  const widthCm =
+    typeof tower.width === "number" && !isNaN(tower.width)
+      ? tower.width
+      : Number(tower.width) || 0;
+  const heightCm =
+    typeof tower.height === "number" && !isNaN(tower.height)
+      ? tower.height
+      : Number(tower.height) || 0;
   return {
     leftCm: pos * wallLength - widthCm / 2,
     bottomCm: 0,
@@ -568,6 +578,63 @@ function towerElevationRect(tower: Tower): ElevationItemRect {
   };
 }
 
+/**
+ * Split a horizontal element (x, w) into segments that skip over any
+ * intersecting door/window openings at the given vertical position.
+ * All coordinates are in cm wall-space.
+ */
+function splitHorizontalSegments(
+  x: number,
+  w: number,
+  yBottom: number,
+  yTop: number,
+  openings: ElevationRectCm[],
+): Array<{ x: number; w: number }> {
+  const right = x + w;
+
+  // Collect opening x-ranges that vertically overlap this element
+  const cuts: Array<{ left: number; right: number }> = [];
+  for (const op of openings) {
+    // Vertical overlap?
+    if (op.topCm <= yBottom || op.bottomCm >= yTop) continue;
+    // Horizontal overlap?
+    const cLeft = Math.max(x, op.leftCm);
+    const cRight = Math.min(right, op.rightCm);
+    if (cLeft < cRight) {
+      cuts.push({ left: cLeft, right: cRight });
+    }
+  }
+
+  if (cuts.length === 0) return [{ x, w }];
+
+  // Sort and merge overlapping cuts
+  cuts.sort((a, b) => a.left - b.left);
+  const merged: Array<{ left: number; right: number }> = [];
+  for (const c of cuts) {
+    const last = merged[merged.length - 1];
+    if (last && c.left <= last.right) {
+      last.right = Math.max(last.right, c.right);
+    } else {
+      merged.push({ left: c.left, right: c.right });
+    }
+  }
+
+  // Build segments that skip over merged cut ranges
+  const segments: Array<{ x: number; w: number }> = [];
+  let cursor = x;
+  for (const m of merged) {
+    if (m.left > cursor) {
+      segments.push({ x: cursor, w: m.left - cursor });
+    }
+    cursor = m.right;
+  }
+  if (cursor < right) {
+    segments.push({ x: cursor, w: right - cursor });
+  }
+
+  return segments;
+}
+
 function getTowerAccessoriesLayout(tower: Tower) {
   const geom = towerElevationGeometryCm(tower);
   const T = closetStore.cabinet?.thickness ?? 2;
@@ -577,6 +644,9 @@ function getTowerAccessoriesLayout(tower: Tower) {
   const innerBottom = T;
   const innerTop = geom.heightCm - T;
   const innerHeight = geom.heightCm - T * 2;
+
+  // Get opening rects on the current elevation wall
+  const openings = elevationOpeningRectsCmForCurrentWall();
 
   const shelves: Array<{ x: number; y: number; w: number; h: number }> = [];
   const rods: Array<{
@@ -608,12 +678,18 @@ function getTowerAccessoriesLayout(tower: Tower) {
         const gap = innerHeight / (count + 1);
         for (let i = 0; i < count; i++) {
           const y = innerBottom + gap * (i + 1);
-          shelves.push({
-            x: innerLeft,
-            y: y - T / 2,
-            w: innerWidth,
-            h: T,
-          });
+          const shelfBottom = y - T / 2;
+          const shelfTop = shelfBottom + T;
+          const segments = splitHorizontalSegments(
+            innerLeft,
+            innerWidth,
+            shelfBottom,
+            shelfTop,
+            openings,
+          );
+          for (const seg of segments) {
+            shelves.push({ x: seg.x, y: shelfBottom, w: seg.w, h: T });
+          }
         }
       }
     } else if (acc.type === "rod") {
@@ -627,16 +703,27 @@ function getTowerAccessoriesLayout(tower: Tower) {
       const rodRadius = 1.2;
       for (let r = 0; r < acc.count; r++) {
         const y = baseY - r * 40;
-        rods.push({
-          x: innerLeft + 1,
-          y: y - rodRadius,
-          w: innerWidth - 2,
-          h: rodRadius * 2,
-          brackets: [
-            { x: innerLeft, y: y - 2, w: 1, h: 4 },
-            { x: innerRight - 1, y: y - 2, w: 1, h: 4 },
-          ],
-        });
+        const rodBottom = y - rodRadius;
+        const rodTop = y + rodRadius;
+        const segments = splitHorizontalSegments(
+          innerLeft + 1,
+          innerWidth - 2,
+          rodBottom,
+          rodTop,
+          openings,
+        );
+        for (const seg of segments) {
+          rods.push({
+            x: seg.x,
+            y: rodBottom,
+            w: seg.w,
+            h: rodRadius * 2,
+            brackets: [
+              { x: seg.x, y: y - 2, w: 1, h: 4 },
+              { x: seg.x + seg.w - 1, y: y - 2, w: 1, h: 4 },
+            ],
+          });
+        }
       }
     } else if (acc.type === "drawer") {
       const count = acc.count;
@@ -644,18 +731,28 @@ function getTowerAccessoriesLayout(tower: Tower) {
       const gap = 1;
       for (let i = 0; i < count; i++) {
         const bottom = innerBottom + i * (drawerHeight + gap);
-        drawers.push({
-          x: innerLeft + 1,
-          y: bottom,
-          w: innerWidth - 2,
-          h: drawerHeight,
-          handle: {
-            x: innerLeft + 1 + (innerWidth - 2) * 0.3,
-            y: bottom + drawerHeight / 2 - 0.5,
-            w: (innerWidth - 2) * 0.4,
-            h: 1,
-          },
-        });
+        const top = bottom + drawerHeight;
+        const segments = splitHorizontalSegments(
+          innerLeft + 1,
+          innerWidth - 2,
+          bottom,
+          top,
+          openings,
+        );
+        for (const seg of segments) {
+          drawers.push({
+            x: seg.x,
+            y: bottom,
+            w: seg.w,
+            h: drawerHeight,
+            handle: {
+              x: seg.x + seg.w * 0.3,
+              y: bottom + drawerHeight / 2 - 0.5,
+              w: seg.w * 0.4,
+              h: 1,
+            },
+          });
+        }
       }
     } else if (acc.type === "shoe_shelf") {
       const count = acc.count;
@@ -663,13 +760,23 @@ function getTowerAccessoriesLayout(tower: Tower) {
         const shelfSpacing = Math.min(20, innerHeight / (count + 1));
         for (let i = 0; i < count; i++) {
           const y = innerBottom + shelfSpacing * (i + 1);
-          shoeShelves.push({
-            x: innerLeft,
-            y: y,
-            w: innerWidth,
-            h: T,
-            guardrailY: y + 3,
-          });
+          const shelfTop = y + T;
+          const segments = splitHorizontalSegments(
+            innerLeft,
+            innerWidth,
+            y,
+            shelfTop,
+            openings,
+          );
+          for (const seg of segments) {
+            shoeShelves.push({
+              x: seg.x,
+              y: y,
+              w: seg.w,
+              h: T,
+              guardrailY: y + 3,
+            });
+          }
         }
       }
     }
@@ -808,8 +915,15 @@ function clampElevationLeftCm(
   widthCm: number,
   bounds: ElevationHorizontalBoundsCm,
 ): number {
-  const minLeft = bounds.minLeftCm;
-  const maxLeft = Math.max(minLeft, bounds.maxRightCm - widthCm);
+  const minLeft =
+    typeof bounds.minLeftCm === "number" && !isNaN(bounds.minLeftCm)
+      ? bounds.minLeftCm
+      : 0;
+  const maxRight =
+    typeof bounds.maxRightCm === "number" && !isNaN(bounds.maxRightCm)
+      ? bounds.maxRightCm
+      : 100;
+  const maxLeft = Math.max(minLeft, maxRight - widthCm);
   return Math.max(minLeft, Math.min(maxLeft, leftCm));
 }
 
@@ -1002,15 +1116,34 @@ type ElevationItemGeometryCm = {
 };
 
 function elevationItemGeometryCm(
-  item: Pick<PlacedItem, "width" | "height" | "leftPosition" | "elevation">,
+  item: Pick<
+    PlacedItem,
+    "type" | "width" | "height" | "leftPosition" | "elevation"
+  >,
 ): ElevationItemGeometryCm {
   const layout = elevationLayout.value;
   const horizontalBounds = elevationHorizontalBounds.value;
-  const widthCm = Math.max(1, item.width);
-  const heightCm = Math.max(1, item.height);
+
+  const itemWidth =
+    typeof item.width === "number" && !isNaN(item.width) ? item.width : 0;
+  const itemHeight =
+    typeof item.height === "number" && !isNaN(item.height) ? item.height : 0;
+  const itemLeftPosition =
+    typeof item.leftPosition === "number" && !isNaN(item.leftPosition)
+      ? item.leftPosition
+      : 0;
+
+  const defaultElevation = item.type === "window" ? 42 : 0;
+  const itemElevation =
+    typeof item.elevation === "number" && !isNaN(item.elevation)
+      ? item.elevation
+      : defaultElevation;
+
+  const widthCm = Math.max(1, itemWidth);
+  const heightCm = Math.max(1, itemHeight);
 
   const leftCm = clampElevationLeftCm(
-    Math.max(0, item.leftPosition) * CM_PER_INCH,
+    Math.max(0, itemLeftPosition) * CM_PER_INCH,
     widthCm,
     horizontalBounds,
   );
@@ -1018,7 +1151,7 @@ function elevationItemGeometryCm(
   const maxElevationCm = Math.max(0, layout.roomHeightCm - heightCm);
   const elevationCm = Math.max(
     0,
-    Math.min(maxElevationCm, Math.max(0, item.elevation) * CM_PER_INCH),
+    Math.min(maxElevationCm, Math.max(0, itemElevation) * CM_PER_INCH),
   );
 
   return {
@@ -1030,7 +1163,10 @@ function elevationItemGeometryCm(
 }
 
 function elevationItemRect(
-  item: Pick<PlacedItem, "width" | "height" | "leftPosition" | "elevation">,
+  item: Pick<
+    PlacedItem,
+    "type" | "width" | "height" | "leftPosition" | "elevation"
+  >,
 ): ElevationItemRect {
   const layout = elevationLayout.value;
   const geometry = elevationItemGeometryCm(item);
@@ -1049,7 +1185,7 @@ function elevationItemRect(
 function elevationOpeningRectCm(
   item: Pick<
     PlacedItem,
-    "id" | "width" | "height" | "leftPosition" | "elevation"
+    "id" | "type" | "width" | "height" | "leftPosition" | "elevation"
   >,
   wallLengthCm: number,
   roomHeightCm: number,
@@ -1064,10 +1200,26 @@ function elevationOpeningRectCm(
       maxRightCm: Math.max(0, wallLengthCm),
       usableSpanCm: Math.max(0, wallLengthCm),
     } as ElevationHorizontalBoundsCm);
-  const widthCm = Math.max(1, item.width);
-  const heightCm = Math.max(1, item.height);
+
+  const itemWidth =
+    typeof item.width === "number" && !isNaN(item.width) ? item.width : 0;
+  const itemHeight =
+    typeof item.height === "number" && !isNaN(item.height) ? item.height : 0;
+  const itemLeftPosition =
+    typeof item.leftPosition === "number" && !isNaN(item.leftPosition)
+      ? item.leftPosition
+      : 0;
+
+  const defaultElevation = item.type === "window" ? 42 : 0;
+  const itemElevation =
+    typeof item.elevation === "number" && !isNaN(item.elevation)
+      ? item.elevation
+      : defaultElevation;
+
+  const widthCm = Math.max(1, itemWidth);
+  const heightCm = Math.max(1, itemHeight);
   const leftCm = clampElevationLeftCm(
-    Math.max(0, item.leftPosition) * CM_PER_INCH,
+    Math.max(0, itemLeftPosition) * CM_PER_INCH,
     widthCm,
     bounds,
   );
@@ -1075,7 +1227,7 @@ function elevationOpeningRectCm(
     0,
     Math.min(
       Math.max(0, roomHeightCm - heightCm),
-      Math.max(0, item.elevation) * CM_PER_INCH,
+      Math.max(0, itemElevation) * CM_PER_INCH,
     ),
   );
 
@@ -1502,6 +1654,65 @@ function startElevationClosetResize(
   (e.currentTarget as Element | null)?.setPointerCapture?.(e.pointerId);
 }
 
+function clampTowerCenter(towerId: string, targetCenterCm: number): number {
+  const wall = elevationWall.value;
+  if (!wall) return targetCenterCm;
+  const tower = closetStore.towers.find((t) => t.id === towerId);
+  if (!tower) return targetCenterCm;
+
+  const widthCm = Number(tower.width) || 0;
+  const heightCm = Number(tower.height) || 0;
+  const bounds = elevationHorizontalBounds.value;
+
+  // Initial allowed range for the tower center
+  const minCenter = bounds.minLeftCm + widthCm / 2;
+  const maxCenter = Math.max(minCenter, bounds.maxRightCm - widthCm / 2);
+  let clampedCenter = Math.max(minCenter, Math.min(maxCenter, targetCenterCm));
+
+  // Get all vertically overlapping openings
+  const openings = elevationOpeningRectsCmForCurrentWall();
+  const forbiddenIntervals: Array<{ min: number; max: number }> = [];
+
+  for (const op of openings) {
+    // Check if opening vertically overlaps with the tower [0, heightCm]
+    const verticalOverlap = op.bottomCm < heightCm && op.topCm > 0;
+    if (verticalOverlap) {
+      // Forbidden range for tower center
+      forbiddenIntervals.push({
+        min: op.leftCm - widthCm / 2,
+        max: op.rightCm + widthCm / 2,
+      });
+    }
+  }
+
+  // If the clamped center is in a forbidden interval, snap to the nearest valid edge
+  for (const interval of forbiddenIntervals) {
+    if (clampedCenter > interval.min && clampedCenter < interval.max) {
+      const leftValid = interval.min >= minCenter;
+      const rightValid = interval.max <= maxCenter;
+
+      if (leftValid && rightValid) {
+        const distToMin = clampedCenter - interval.min;
+        const distToMax = interval.max - clampedCenter;
+        clampedCenter = distToMin < distToMax ? interval.min : interval.max;
+      } else if (leftValid) {
+        clampedCenter = interval.min;
+      } else if (rightValid) {
+        clampedCenter = interval.max;
+      } else {
+        // Neither side is valid (tower can't fit on either side).
+        // Snap to the side that minimizes overlap.
+        const distToMin = clampedCenter - interval.min;
+        const distToMax = interval.max - clampedCenter;
+        clampedCenter = distToMin < distToMax ? minCenter : maxCenter;
+      }
+    }
+  }
+
+  // Final check to make sure we are clamped within usable wall boundaries
+  return Math.max(minCenter, Math.min(maxCenter, clampedCenter));
+}
+
 function onElevationPointerMove(e: PointerEvent) {
   if (!elevationSvgRef.value || !elevationWall.value) return;
 
@@ -1539,7 +1750,11 @@ function onElevationPointerMove(e: PointerEvent) {
     );
     const nextLeftCm = (nextX - layout.wallX) / layout.scale;
     const centerCm = nextLeftCm + tower.width / 2;
-    const nextAlong = Math.max(0, Math.min(1, centerCm / layout.wallLengthCm));
+    const clampedCenterCm = clampTowerCenter(tower.id, centerCm);
+    const nextAlong = Math.max(
+      0,
+      Math.min(1, clampedCenterCm / layout.wallLengthCm),
+    );
 
     closetStore.updateTower(tower.id, { positionAlongWall: nextAlong });
     return;
@@ -2640,7 +2855,10 @@ function dimLinePoints(wall: {
 </script>
 
 <template>
-  <div class="floorplan-page" :class="{ 'elevation-only-page': props.elevationOnly }">
+  <div
+    class="floorplan-page"
+    :class="{ 'elevation-only-page': props.elevationOnly }"
+  >
     <TopToolbar
       v-if="!props.elevationOnly"
       @undo="historyStore.undo()"
@@ -3078,7 +3296,13 @@ function dimLinePoints(wall: {
               >
                 <defs>
                   <!-- Premium Chrome linear gradient for hanging rods and handles -->
-                  <linearGradient id="chrome-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <linearGradient
+                    id="chrome-gradient"
+                    x1="0%"
+                    y1="0%"
+                    x2="0%"
+                    y2="100%"
+                  >
                     <stop offset="0%" stop-color="#f8fafc" />
                     <stop offset="30%" stop-color="#cbd5e1" />
                     <stop offset="50%" stop-color="#94a3b8" />
@@ -3087,7 +3311,13 @@ function dimLinePoints(wall: {
                   </linearGradient>
 
                   <!-- Premium wood linear gradient for shelves and carcass -->
-                  <linearGradient id="wood-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <linearGradient
+                    id="wood-gradient"
+                    x1="0%"
+                    y1="0%"
+                    x2="0%"
+                    y2="100%"
+                  >
                     <stop offset="0%" stop-color="#a16207" />
                     <stop offset="50%" stop-color="#ca8a04" />
                     <stop offset="100%" stop-color="#854d0e" />
@@ -3299,9 +3529,18 @@ function dimLinePoints(wall: {
                     v-for="i in 4"
                     :key="`dash-${i}`"
                     :x1="elevationClosetRect(block).x"
-                    :y1="elevationClosetRect(block).y + (elevationClosetRect(block).height / 5) * i"
-                    :x2="elevationClosetRect(block).x + elevationClosetRect(block).width"
-                    :y2="elevationClosetRect(block).y + (elevationClosetRect(block).height / 5) * i"
+                    :y1="
+                      elevationClosetRect(block).y +
+                      (elevationClosetRect(block).height / 5) * i
+                    "
+                    :x2="
+                      elevationClosetRect(block).x +
+                      elevationClosetRect(block).width
+                    "
+                    :y2="
+                      elevationClosetRect(block).y +
+                      (elevationClosetRect(block).height / 5) * i
+                    "
                     stroke="rgba(255, 255, 255, 0.25)"
                     stroke-width="1"
                     stroke-dasharray="3,3"
@@ -3385,7 +3624,9 @@ function dimLinePoints(wall: {
                   v-for="tower in activeElevationTowers"
                   :key="tower.id"
                   class="elevation-tower"
-                  :class="{ selected: selectionStore.selectedTowerId === tower.id }"
+                  :class="{
+                    selected: selectionStore.selectedTowerId === tower.id,
+                  }"
                   @pointerdown="startElevationTowerDrag(tower.id, $event)"
                   @click.stop="selectionStore.selectTower(tower.id)"
                   style="cursor: grab"
@@ -3400,18 +3641,46 @@ function dimLinePoints(wall: {
                   />
                   <!-- Interior backing box -->
                   <rect
-                    :x="towerElevationRect(tower).x + (closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
-                    :y="towerElevationRect(tower).y + (closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
-                    :width="towerElevationRect(tower).width - (closetStore.cabinet?.thickness ?? 2) * 2 * elevationLayout.scale"
-                    :height="towerElevationRect(tower).height - (closetStore.cabinet?.thickness ?? 2) * 2 * elevationLayout.scale"
+                    :x="
+                      towerElevationRect(tower).x +
+                      (closetStore.cabinet?.thickness ?? 2) *
+                        elevationLayout.scale
+                    "
+                    :y="
+                      towerElevationRect(tower).y +
+                      (closetStore.cabinet?.thickness ?? 2) *
+                        elevationLayout.scale
+                    "
+                    :width="
+                      towerElevationRect(tower).width -
+                      (closetStore.cabinet?.thickness ?? 2) *
+                        2 *
+                        elevationLayout.scale
+                    "
+                    :height="
+                      towerElevationRect(tower).height -
+                      (closetStore.cabinet?.thickness ?? 2) *
+                        2 *
+                        elevationLayout.scale
+                    "
                     class="elevation-tower-interior"
                   />
 
                   <!-- Shelves -->
-                  <g v-for="(shelf, sIdx) in getTowerAccessoriesLayout(tower).shelves" :key="`shelf-${sIdx}`">
+                  <g
+                    v-for="(shelf, sIdx) in getTowerAccessoriesLayout(tower)
+                      .shelves"
+                    :key="`shelf-${sIdx}`"
+                  >
                     <rect
-                      :x="elevationLayout.wallX + shelf.x * elevationLayout.scale"
-                      :y="elevationLayout.wallY + (elevationLayout.roomHeightCm - (shelf.y + shelf.h)) * elevationLayout.scale"
+                      :x="
+                        elevationLayout.wallX + shelf.x * elevationLayout.scale
+                      "
+                      :y="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm - (shelf.y + shelf.h)) *
+                          elevationLayout.scale
+                      "
                       :width="shelf.w * elevationLayout.scale"
                       :height="shelf.h * elevationLayout.scale"
                       class="elevation-shelf"
@@ -3419,13 +3688,24 @@ function dimLinePoints(wall: {
                   </g>
 
                   <!-- Hanging Rods with realistic chrome look and wall brackets -->
-                  <g v-for="(rod, rIdx) in getTowerAccessoriesLayout(tower).rods" :key="`rod-${rIdx}`">
+                  <g
+                    v-for="(rod, rIdx) in getTowerAccessoriesLayout(tower).rods"
+                    :key="`rod-${rIdx}`"
+                  >
                     <!-- Brackets -->
                     <rect
                       v-for="(bracket, bIdx) in rod.brackets"
                       :key="`bracket-${bIdx}`"
-                      :x="elevationLayout.wallX + bracket.x * elevationLayout.scale"
-                      :y="elevationLayout.wallY + (elevationLayout.roomHeightCm - (bracket.y + bracket.h)) * elevationLayout.scale"
+                      :x="
+                        elevationLayout.wallX +
+                        bracket.x * elevationLayout.scale
+                      "
+                      :y="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm -
+                          (bracket.y + bracket.h)) *
+                          elevationLayout.scale
+                      "
                       :width="bracket.w * elevationLayout.scale"
                       :height="bracket.h * elevationLayout.scale"
                       class="elevation-rod-bracket"
@@ -3433,7 +3713,11 @@ function dimLinePoints(wall: {
                     <!-- Rod bar -->
                     <rect
                       :x="elevationLayout.wallX + rod.x * elevationLayout.scale"
-                      :y="elevationLayout.wallY + (elevationLayout.roomHeightCm - (rod.y + rod.h)) * elevationLayout.scale"
+                      :y="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm - (rod.y + rod.h)) *
+                          elevationLayout.scale
+                      "
                       :width="rod.w * elevationLayout.scale"
                       :height="rod.h * elevationLayout.scale"
                       class="elevation-rod-bar"
@@ -3441,19 +3725,37 @@ function dimLinePoints(wall: {
                   </g>
 
                   <!-- Drawers with warm wood fronts and polished chrome handle strips -->
-                  <g v-for="(drawer, dIdx) in getTowerAccessoriesLayout(tower).drawers" :key="`drawer-${dIdx}`">
+                  <g
+                    v-for="(drawer, dIdx) in getTowerAccessoriesLayout(tower)
+                      .drawers"
+                    :key="`drawer-${dIdx}`"
+                  >
                     <!-- Drawer Face -->
                     <rect
-                      :x="elevationLayout.wallX + drawer.x * elevationLayout.scale"
-                      :y="elevationLayout.wallY + (elevationLayout.roomHeightCm - (drawer.y + drawer.h)) * elevationLayout.scale"
+                      :x="
+                        elevationLayout.wallX + drawer.x * elevationLayout.scale
+                      "
+                      :y="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm - (drawer.y + drawer.h)) *
+                          elevationLayout.scale
+                      "
                       :width="drawer.w * elevationLayout.scale"
                       :height="drawer.h * elevationLayout.scale"
                       class="elevation-drawer-face"
                     />
                     <!-- Drawer Handle -->
                     <rect
-                      :x="elevationLayout.wallX + drawer.handle.x * elevationLayout.scale"
-                      :y="elevationLayout.wallY + (elevationLayout.roomHeightCm - (drawer.handle.y + drawer.handle.h)) * elevationLayout.scale"
+                      :x="
+                        elevationLayout.wallX +
+                        drawer.handle.x * elevationLayout.scale
+                      "
+                      :y="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm -
+                          (drawer.handle.y + drawer.handle.h)) *
+                          elevationLayout.scale
+                      "
                       :width="drawer.handle.w * elevationLayout.scale"
                       :height="drawer.handle.h * elevationLayout.scale"
                       class="elevation-drawer-handle"
@@ -3461,19 +3763,42 @@ function dimLinePoints(wall: {
                   </g>
 
                   <!-- Shoe shelves with safety guardrails -->
-                  <g v-for="(shoe, shIdx) in getTowerAccessoriesLayout(tower).shoeShelves" :key="`shoe-${shIdx}`">
+                  <g
+                    v-for="(shoe, shIdx) in getTowerAccessoriesLayout(tower)
+                      .shoeShelves"
+                    :key="`shoe-${shIdx}`"
+                  >
                     <rect
-                      :x="elevationLayout.wallX + shoe.x * elevationLayout.scale"
-                      :y="elevationLayout.wallY + (elevationLayout.roomHeightCm - (shoe.y + shoe.h)) * elevationLayout.scale"
+                      :x="
+                        elevationLayout.wallX + shoe.x * elevationLayout.scale
+                      "
+                      :y="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm - (shoe.y + shoe.h)) *
+                          elevationLayout.scale
+                      "
                       :width="shoe.w * elevationLayout.scale"
                       :height="shoe.h * elevationLayout.scale"
                       class="elevation-shoe-shelf"
                     />
                     <line
-                      :x1="elevationLayout.wallX + shoe.x * elevationLayout.scale"
-                      :y1="elevationLayout.wallY + (elevationLayout.roomHeightCm - shoe.guardrailY) * elevationLayout.scale"
-                      :x2="elevationLayout.wallX + (shoe.x + shoe.w) * elevationLayout.scale"
-                      :y2="elevationLayout.wallY + (elevationLayout.roomHeightCm - shoe.guardrailY) * elevationLayout.scale"
+                      :x1="
+                        elevationLayout.wallX + shoe.x * elevationLayout.scale
+                      "
+                      :y1="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm - shoe.guardrailY) *
+                          elevationLayout.scale
+                      "
+                      :x2="
+                        elevationLayout.wallX +
+                        (shoe.x + shoe.w) * elevationLayout.scale
+                      "
+                      :y2="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm - shoe.guardrailY) *
+                          elevationLayout.scale
+                      "
                       class="elevation-shoe-guardrail"
                     />
                   </g>
@@ -3490,8 +3815,15 @@ function dimLinePoints(wall: {
 
                   <!-- Tower label showing width -->
                   <text
-                    :x="towerElevationRect(tower).x + towerElevationRect(tower).width / 2"
-                    :y="towerElevationRect(tower).y + towerElevationRect(tower).height + 15"
+                    :x="
+                      towerElevationRect(tower).x +
+                      towerElevationRect(tower).width / 2
+                    "
+                    :y="
+                      towerElevationRect(tower).y +
+                      towerElevationRect(tower).height +
+                      15
+                    "
                     text-anchor="middle"
                     class="elevation-tower-label"
                   >
