@@ -58,6 +58,92 @@ const maxElevationCm = computed(() => {
   return Math.max(0, room.height - tower.height);
 });
 
+/**
+ * Clearance left (cm) — usable wall space to the left of the tower's left edge.
+ * Clearance right (cm) — usable wall space to the right of the tower's right edge.
+ *
+ * Accounts for:
+ *  1. Corner margins — full wall thickness is consumed by connected walls.
+ *  2. Placed doors/windows — any opening whose interval overlaps the clearance
+ *     zone further restricts the available space.
+ */
+const clearances = computed(() => {
+  const tower = selectedTower.value;
+  const wall = selectedTowerWall.value;
+  if (!tower || !wall) return null;
+
+  // Tower left/right edges in wall-axis cm
+  const pos = tower.positionAlongWall ?? 0.5;
+  const centerCm = pos * wall.length;
+  const halfW = tower.width / 2;
+  const towerLeft = centerCm - halfW;
+  const towerRight = centerCm + halfW;
+
+  // ── 1. Corner margins ────────────────────────────────────────────────────
+  const tolerance = 1;
+  const wallStart: [number, number] = [wall.position[0], wall.position[1]];
+  const wallEndX = wall.position[0] + Math.cos(wall.angle) * wall.length;
+  const wallEndY = wall.position[1] + Math.sin(wall.angle) * wall.length;
+  const wallEnd: [number, number] = [wallEndX, wallEndY];
+
+  let startConnected = false;
+  let endConnected = false;
+
+  for (const other of room.walls) {
+    if (other.id === wall.id) continue;
+    const os: [number, number] = [other.position[0], other.position[1]];
+    const oe: [number, number] = [
+      other.position[0] + Math.cos(other.angle) * other.length,
+      other.position[1] + Math.sin(other.angle) * other.length,
+    ];
+    const dist = (a: [number, number], b: [number, number]) =>
+      Math.hypot(a[0] - b[0], a[1] - b[1]);
+
+    if (!startConnected && (dist(wallStart, os) <= tolerance || dist(wallStart, oe) <= tolerance)) {
+      startConnected = true;
+    }
+    if (!endConnected && (dist(wallEnd, os) <= tolerance || dist(wallEnd, oe) <= tolerance)) {
+      endConnected = true;
+    }
+    if (startConnected && endConnected) break;
+  }
+
+  const startMargin = startConnected ? Math.max(0, wall.thickness) : 0;
+  const endMargin   = endConnected   ? Math.max(0, wall.thickness) : 0;
+
+  // Start with corner-based usable boundaries
+  let effectiveLeft  = startMargin;          // nearest boundary to the left of tower
+  let effectiveRight = wall.length - endMargin; // nearest boundary to the right of tower
+
+  // ── 2. Door / window obstructions ───────────────────────────────────────
+  const CM_PER_INCH = 2.54;
+  const epsilon = 0.5; // tolerance to handle floating point rounding when flush
+
+  for (const item of room.items) {
+    if (item.wallId !== wall.id) continue;
+    if (item.category !== 'door' && item.type !== 'window') continue;
+
+    // Use leftPosition * CM_PER_INCH to exactly match elevation view's geometry,
+    // rather than positionAlongWall which can suffer from round-trip precision loss.
+    const itemLeft   = item.leftPosition * CM_PER_INCH;
+    const itemRight  = itemLeft + item.width;
+
+    // Item is entirely to the LEFT of the tower (or flush against it) → left boundary
+    if (itemRight <= towerLeft + epsilon) {
+      effectiveLeft = Math.max(effectiveLeft, itemRight);
+    }
+    // Item is entirely to the RIGHT of the tower (or flush against it) → right boundary
+    if (itemLeft >= towerRight - epsilon) {
+      effectiveRight = Math.min(effectiveRight, itemLeft);
+    }
+  }
+
+  return {
+    left:  Math.max(0, towerLeft  - effectiveLeft),
+    right: Math.max(0, effectiveRight - towerRight),
+  };
+});
+
 /** Wall the selected tower is placed on */
 const selectedTowerWall = computed(() => {
   const tower = selectedTower.value;
@@ -367,6 +453,19 @@ function towerSubtitle(tower: {
               @change="onDimensionInput('elevation', $event)"
             />
           </div>
+
+          <!-- Clearance display -->
+          <div v-if="clearances" class="clearance-section">
+            <div class="section-title" style="margin-bottom: 8px">Clearance</div>
+            <div class="clearance-row">
+              <span class="clearance-label">Left</span>
+              <span class="clearance-value">{{ fmt(clearances.left) }}</span>
+            </div>
+            <div class="clearance-row">
+              <span class="clearance-label">Right</span>
+              <span class="clearance-value">{{ fmt(clearances.right) }}</span>
+            </div>
+          </div>
         </section>
 
         <section v-else class="panel-section muted-section">
@@ -658,6 +757,36 @@ function towerSubtitle(tower: {
   background: rgba(2, 6, 23, 0.56);
   color: #e2e8f0;
 }
+
+.clearance-section {
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.46);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.clearance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.clearance-label {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.clearance-value {
+  color: #fbbf24;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 
 @media (max-width: 1100px) {
   .build-body {
