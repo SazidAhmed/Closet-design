@@ -48,6 +48,16 @@ const selectedTowerLimits = computed<ClosetCatalogLimits | null>(() => {
   return getCategoryLimits(tower.doorMode, tower.categoryCode);
 });
 
+/**
+ * Maximum elevation (in display units) — the tower must stay fully inside
+ * the room height, so max = roomHeight - towerHeight (min 0).
+ */
+const maxElevationCm = computed(() => {
+  const tower = selectedTower.value;
+  if (!tower) return 0;
+  return Math.max(0, room.height - tower.height);
+});
+
 /** Wall the selected tower is placed on */
 const selectedTowerWall = computed(() => {
   const tower = selectedTower.value;
@@ -103,7 +113,7 @@ function setDoorMode(mode: ClosetDoorMode) {
 }
 
 function onDimensionInput(
-  dimension: "width" | "depth" | "height",
+  dimension: "width" | "depth" | "height" | "outset" | "elevation",
   event: Event,
 ) {
   const tower = selectedTower.value;
@@ -120,6 +130,17 @@ function onDimensionInput(
 
   if (dimension === "depth") {
     closet.setTowerDepth(tower.id, valueCm);
+    return;
+  }
+
+  if (dimension === "outset") {
+    closet.setTowerOutset(tower.id, valueCm);
+    return;
+  }
+
+  if (dimension === "elevation") {
+    const maxCm = maxElevationCm.value;
+    closet.setTowerElevation(tower.id, Math.min(valueCm, maxCm));
     return;
   }
 
@@ -311,6 +332,39 @@ function towerSubtitle(tower: {
               :max="fromCmDisplay(selectedTowerLimits.maxH)"
               :value="fromCmDisplay(selectedTower.height)"
               @change="onDimensionInput('height', $event)"
+            />
+          </div>
+
+          <div class="dimension-control">
+            <div class="dimension-head">
+              <label>Outset</label>
+              <span>{{ fmt(selectedTower.outset ?? 0) }}</span>
+            </div>
+            <input
+              id="tower-outset-input"
+              class="number-input"
+              type="number"
+              step="0.1"
+              min="0"
+              :value="fromCmDisplay(selectedTower.outset ?? 0)"
+              @change="onDimensionInput('outset', $event)"
+            />
+          </div>
+
+          <div class="dimension-control">
+            <div class="dimension-head">
+              <label>Elevation</label>
+              <span>{{ fmt(selectedTower.elevation ?? 0) }}</span>
+            </div>
+            <input
+              id="tower-elevation-input"
+              class="number-input"
+              type="number"
+              step="0.1"
+              min="0"
+              :max="fromCmDisplay(maxElevationCm)"
+              :value="fromCmDisplay(selectedTower.elevation ?? 0)"
+              @change="onDimensionInput('elevation', $event)"
             />
           </div>
         </section>

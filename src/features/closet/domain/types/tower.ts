@@ -87,6 +87,16 @@ export type Tower = {
    * Clamped at render/move time so the tower stays fully within the wall.
    */
   positionAlongWall?: number
+  /**
+   * Outset distance (in cm) — the gap between the wall and the front face of
+   * the tower/shelve. Defaults to 0 when absent.
+   */
+  outset?: number
+  /**
+   * Elevation distance (in cm) — the gap between the floor and the bottom of
+   * the tower/shelve. Defaults to 0 when absent.
+   */
+  elevation?: number
 }
 
 // ---- Factory helpers ------------------------------------------------------

@@ -143,6 +143,16 @@ export const useClosetStore = defineStore('closet', {
       if (tower) tower.height = clampTowerHeight(tower, height)
     },
 
+    setTowerOutset(towerId: string, outset: number) {
+      const tower = this.towers.find((t) => t.id === towerId)
+      if (tower) tower.outset = Math.max(0, outset)
+    },
+
+    setTowerElevation(towerId: string, elevation: number) {
+      const tower = this.towers.find((t) => t.id === towerId)
+      if (tower) tower.elevation = Math.max(0, elevation)
+    },
+
     // ── Accessories ───────────────────────────────────────────────────────
     setTowerAccessories(towerId: string, accessories: Accessory[]) {
       const tower = this.towers.find((t) => t.id === towerId)

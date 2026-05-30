@@ -123,7 +123,7 @@ function selectWall(id: string) {
  * inward (perpendicular into the room) by `tower.depth`.
  */
 function getTowerCorners(
-  tower: { depth: number },
+  tower: { depth: number; outset?: number },
   wall: {
     position: [number, number];
     angle: number;
@@ -147,8 +147,10 @@ function getTowerCorners(
 
   // Offset by half wall thickness so the back edge of the tower sits on the wall's inside face
   const tHalf = (wall.thickness ?? 6) / 2;
-  const cx_inner = cx + px * tHalf;
-  const cy_inner = cy + py * tHalf;
+  // Apply outset: push tower further into the room by `outset` cm
+  const outset = tower.outset ?? 0;
+  const cx_inner = cx + px * (tHalf + outset);
+  const cy_inner = cy + py * (tHalf + outset);
 
   const d = tower.depth;
   return [
@@ -252,12 +254,13 @@ const placedTowerPolygons = computed(() => {
       const px = -Math.sin(wall.angle);
       const py = Math.cos(wall.angle);
 
-      // Offset by half wall thickness
+      // Offset by half wall thickness + outset for label centre
       const cx = wall.position[0] + Math.cos(wall.angle) * wall.length * pos;
       const cy = wall.position[1] + Math.sin(wall.angle) * wall.length * pos;
       const tHalf = (wall.thickness ?? 6) / 2;
-      const cx_inner = cx + px * tHalf;
-      const cy_inner = cy + py * tHalf;
+      const outset = tower.outset ?? 0;
+      const cx_inner = cx + px * (tHalf + outset);
+      const cy_inner = cy + py * (tHalf + outset);
 
       const d = tower.depth;
 

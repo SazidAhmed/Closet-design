@@ -556,9 +556,13 @@ function towerElevationGeometryCm(tower: Tower) {
     typeof tower.height === "number" && !isNaN(tower.height)
       ? tower.height
       : Number(tower.height) || 0;
+  const elevationCm =
+    typeof tower.elevation === "number" && !isNaN(tower.elevation)
+      ? Math.max(0, tower.elevation)
+      : 0;
   return {
     leftCm: pos * wallLength - widthCm / 2,
-    bottomCm: 0,
+    bottomCm: elevationCm,
     widthCm,
     heightCm,
   };
@@ -3828,6 +3832,7 @@ function dimLinePoints(wall: {
                     class="elevation-tower-label"
                   >
                     Tower · {{ formatLength(tower.width) }}
+                    · E {{ formatLength(tower.elevation ?? 0) }}
                   </text>
                 </g>
               </svg>
