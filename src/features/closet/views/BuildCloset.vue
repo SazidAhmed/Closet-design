@@ -99,20 +99,26 @@ const clearances = computed(() => {
     const dist = (a: [number, number], b: [number, number]) =>
       Math.hypot(a[0] - b[0], a[1] - b[1]);
 
-    if (!startConnected && (dist(wallStart, os) <= tolerance || dist(wallStart, oe) <= tolerance)) {
+    if (
+      !startConnected &&
+      (dist(wallStart, os) <= tolerance || dist(wallStart, oe) <= tolerance)
+    ) {
       startConnected = true;
     }
-    if (!endConnected && (dist(wallEnd, os) <= tolerance || dist(wallEnd, oe) <= tolerance)) {
+    if (
+      !endConnected &&
+      (dist(wallEnd, os) <= tolerance || dist(wallEnd, oe) <= tolerance)
+    ) {
       endConnected = true;
     }
     if (startConnected && endConnected) break;
   }
 
   const startMargin = startConnected ? Math.max(0, wall.thickness) : 0;
-  const endMargin   = endConnected   ? Math.max(0, wall.thickness) : 0;
+  const endMargin = endConnected ? Math.max(0, wall.thickness) : 0;
 
   // Start with corner-based usable boundaries
-  let effectiveLeft  = startMargin;          // nearest boundary to the left of tower
+  let effectiveLeft = startMargin; // nearest boundary to the left of tower
   let effectiveRight = wall.length - endMargin; // nearest boundary to the right of tower
 
   // ── 2. Door / window obstructions ───────────────────────────────────────
@@ -121,12 +127,12 @@ const clearances = computed(() => {
 
   for (const item of room.items) {
     if (item.wallId !== wall.id) continue;
-    if (item.category !== 'door' && item.type !== 'window') continue;
+    if (item.category !== "door" && item.type !== "window") continue;
 
     // Use leftPosition * CM_PER_INCH to exactly match elevation view's geometry,
     // rather than positionAlongWall which can suffer from round-trip precision loss.
-    const itemLeft   = item.leftPosition * CM_PER_INCH;
-    const itemRight  = itemLeft + item.width;
+    const itemLeft = item.leftPosition * CM_PER_INCH;
+    const itemRight = itemLeft + item.width;
 
     // Item is entirely to the LEFT of the tower (or flush against it) → left boundary
     if (itemRight <= towerLeft + epsilon) {
@@ -139,8 +145,10 @@ const clearances = computed(() => {
   }
 
   return {
-    left:  Math.max(0, towerLeft  - effectiveLeft),
+    left: Math.max(0, towerLeft - effectiveLeft),
     right: Math.max(0, effectiveRight - towerRight),
+    effectiveLeft,
+    effectiveRight,
   };
 });
 
@@ -231,6 +239,32 @@ function onDimensionInput(
   }
 
   closet.setTowerHeight(tower.id, valueCm);
+}
+
+function onClearanceInput(side: "left" | "right", event: Event) {
+  const tower = selectedTower.value;
+  const wall = selectedTowerWall.value;
+  const c = clearances.value;
+  if (!tower || !wall || !c) return;
+
+  const value = Number((event.target as HTMLInputElement).value);
+  if (!Number.isFinite(value)) return;
+
+  const valueCm = toCm(value);
+  const halfW = tower.width / 2;
+
+  let newCenterCm = 0;
+  if (side === "left") {
+    newCenterCm = c.effectiveLeft + valueCm + halfW;
+  } else {
+    newCenterCm = c.effectiveRight - valueCm - halfW;
+  }
+
+  // Ensure center stays within raw wall bounds
+  newCenterCm = Math.max(halfW, Math.min(wall.length - halfW, newCenterCm));
+
+  const positionAlongWall = newCenterCm / wall.length;
+  closet.updateTower(tower.id, { positionAlongWall });
 }
 
 function removeTower(towerId: string) {
@@ -456,14 +490,40 @@ function towerSubtitle(tower: {
 
           <!-- Clearance display -->
           <div v-if="clearances" class="clearance-section">
-            <div class="section-title" style="margin-bottom: 8px">Clearance</div>
-            <div class="clearance-row">
-              <span class="clearance-label">Left</span>
-              <span class="clearance-value">{{ fmt(clearances.left) }}</span>
-            </div>
-            <div class="clearance-row">
-              <span class="clearance-label">Right</span>
-              <span class="clearance-value">{{ fmt(clearances.right) }}</span>
+            <h2 class="section-title">Clearance</h2>
+
+            <div class="clearance-grid">
+              <div class="dimension-control">
+                <div class="dimension-head">
+                  <label>Left</label>
+                  <span>{{ fmt(clearances.left) }}</span>
+                </div>
+                <input
+                  class="number-input"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  :max="fromCmDisplay(clearances.left + clearances.right)"
+                  :value="fromCmDisplay(clearances.left)"
+                  @change="onClearanceInput('left', $event)"
+                />
+              </div>
+
+              <div class="dimension-control">
+                <div class="dimension-head">
+                  <label>Right</label>
+                  <span>{{ fmt(clearances.right) }}</span>
+                </div>
+                <input
+                  class="number-input"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  :max="fromCmDisplay(clearances.left + clearances.right)"
+                  :value="fromCmDisplay(clearances.right)"
+                  @change="onClearanceInput('right', $event)"
+                />
+              </div>
             </div>
           </div>
         </section>
@@ -765,7 +825,13 @@ function towerSubtitle(tower: {
   border: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+}
+
+.clearance-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
 }
 
 .clearance-row {
@@ -786,7 +852,6 @@ function towerSubtitle(tower: {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-
 
 @media (max-width: 1100px) {
   .build-body {
