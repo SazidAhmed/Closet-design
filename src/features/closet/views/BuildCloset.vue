@@ -121,6 +121,12 @@ const clearances = computed(() => {
   let effectiveLeft = startMargin; // nearest boundary to the left of tower
   let effectiveRight = wall.length - endMargin; // nearest boundary to the right of tower
 
+  const towerElevationCm =
+    typeof tower.elevation === "number" && !isNaN(tower.elevation)
+      ? Math.max(0, tower.elevation)
+      : 0;
+  const towerTopCm = towerElevationCm + tower.height;
+
   // ── 2. Door / window obstructions ───────────────────────────────────────
   const CM_PER_INCH = 2.54;
   const epsilon = 0.5; // tolerance to handle floating point rounding when flush
@@ -128,6 +134,18 @@ const clearances = computed(() => {
   for (const item of room.items) {
     if (item.wallId !== wall.id) continue;
     if (item.category !== "door" && item.type !== "window") continue;
+
+    const defaultElevation = item.type === "window" ? 42 : 0;
+    const itemElevation =
+      typeof item.elevation === "number" && !isNaN(item.elevation)
+        ? item.elevation
+        : defaultElevation;
+    const itemBottomCm = Math.max(0, itemElevation * CM_PER_INCH);
+    const itemTopCm = itemBottomCm + item.height;
+
+    const verticalOverlap =
+      itemBottomCm < towerTopCm && itemTopCm > towerElevationCm;
+    if (!verticalOverlap) continue;
 
     // Use leftPosition * CM_PER_INCH to exactly match elevation view's geometry,
     // rather than positionAlongWall which can suffer from round-trip precision loss.
@@ -148,6 +166,16 @@ const clearances = computed(() => {
   for (const otherTower of closet.towers) {
     if (otherTower.id === tower.id) continue;
     if (otherTower.wallId !== wall.id) continue;
+
+    const otherElevationCm =
+      typeof otherTower.elevation === "number" && !isNaN(otherTower.elevation)
+        ? Math.max(0, otherTower.elevation)
+        : 0;
+    const otherTopCm = otherElevationCm + otherTower.height;
+
+    const verticalOverlap =
+      otherElevationCm < towerTopCm && otherTopCm > towerElevationCm;
+    if (!verticalOverlap) continue;
 
     const otherPos = otherTower.positionAlongWall ?? 0.5;
     const otherCenterCm = otherPos * wall.length;

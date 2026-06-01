@@ -1666,6 +1666,11 @@ function clampTowerCenter(towerId: string, targetCenterCm: number): number {
 
   const widthCm = Number(tower.width) || 0;
   const heightCm = Number(tower.height) || 0;
+  const towerElevationCm =
+    typeof tower.elevation === "number" && !isNaN(tower.elevation)
+      ? Math.max(0, tower.elevation)
+      : 0;
+  const towerTopCm = towerElevationCm + heightCm;
   const bounds = elevationHorizontalBounds.value;
 
   // Initial allowed range for the tower center
@@ -1678,8 +1683,8 @@ function clampTowerCenter(towerId: string, targetCenterCm: number): number {
   const forbiddenIntervals: Array<{ min: number; max: number }> = [];
 
   for (const op of openings) {
-    // Check if opening vertically overlaps with the tower [0, heightCm]
-    const verticalOverlap = op.bottomCm < heightCm && op.topCm > 0;
+    // Check if opening vertically overlaps with the tower [towerElevationCm, towerTopCm]
+    const verticalOverlap = op.bottomCm < towerTopCm && op.topCm > towerElevationCm;
     if (verticalOverlap) {
       // Forbidden range for tower center
       forbiddenIntervals.push({
@@ -1689,8 +1694,51 @@ function clampTowerCenter(towerId: string, targetCenterCm: number): number {
     }
   }
 
-  // If the clamped center is in a forbidden interval, snap to the nearest valid edge
+  // Add other towers on the same wall to forbidden intervals
+  const otherTowers = closetStore.towers.filter(
+    (t) => t.wallId === wall.id && t.id !== towerId
+  );
+  for (const other of otherTowers) {
+    const otherWidth = Number(other.width) || 0;
+    const otherHeight = Number(other.height) || 0;
+    const otherPos =
+      typeof other.positionAlongWall === "number" && !isNaN(other.positionAlongWall)
+        ? other.positionAlongWall
+        : 0.5;
+    const otherCenterCm = otherPos * wall.length;
+    const otherLeft = otherCenterCm - otherWidth / 2;
+    const otherRight = otherCenterCm + otherWidth / 2;
+
+    const otherElevationCm =
+      typeof other.elevation === "number" && !isNaN(other.elevation)
+        ? Math.max(0, other.elevation)
+        : 0;
+    const otherTopCm = otherElevationCm + otherHeight;
+
+    const verticalOverlap =
+      otherElevationCm < towerTopCm && otherTopCm > towerElevationCm;
+    if (verticalOverlap) {
+      forbiddenIntervals.push({
+        min: otherLeft - widthCm / 2,
+        max: otherRight + widthCm / 2,
+      });
+    }
+  }
+
+  // Sort and merge intervals to handle overlaps cleanly
+  forbiddenIntervals.sort((a, b) => a.min - b.min);
+  const mergedIntervals: Array<{ min: number; max: number }> = [];
   for (const interval of forbiddenIntervals) {
+    const last = mergedIntervals[mergedIntervals.length - 1];
+    if (last && interval.min <= last.max) {
+      last.max = Math.max(last.max, interval.max);
+    } else {
+      mergedIntervals.push(interval);
+    }
+  }
+
+  // If the clamped center is in a forbidden interval, snap to the nearest valid edge
+  for (const interval of mergedIntervals) {
     if (clampedCenter > interval.min && clampedCenter < interval.max) {
       const leftValid = interval.min >= minCenter;
       const rightValid = interval.max <= maxCenter;
