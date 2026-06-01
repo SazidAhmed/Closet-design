@@ -144,6 +144,27 @@ const clearances = computed(() => {
     }
   }
 
+  // ── 3. Other towers on the same wall ──────────────────────────────────────
+  for (const otherTower of closet.towers) {
+    if (otherTower.id === tower.id) continue;
+    if (otherTower.wallId !== wall.id) continue;
+
+    const otherPos = otherTower.positionAlongWall ?? 0.5;
+    const otherCenterCm = otherPos * wall.length;
+    const otherHalfW = otherTower.width / 2;
+    const otherLeft = otherCenterCm - otherHalfW;
+    const otherRight = otherCenterCm + otherHalfW;
+
+    // Other tower is to the left of our tower
+    if (otherRight <= towerLeft + epsilon) {
+      effectiveLeft = Math.max(effectiveLeft, otherRight);
+    }
+    // Other tower is to the right of our tower
+    if (otherLeft >= towerRight - epsilon) {
+      effectiveRight = Math.min(effectiveRight, otherLeft);
+    }
+  }
+
   return {
     left: Math.max(0, towerLeft - effectiveLeft),
     right: Math.max(0, effectiveRight - towerRight),
