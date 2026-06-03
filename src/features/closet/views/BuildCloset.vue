@@ -79,43 +79,10 @@ const clearances = computed(() => {
   const towerLeft = centerCm - halfW;
   const towerRight = centerCm + halfW;
 
-  // ── 1. Corner margins ────────────────────────────────────────────────────
-  const tolerance = 1;
-  const wallStart: [number, number] = [wall.position[0], wall.position[1]];
-  const wallEndX = wall.position[0] + Math.cos(wall.angle) * wall.length;
-  const wallEndY = wall.position[1] + Math.sin(wall.angle) * wall.length;
-  const wallEnd: [number, number] = [wallEndX, wallEndY];
-
-  let startConnected = false;
-  let endConnected = false;
-
-  for (const other of room.walls) {
-    if (other.id === wall.id) continue;
-    const os: [number, number] = [other.position[0], other.position[1]];
-    const oe: [number, number] = [
-      other.position[0] + Math.cos(other.angle) * other.length,
-      other.position[1] + Math.sin(other.angle) * other.length,
-    ];
-    const dist = (a: [number, number], b: [number, number]) =>
-      Math.hypot(a[0] - b[0], a[1] - b[1]);
-
-    if (
-      !startConnected &&
-      (dist(wallStart, os) <= tolerance || dist(wallStart, oe) <= tolerance)
-    ) {
-      startConnected = true;
-    }
-    if (
-      !endConnected &&
-      (dist(wallEnd, os) <= tolerance || dist(wallEnd, oe) <= tolerance)
-    ) {
-      endConnected = true;
-    }
-    if (startConnected && endConnected) break;
-  }
-
-  const startMargin = startConnected ? Math.max(0, wall.thickness) : 0;
-  const endMargin = endConnected ? Math.max(0, wall.thickness) : 0;
+  // ── 1. Corner margins — intentionally ignored so that
+  //    Left + Width + Right = full wall length (no thickness deduction).
+  const startMargin = 0;
+  const endMargin = 0;
 
   // Start with corner-based usable boundaries
   let effectiveLeft = startMargin; // nearest boundary to the left of tower
@@ -337,42 +304,9 @@ function distributeTowers() {
   });
 
   const CM_PER_INCH = 2.54;
-  const tolerance = 1;
-  const wallStart: [number, number] = [wall.position[0], wall.position[1]];
-  const wallEndX = wall.position[0] + Math.cos(wall.angle) * wall.length;
-  const wallEndY = wall.position[1] + Math.sin(wall.angle) * wall.length;
-  const wallEnd: [number, number] = [wallEndX, wallEndY];
-
-  let startConnected = false;
-  let endConnected = false;
-
-  for (const other of room.walls) {
-    if (other.id === wall.id) continue;
-    const os: [number, number] = [other.position[0], other.position[1]];
-    const oe: [number, number] = [
-      other.position[0] + Math.cos(other.angle) * other.length,
-      other.position[1] + Math.sin(other.angle) * other.length,
-    ];
-    const dist = (a: [number, number], b: [number, number]) =>
-      Math.hypot(a[0] - b[0], a[1] - b[1]);
-
-    if (
-      !startConnected &&
-      (dist(wallStart, os) <= tolerance || dist(wallStart, oe) <= tolerance)
-    ) {
-      startConnected = true;
-    }
-    if (
-      !endConnected &&
-      (dist(wallEnd, os) <= tolerance || dist(wallEnd, oe) <= tolerance)
-    ) {
-      endConnected = true;
-    }
-    if (startConnected && endConnected) break;
-  }
-
-  const startMargin = startConnected ? Math.max(0, wall.thickness) : 0;
-  const endMargin = endConnected ? Math.max(0, wall.thickness) : 0;
+  // Corner margins intentionally ignored — distribute across full wall length.
+  const startMargin = 0;
+  const endMargin = 0;
 
   // We will distribute towers within their current vertical slice
   // To keep it simple and match the clearance visual, we do a flat horizontal distribution

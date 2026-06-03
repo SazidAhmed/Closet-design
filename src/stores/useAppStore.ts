@@ -11,7 +11,7 @@ export const useAppStore = defineStore('app', {
   state: () => ({
     currentStep: 'type' as AppStep,
     viewMode: '3d' as ViewMode,
-    units: 'cm' as 'cm' | 'in',
+    units: 'in' as 'cm' | 'in',
   }),
   actions: {
     setStep(step: AppStep) {
