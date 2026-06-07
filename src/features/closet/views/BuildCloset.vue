@@ -59,6 +59,68 @@ const maxElevationCm = computed(() => {
 });
 
 /**
+ * Maximum height (cm) for the selected tower.
+ *
+ * The tower height is limited by:
+ *  1. The catalog's maxH limit.
+ *  2. The room height minus the tower's elevation.
+ *  3. For any window on the same wall that horizontally overlaps the tower,
+ *     the window's bottom edge — so the tower cannot grow into the window.
+ *
+ * Window elevation is stored in inches; tower dimensions are in cm.
+ */
+const CM_PER_INCH = 2.54;
+
+const maxHeightCm = computed(() => {
+  const tower = selectedTower.value;
+  const wall = selectedTowerWall.value;
+  if (!tower) return Infinity;
+
+  // 1. Room-height ceiling (tower bottom + height ≤ room height)
+  const towerElevationCm =
+    typeof tower.elevation === "number" && !isNaN(tower.elevation)
+      ? Math.max(0, tower.elevation)
+      : 0;
+  let maxH = Math.max(0, room.height - towerElevationCm);
+
+  // 2. Window constraint — only when the tower is placed on a wall
+  if (wall) {
+    const pos = tower.positionAlongWall ?? 0.5;
+    const centerCm = pos * wall.length;
+    const halfW = tower.width / 2;
+    const towerLeft = centerCm - halfW;
+    const towerRight = centerCm + halfW;
+
+    for (const item of room.items) {
+      if (item.wallId !== wall.id) continue;
+      if (item.type !== "window") continue;
+
+      // Window horizontal extent (leftPosition stored in inches)
+      const itemLeft = (item.leftPosition ?? 0) * CM_PER_INCH;
+      const itemRight = itemLeft + item.width;
+
+      // Does the window horizontally overlap the tower?
+      const hOverlap = itemLeft < towerRight && itemRight > towerLeft;
+      if (!hOverlap) continue;
+
+      // Window bottom elevation in cm (elevation stored in inches; default 42 in for windows)
+      const defaultElevationIn = 42;
+      const itemElevationIn =
+        typeof item.elevation === "number" && !isNaN(item.elevation)
+          ? item.elevation
+          : defaultElevationIn;
+      const windowBottomCm = Math.max(0, itemElevationIn) * CM_PER_INCH;
+
+      // Tower height must not cause the tower top to exceed the window bottom
+      const allowedHeight = Math.max(0, windowBottomCm - towerElevationCm);
+      maxH = Math.min(maxH, allowedHeight);
+    }
+  }
+
+  return maxH;
+});
+
+/**
  * Clearance left (cm) — usable wall space to the left of the tower's left edge.
  * Clearance right (cm) — usable wall space to the right of the tower's right edge.
  *
@@ -254,7 +316,8 @@ function onDimensionInput(
     return;
   }
 
-  closet.setTowerHeight(tower.id, valueCm);
+  closet.setTowerHeight(tower.id, Math.min(valueCm, maxHeightCm.value));
+  return;
 }
 
 function onClearanceInput(side: "left" | "right", event: Event) {
@@ -574,7 +637,9 @@ function towerSubtitle(tower: {
               type="number"
               step="0.1"
               :min="fromCmDisplay(selectedTowerLimits.minH)"
-              :max="fromCmDisplay(selectedTowerLimits.maxH)"
+              :max="
+                fromCmDisplay(Math.min(selectedTowerLimits.maxH, maxHeightCm))
+              "
               :value="fromCmDisplay(selectedTower.height)"
               @change="onDimensionInput('height', $event)"
             />
