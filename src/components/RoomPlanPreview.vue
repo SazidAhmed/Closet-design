@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted } from "vue";
 import { useRoomStore } from "../stores/useRoomStore";
 import { useSelectionStore } from "../stores/useSelectionStore";
 import { useClosetStore } from "../stores/useClosetStore";
@@ -11,6 +11,13 @@ import type {
 const roomStore = useRoomStore();
 const selectionStore = useSelectionStore();
 const closetStore = useClosetStore();
+
+onMounted(() => {
+  // Clamp any towers whose stored position falls outside the usable wall boundary.
+  // This runs here (in addition to BuildCloset.vue) to fix positions when the user
+  // is viewing the plan without first visiting the build page.
+  sanitizeAllTowerPositionsInPlan();
+});
 
 const GRID_SIZE = 10;
 
@@ -352,6 +359,58 @@ const placedDoorWindowItems = computed(() =>
  * @param wallId     ID of the wall the tower is on
  * @param prevPos    last known good position (returned if no room on either side)
  */
+/**
+ * Returns the usable min/max positionAlongWall for a tower of `halfW` cm on `wall`,
+ * accounting for wall-thickness margins at connected endpoints.
+ * This mirrors the logic in BuildCloset.vue clearances and
+ * FloorPlan.vue elevationHorizontalBoundsForWall.
+ */
+function wallUsableBoundsPos(
+  wall: { id: string; position: [number, number]; angle: number; length: number; thickness: number },
+  halfW: number,
+): { min: number; max: number } {
+  if (wall.length <= 0) return { min: 0, max: 1 };
+
+  const CONN_TOL = 1;
+  const wallThickness = typeof wall.thickness === "number" && wall.thickness > 0 ? wall.thickness : 0;
+  const wallStartPt: [number, number] = [wall.position[0], wall.position[1]];
+  const wallEndPt: [number, number] = [
+    wall.position[0] + Math.cos(wall.angle) * wall.length,
+    wall.position[1] + Math.sin(wall.angle) * wall.length,
+  ];
+
+  let startConnected = false;
+  let endConnected = false;
+  for (const other of roomStore.walls) {
+    if (other.id === wall.id) continue;
+    const oStart: [number, number] = [other.position[0], other.position[1]];
+    const oEnd: [number, number] = [
+      other.position[0] + Math.cos(other.angle) * other.length,
+      other.position[1] + Math.sin(other.angle) * other.length,
+    ];
+    const hit = (a: [number, number], b: [number, number]) =>
+      Math.hypot(a[0] - b[0], a[1] - b[1]) <= CONN_TOL;
+    if (!startConnected && (hit(wallStartPt, oStart) || hit(wallStartPt, oEnd)))
+      startConnected = true;
+    if (!endConnected && (hit(wallEndPt, oStart) || hit(wallEndPt, oEnd)))
+      endConnected = true;
+    if (startConnected && endConnected) break;
+  }
+
+  const startMargin = startConnected ? Math.min(wallThickness / 2, wall.length) : 0;
+  const endMargin = endConnected ? Math.min(wallThickness / 2, wall.length) : 0;
+  const usableLeft = startMargin;
+  const usableRight = Math.max(startMargin, wall.length - endMargin);
+
+  const minCenterCm = usableLeft + halfW;
+  const maxCenterCm = Math.max(minCenterCm, usableRight - halfW);
+
+  return {
+    min: Math.max(0, minCenterCm / wall.length),
+    max: Math.min(1, maxCenterCm / wall.length),
+  };
+}
+
 function clampTowerAwayFromObstructions(
   proposed: number,
   halfW: number,
@@ -515,10 +574,7 @@ function onSvgPointerMove(e: PointerEvent) {
     const delta = projected / dragState.wallLength;
 
     const halfW = tower.width / 2;
-    const halfRatio =
-      dragState.wallLength > 0 ? halfW / dragState.wallLength : 0;
-    const min = Math.max(0, halfRatio);
-    const max = Math.min(1, 1 - halfRatio);
+    const { min, max } = wallUsableBoundsPos(wall, halfW);
     const rawPos = Math.max(min, Math.min(max, dragState.startPos + delta));
     const prevPos = tower.positionAlongWall ?? 0.5;
     let clampedPos = clampTowerAwayFromObstructions(
@@ -575,10 +631,7 @@ function onSvgPointerMove(e: PointerEvent) {
     const newCenterCm = pinnedPosCm - actualWidth / 2;
     const rawPos = newCenterCm / dragState.wallLength;
 
-    const halfRatio =
-      dragState.wallLength > 0 ? actualWidth / 2 / dragState.wallLength : 0;
-    const min = Math.max(0, halfRatio);
-    const max = Math.min(1, 1 - halfRatio);
+    const { min, max } = wallUsableBoundsPos(wall, actualWidth / 2);
     const prevPos = tower.positionAlongWall ?? 0.5;
     let clampedPos = clampTowerAwayFromObstructions(
       rawPos,
@@ -616,10 +669,7 @@ function onSvgPointerMove(e: PointerEvent) {
     const newCenterCm = pinnedPosCm + actualWidth / 2;
     const rawPos = newCenterCm / dragState.wallLength;
 
-    const halfRatio =
-      dragState.wallLength > 0 ? actualWidth / 2 / dragState.wallLength : 0;
-    const min = Math.max(0, halfRatio);
-    const max = Math.min(1, 1 - halfRatio);
+    const { min, max } = wallUsableBoundsPos(wall, actualWidth / 2);
     const prevPos = tower.positionAlongWall ?? 0.5;
     let clampedPos = clampTowerAwayFromObstructions(
       rawPos,
@@ -643,6 +693,28 @@ function onSvgPointerMove(e: PointerEvent) {
 
 function onSvgPointerUp() {
   dragState = null;
+}
+
+/**
+ * Clamp all towers to their usable wall bounds on mount, fixing any positions
+ * that were stored before wall-thickness margins were enforced.
+ */
+function sanitizeAllTowerPositionsInPlan() {
+  for (const tower of closetStore.towers) {
+    if (!tower.wallId) continue;
+    const wall = roomStore.walls.find((w) => w.id === tower.wallId);
+    if (!wall) continue;
+
+    const halfW = tower.width / 2;
+    const { min, max } = wallUsableBoundsPos(wall, halfW);
+
+    const currentPos = tower.positionAlongWall ?? 0.5;
+    const clampedPos = Math.max(min, Math.min(max, currentPos));
+
+    if (Math.abs(clampedPos - currentPos) > 0.0001) {
+      closetStore.updateTower(tower.id, { positionAlongWall: clampedPos });
+    }
+  }
 }
 </script>
 

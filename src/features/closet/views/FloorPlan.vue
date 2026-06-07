@@ -893,12 +893,14 @@ function elevationHorizontalBoundsForWall(
     };
   }
 
+  // Walls are drawn on their centerlines, so the inner face of the connected
+  // perpendicular wall is at wall.thickness/2 from the corner, not wall.thickness.
   const connectivity = wallConnectivityForWall(wall);
   const rawStartMargin = connectivity.startConnected
-    ? Math.max(0, wall.thickness)
+    ? Math.max(0, wall.thickness / 2)
     : 0;
   const rawEndMargin = connectivity.endConnected
-    ? Math.max(0, wall.thickness)
+    ? Math.max(0, wall.thickness / 2)
     : 0;
   const startMarginCm = Math.min(rawStartMargin, minLength);
   const endMarginCm = Math.min(rawEndMargin, minLength);

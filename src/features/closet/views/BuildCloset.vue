@@ -126,8 +126,11 @@ const maxHeightCm = computed(() => {
  *
  * Accounts for:
  *  1. Corner margins — full wall thickness is consumed by connected walls.
+ *     Mirrors the elevation view's elevationHorizontalBoundsForWall logic so that
+ *     clearance reads 0 when the tower is flush with the usable wall boundary.
  *  2. Placed doors/windows — any opening whose interval overlaps the clearance
  *     zone further restricts the available space.
+ *  3. Other towers on the same wall.
  */
 const clearances = computed(() => {
   const tower = selectedTower.value;
@@ -141,14 +144,46 @@ const clearances = computed(() => {
   const towerLeft = centerCm - halfW;
   const towerRight = centerCm + halfW;
 
-  // ── 1. Corner margins — intentionally ignored so that
-  //    Left + Width + Right = full wall length (no thickness deduction).
-  const startMargin = 0;
-  const endMargin = 0;
+  // ── 1. Corner margins — wall thickness consumed by perpendicular connected walls.
+  //    Walls are drawn on centerlines, so the perpendicular wall's inner face is
+  //    at wall.thickness/2 from the corner — use half-thickness as the margin.
+  const wallThickness =
+    typeof wall.thickness === "number" && wall.thickness > 0
+      ? wall.thickness
+      : 0;
 
-  // Start with corner-based usable boundaries
-  let effectiveLeft = startMargin; // nearest boundary to the left of tower
-  let effectiveRight = wall.length - endMargin; // nearest boundary to the right of tower
+  const CONN_TOL = 1; // cm — same tolerance used in FloorPlan wallConnectivityForWall
+  const wallStartPt: [number, number] = [wall.position[0], wall.position[1]];
+  const wallEndPt: [number, number] = [
+    wall.position[0] + Math.cos(wall.angle) * wall.length,
+    wall.position[1] + Math.sin(wall.angle) * wall.length,
+  ];
+
+  let startConnected = false;
+  let endConnected = false;
+  for (const other of room.walls) {
+    if (other.id === wall.id) continue;
+    const oStart: [number, number] = [other.position[0], other.position[1]];
+    const oEnd: [number, number] = [
+      other.position[0] + Math.cos(other.angle) * other.length,
+      other.position[1] + Math.sin(other.angle) * other.length,
+    ];
+    const hit = (a: [number, number], b: [number, number]) =>
+      Math.hypot(a[0] - b[0], a[1] - b[1]) <= CONN_TOL;
+    if (!startConnected && (hit(wallStartPt, oStart) || hit(wallStartPt, oEnd)))
+      startConnected = true;
+    if (!endConnected && (hit(wallEndPt, oStart) || hit(wallEndPt, oEnd)))
+      endConnected = true;
+    if (startConnected && endConnected) break;
+  }
+
+  const halfThickness = wallThickness / 2;
+  const startMargin = startConnected ? Math.min(halfThickness, wall.length) : 0;
+  const endMargin = endConnected ? Math.min(halfThickness, wall.length) : 0;
+
+  // Usable wall boundaries (matches elevationHorizontalBoundsForWall with wall.thickness/2)
+  let effectiveLeft = startMargin;
+  let effectiveRight = Math.max(startMargin, wall.length - endMargin);
 
   const towerElevationCm =
     typeof tower.elevation === "number" && !isNaN(tower.elevation)
@@ -222,9 +257,12 @@ const clearances = computed(() => {
     }
   }
 
+  const rawLeft = towerLeft - effectiveLeft;
+  const rawRight = effectiveRight - towerRight;
+
   return {
-    left: Math.max(0, towerLeft - effectiveLeft),
-    right: Math.max(0, effectiveRight - towerRight),
+    left: rawLeft < epsilon ? 0 : Math.max(0, rawLeft),
+    right: rawRight < epsilon ? 0 : Math.max(0, rawRight),
     effectiveLeft,
     effectiveRight,
   };
@@ -251,7 +289,81 @@ onMounted(() => {
   if (!selection.selectedTowerId && closet.towers[0]) {
     selection.selectTower(closet.towers[0].id);
   }
+
+  // Clamp any towers whose stored position falls outside the usable wall boundary.
+  // This can happen when positions were saved before wall-thickness margins were enforced.
+  sanitizeAllTowerPositions();
 });
+
+/**
+ * For every tower on a wall, clamp its positionAlongWall so the tower stays
+ * within the usable span [startMargin, wall.length - endMargin] where each
+ * margin equals wall.thickness when that endpoint is connected to another wall.
+ */
+function sanitizeAllTowerPositions() {
+  const CONN_TOL = 1;
+  for (const tower of closet.towers) {
+    if (!tower.wallId) continue;
+    const wall = room.walls.find((w) => w.id === tower.wallId);
+    if (!wall) continue;
+
+    const wallThickness =
+      typeof wall.thickness === "number" && wall.thickness > 0
+        ? wall.thickness
+        : 0;
+
+    const wallStartPt: [number, number] = [wall.position[0], wall.position[1]];
+    const wallEndPt: [number, number] = [
+      wall.position[0] + Math.cos(wall.angle) * wall.length,
+      wall.position[1] + Math.sin(wall.angle) * wall.length,
+    ];
+
+    let startConnected = false;
+    let endConnected = false;
+    for (const other of room.walls) {
+      if (other.id === wall.id) continue;
+      const oStart: [number, number] = [other.position[0], other.position[1]];
+      const oEnd: [number, number] = [
+        other.position[0] + Math.cos(other.angle) * other.length,
+        other.position[1] + Math.sin(other.angle) * other.length,
+      ];
+      const hit = (a: [number, number], b: [number, number]) =>
+        Math.hypot(a[0] - b[0], a[1] - b[1]) <= CONN_TOL;
+      if (
+        !startConnected &&
+        (hit(wallStartPt, oStart) || hit(wallStartPt, oEnd))
+      )
+        startConnected = true;
+      if (!endConnected && (hit(wallEndPt, oStart) || hit(wallEndPt, oEnd)))
+        endConnected = true;
+      if (startConnected && endConnected) break;
+    }
+
+    const halfThickness = wallThickness / 2;
+    const startMargin = startConnected
+      ? Math.min(halfThickness, wall.length)
+      : 0;
+    const endMargin = endConnected ? Math.min(halfThickness, wall.length) : 0;
+    const usableLeft = startMargin;
+    const usableRight = Math.max(startMargin, wall.length - endMargin);
+
+    const halfW = tower.width / 2;
+    const minCenterCm = usableLeft + halfW;
+    const maxCenterCm = Math.max(minCenterCm, usableRight - halfW);
+
+    const currentCenterCm = (tower.positionAlongWall ?? 0.5) * wall.length;
+    const clampedCenterCm = Math.max(
+      minCenterCm,
+      Math.min(maxCenterCm, currentCenterCm),
+    );
+
+    if (Math.abs(clampedCenterCm - currentCenterCm) > 0.001) {
+      closet.updateTower(tower.id, {
+        positionAlongWall: clampedCenterCm / wall.length,
+      });
+    }
+  }
+}
 
 function addCategoryTower(category: ClosetCatalogCategory) {
   closet.addTowerFromCatalog(category.doorMode, category.categoryCode);
@@ -271,6 +383,7 @@ function moveTowerLeft() {
   const wall = selectedTowerWall.value;
   if (!tower || !wall) return;
   closet.moveTowerAlongWall(tower.id, -0.05, wall.length);
+  clampSelectedTowerToUsableBounds();
 }
 
 function moveTowerRight() {
@@ -278,6 +391,36 @@ function moveTowerRight() {
   const wall = selectedTowerWall.value;
   if (!tower || !wall) return;
   closet.moveTowerAlongWall(tower.id, 0.05, wall.length);
+  clampSelectedTowerToUsableBounds();
+}
+
+/**
+ * After any positional change, ensure the selected tower's centre stays within
+ * the usable wall bounds [effectiveLeft + halfW, effectiveRight - halfW].
+ * This mirrors the clamping in the elevation-view's clampTowerCenter() so that
+ * the ← → buttons can never push a tower into a connected wall's thickness zone.
+ */
+function clampSelectedTowerToUsableBounds() {
+  const tower = selectedTower.value;
+  const wall = selectedTowerWall.value;
+  const c = clearances.value;
+  if (!tower || !wall || !c) return;
+
+  const halfW = tower.width / 2;
+  const minCenterCm = c.effectiveLeft + halfW;
+  const maxCenterCm = Math.max(minCenterCm, c.effectiveRight - halfW);
+
+  const currentCenterCm = (tower.positionAlongWall ?? 0.5) * wall.length;
+  const clampedCenterCm = Math.max(
+    minCenterCm,
+    Math.min(maxCenterCm, currentCenterCm),
+  );
+
+  if (Math.abs(clampedCenterCm - currentCenterCm) > 0.001) {
+    closet.updateTower(tower.id, {
+      positionAlongWall: clampedCenterCm / wall.length,
+    });
+  }
 }
 
 function setDoorMode(mode: ClosetDoorMode) {
