@@ -354,112 +354,24 @@ function removeTower(towerId: string) {
 }
 
 function distributeTowers() {
+  const tower = selectedTower.value;
   const wall = selectedTowerWall.value;
-  if (!wall) return;
+  const c = clearances.value;
+  if (!tower || !wall || !c) return;
 
-  const towersOnWall = closet.towers.filter((t) => t.wallId === wall.id);
-  if (towersOnWall.length === 0) return;
-
-  towersOnWall.sort((a, b) => {
-    const aPos = a.positionAlongWall ?? 0.5;
-    const bPos = b.positionAlongWall ?? 0.5;
-    return aPos - bPos;
-  });
-
-  const CM_PER_INCH = 2.54;
-  // Corner margins intentionally ignored — distribute across full wall length.
-  const startMargin = 0;
-  const endMargin = 0;
-
-  // We will distribute towers within their current vertical slice
-  // To keep it simple and match the clearance visual, we do a flat horizontal distribution
-  // ignoring vertical overlaps for obstacles (assuming doors/windows break the wall into segments).
-  const obstacles: { left: number; right: number }[] = [];
-  obstacles.push({ left: 0, right: startMargin });
-  obstacles.push({ left: wall.length - endMargin, right: wall.length });
-
-  for (const item of room.items) {
-    if (item.wallId !== wall.id) continue;
-    if (item.category !== "door" && item.type !== "window") continue;
-    const itemLeft = item.leftPosition * CM_PER_INCH;
-    const itemRight = itemLeft + item.width;
-    obstacles.push({ left: itemLeft, right: itemRight });
-  }
-
-  obstacles.sort((a, b) => a.left - b.left);
-  const merged: { left: number; right: number }[] = [];
-  for (const obs of obstacles) {
-    const last = merged[merged.length - 1];
-    if (last && obs.left <= last.right) {
-      last.right = Math.max(last.right, obs.right);
-    } else {
-      merged.push(obs);
-    }
-  }
-
-  const segments: {
-    left: number;
-    right: number;
-    towers: typeof towersOnWall;
-  }[] = [];
-  let cursor = 0;
-  for (const obs of merged) {
-    if (obs.left > cursor) {
-      segments.push({ left: cursor, right: obs.left, towers: [] });
-    }
-    cursor = Math.max(cursor, obs.right);
-  }
-  if (cursor < wall.length) {
-    segments.push({ left: cursor, right: wall.length, towers: [] });
-  }
-
-  for (const t of towersOnWall) {
-    const center = (t.positionAlongWall ?? 0.5) * wall.length;
-    let assigned = false;
-    for (const seg of segments) {
-      if (center >= seg.left && center <= seg.right) {
-        seg.towers.push(t);
-        assigned = true;
-        break;
-      }
-    }
-    if (!assigned) {
-      let closestSeg = segments[0];
-      let minD = Infinity;
-      for (const seg of segments) {
-        const d = Math.min(
-          Math.abs(center - seg.left),
-          Math.abs(center - seg.right),
-        );
-        if (d < minD) {
-          minD = d;
-          closestSeg = seg;
-        }
-      }
-      if (closestSeg) closestSeg.towers.push(t);
-    }
-  }
-
-  for (const seg of segments) {
-    if (seg.towers.length === 0) continue;
-
-    seg.towers.sort(
-      (a, b) => (a.positionAlongWall ?? 0.5) - (b.positionAlongWall ?? 0.5),
-    );
-
-    const totalWidth = seg.towers.reduce((sum, t) => sum + t.width, 0);
-    const availableSpace = seg.right - seg.left;
-    const emptySpace = Math.max(0, availableSpace - totalWidth);
-    const gap = emptySpace / (seg.towers.length + 1);
-
-    let currentX = seg.left + gap;
-    for (const t of seg.towers) {
-      const newCenter = currentX + t.width / 2;
-      const positionAlongWall = newCenter / wall.length;
-      closet.updateTower(t.id, { positionAlongWall });
-      currentX += t.width + gap;
-    }
-  }
+  // Center the selected tower within its available gap [effectiveLeft, effectiveRight].
+  // effectiveLeft and effectiveRight already account for neighboring towers,
+  // doors, windows, and wall boundaries — so other towers stay untouched.
+  const availableSpace = c.effectiveRight - c.effectiveLeft;
+  const newCenter = c.effectiveLeft + availableSpace / 2;
+  const positionAlongWall = Math.max(
+    tower.width / 2 / wall.length,
+    Math.min(
+      (wall.length - tower.width / 2) / wall.length,
+      newCenter / wall.length,
+    ),
+  );
+  closet.updateTower(tower.id, { positionAlongWall });
 }
 
 function categoryTitle(category: ClosetCatalogCategory): string {
