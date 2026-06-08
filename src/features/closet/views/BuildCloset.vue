@@ -260,11 +260,43 @@ const clearances = computed(() => {
   const rawLeft = towerLeft - effectiveLeft;
   const rawRight = effectiveRight - towerRight;
 
+  // To satisfy user expectation that Left + Width + Right = Wall Length,
+  // we map the physical usable bounds back to the nominal bounds (0 to wall.length).
+  let nominalEffectiveLeft = effectiveLeft;
+  if (Math.abs(effectiveLeft - startMargin) < 0.1) {
+    nominalEffectiveLeft = 0;
+  }
+  let nominalEffectiveRight = effectiveRight;
+  const physicalMaxRight = Math.max(startMargin, wall.length - endMargin);
+  if (Math.abs(effectiveRight - physicalMaxRight) < 0.1) {
+    nominalEffectiveRight = wall.length;
+  }
+
+  const actualUsable = effectiveRight - effectiveLeft;
+  const nominalUsable = nominalEffectiveRight - nominalEffectiveLeft;
+
+  let uiLeft = rawLeft;
+  let uiRight = rawRight;
+
+  if (actualUsable >= tower.width) {
+    const slideRange = actualUsable - tower.width;
+    const nominalSlideRange = Math.max(0, nominalUsable - tower.width);
+    if (slideRange > 0.1) {
+      uiLeft = (rawLeft / slideRange) * nominalSlideRange;
+      uiRight = (rawRight / slideRange) * nominalSlideRange;
+    } else {
+      uiLeft = nominalSlideRange / 2;
+      uiRight = nominalSlideRange / 2;
+    }
+  }
+
   return {
-    left: rawLeft < epsilon ? 0 : Math.max(0, rawLeft),
-    right: rawRight < epsilon ? 0 : Math.max(0, rawRight),
+    left: uiLeft < epsilon ? 0 : Math.max(0, uiLeft),
+    right: uiRight < epsilon ? 0 : Math.max(0, uiRight),
     effectiveLeft,
     effectiveRight,
+    nominalEffectiveLeft,
+    nominalEffectiveRight,
   };
 });
 
@@ -476,10 +508,29 @@ function onClearanceInput(side: "left" | "right", event: Event) {
   const halfW = tower.width / 2;
 
   let newCenterCm = 0;
-  if (side === "left") {
-    newCenterCm = c.effectiveLeft + valueCm + halfW;
+
+  const actualUsable = c.effectiveRight - c.effectiveLeft;
+  const nominalUsable = c.nominalEffectiveRight - c.nominalEffectiveLeft;
+
+  if (actualUsable >= tower.width) {
+    const slideRange = actualUsable - tower.width;
+    const nominalSlideRange = Math.max(0.1, nominalUsable - tower.width);
+
+    // Reverse the scale from UI value to raw physical value
+    const rawValueCm = (valueCm / nominalSlideRange) * slideRange;
+
+    if (side === "left") {
+      newCenterCm = c.effectiveLeft + rawValueCm + halfW;
+    } else {
+      newCenterCm = c.effectiveRight - rawValueCm - halfW;
+    }
   } else {
-    newCenterCm = c.effectiveRight - valueCm - halfW;
+    // Fallback if no sliding space
+    if (side === "left") {
+      newCenterCm = c.effectiveLeft + valueCm + halfW;
+    } else {
+      newCenterCm = c.effectiveRight - valueCm - halfW;
+    }
   }
 
   // Ensure center stays within raw wall bounds
