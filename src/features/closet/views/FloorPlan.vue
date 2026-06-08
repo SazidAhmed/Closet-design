@@ -3487,23 +3487,7 @@ function dimLinePoints(wall: {
                     {{ formatLength(item.width) }} x
                     {{ formatLength(item.height) }}
                   </text>
-                  <text
-                    :x="
-                      elevationItemRect(item).x +
-                      elevationItemRect(item).width / 2
-                    "
-                    :y="
-                      elevationItemRect(item).y +
-                      elevationItemRect(item).height +
-                      14
-                    "
-                    text-anchor="middle"
-                    class="elevation-item-meta"
-                  >
-                    L {{ formatPositionInches(item.leftPosition) }}" · R
-                    {{ formatPositionInches(item.rightPosition) }}" · E
-                    {{ formatPositionInches(item.elevation) }}"
-                  </text>
+
 
                   <g
                     v-if="selectedItemId === item.id"
@@ -3867,25 +3851,41 @@ function dimLinePoints(wall: {
                     class="elevation-tower-selection-highlight"
                   />
 
-                  <!-- Tower label showing width -->
-                  <text
-                    :x="
-                      towerElevationRect(tower).x +
-                      towerElevationRect(tower).width / 2
-                    "
-                    :y="
-                      towerElevationRect(tower).y +
-                      towerElevationRect(tower).height +
-                      15
-                    "
-                    text-anchor="middle"
-                    class="elevation-tower-label"
-                  >
-                    Tower · {{ formatLength(tower.width) }}
-                    · E {{ formatLength(tower.elevation ?? 0) }}
-                  </text>
+
                 </g>
               </svg>
+
+              <!-- Elevation info bar -->
+              <div class="elevation-info-bar">
+                <!-- Selected tower chip -->
+                <template v-if="selectionStore.selectedTowerId && activeElevationTowers.find(t => t.id === selectionStore.selectedTowerId)">
+                  <div class="elev-info-chip tower-chip">
+                    <span class="elev-info-icon">&#9635;</span>
+                    <span class="elev-info-label">{{ activeElevationTowers.find(t => t.id === selectionStore.selectedTowerId)!.label }}</span>
+                    <span class="elev-info-sep">&middot;</span>
+                    <span class="elev-info-value">{{ formatLength(activeElevationTowers.find(t => t.id === selectionStore.selectedTowerId)!.width) }}</span>
+                    <span class="elev-info-dim-sep">&times;</span>
+                    <span class="elev-info-value">{{ formatLength(activeElevationTowers.find(t => t.id === selectionStore.selectedTowerId)!.depth) }}</span>
+                    <span class="elev-info-sep">&middot;</span>
+                    <span class="elev-info-seg"><span class="elev-seg-label">E</span> {{ formatLength(activeElevationTowers.find(t => t.id === selectionStore.selectedTowerId)!.elevation ?? 0) }}</span>
+                  </div>
+                </template>
+                <!-- Selected item L/R/E chip -->
+                <template v-if="selectedDoorWindowItem">
+                  <div class="elev-info-chip clearance-chip">
+                    <span class="elev-info-icon">&#8596;</span>
+                    <span class="elev-info-seg"><span class="elev-seg-label">L</span> {{ formatPositionInches(selectedDoorWindowItem.leftPosition) }}"</span>
+                    <span class="elev-info-sep">&middot;</span>
+                    <span class="elev-info-seg"><span class="elev-seg-label">R</span> {{ formatPositionInches(selectedDoorWindowItem.rightPosition) }}"</span>
+                    <span class="elev-info-sep">&middot;</span>
+                    <span class="elev-info-seg"><span class="elev-seg-label">E</span> {{ formatPositionInches(selectedDoorWindowItem.elevation) }}"</span>
+                  </div>
+                </template>
+                <!-- Fallback when nothing selected -->
+                <span v-if="!selectionStore.selectedTowerId && !selectedDoorWindowItem" class="elev-info-hint">
+                  Click a tower or opening to inspect
+                </span>
+              </div>
 
               <div
                 class="elevation-measurements-panel"
@@ -5420,5 +5420,82 @@ function dimLinePoints(wall: {
 
 .dialog-btn.apply:hover {
   background: rgba(251, 191, 36, 0.25);
+}
+
+/* ─── Elevation info bar ──────────────────────────────────────────────── */
+.elevation-info-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(10, 16, 30, 0.7);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  min-height: 36px;
+  flex-shrink: 0;
+}
+
+.elev-info-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(15, 23, 42, 0.9);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  color: #e2e8f0;
+  white-space: nowrap;
+}
+
+.elev-info-chip.tower-chip {
+  border: 1px solid rgba(251, 191, 36, 0.4);
+}
+
+.elev-info-chip.clearance-chip {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.elev-info-icon {
+  font-size: 10px;
+  opacity: 0.55;
+  margin-right: 1px;
+}
+
+.elev-info-label {
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+.elev-info-sep {
+  opacity: 0.35;
+}
+
+.elev-info-dim-sep {
+  opacity: 0.45;
+  font-size: 10px;
+}
+
+.elev-info-value {
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.elev-info-seg {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.elev-seg-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.04em;
+}
+
+.elev-info-hint {
+  font-size: 11px;
+  color: #475569;
+  font-style: italic;
 }
 </style>

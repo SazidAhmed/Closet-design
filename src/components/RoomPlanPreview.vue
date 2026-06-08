@@ -366,13 +366,22 @@ const placedDoorWindowItems = computed(() =>
  * FloorPlan.vue elevationHorizontalBoundsForWall.
  */
 function wallUsableBoundsPos(
-  wall: { id: string; position: [number, number]; angle: number; length: number; thickness: number },
+  wall: {
+    id: string;
+    position: [number, number];
+    angle: number;
+    length: number;
+    thickness: number;
+  },
   halfW: number,
 ): { min: number; max: number } {
   if (wall.length <= 0) return { min: 0, max: 1 };
 
   const CONN_TOL = 1;
-  const wallThickness = typeof wall.thickness === "number" && wall.thickness > 0 ? wall.thickness : 0;
+  const wallThickness =
+    typeof wall.thickness === "number" && wall.thickness > 0
+      ? wall.thickness
+      : 0;
   const wallStartPt: [number, number] = [wall.position[0], wall.position[1]];
   const wallEndPt: [number, number] = [
     wall.position[0] + Math.cos(wall.angle) * wall.length,
@@ -397,7 +406,9 @@ function wallUsableBoundsPos(
     if (startConnected && endConnected) break;
   }
 
-  const startMargin = startConnected ? Math.min(wallThickness / 2, wall.length) : 0;
+  const startMargin = startConnected
+    ? Math.min(wallThickness / 2, wall.length)
+    : 0;
   const endMargin = endConnected ? Math.min(wallThickness / 2, wall.length) : 0;
   const usableLeft = startMargin;
   const usableRight = Math.max(startMargin, wall.length - endMargin);
