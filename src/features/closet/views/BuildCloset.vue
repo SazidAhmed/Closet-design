@@ -262,15 +262,14 @@ const clearances = computed(() => {
 
   // To satisfy user expectation that Left + Width + Right = Wall Length,
   // we map the physical usable bounds back to the nominal bounds (0 to wall.length).
-  let nominalEffectiveLeft = effectiveLeft;
-  if (Math.abs(effectiveLeft - startMargin) < 0.1) {
-    nominalEffectiveLeft = 0;
-  }
-  let nominalEffectiveRight = effectiveRight;
-  const physicalMaxRight = Math.max(startMargin, wall.length - endMargin);
-  if (Math.abs(effectiveRight - physicalMaxRight) < 0.1) {
-    nominalEffectiveRight = wall.length;
-  }
+  // The hidden physical margins (startMargin and endMargin) are subtracted from the physical space.
+  // We restore the nominal bounds by subtracting startMargin from effectiveLeft
+  // and adding endMargin to effectiveRight.
+  const nominalEffectiveLeft = Math.max(0, effectiveLeft - startMargin);
+  const nominalEffectiveRight = Math.min(
+    wall.length,
+    effectiveRight + endMargin,
+  );
 
   const actualUsable = effectiveRight - effectiveLeft;
   const nominalUsable = nominalEffectiveRight - nominalEffectiveLeft;
