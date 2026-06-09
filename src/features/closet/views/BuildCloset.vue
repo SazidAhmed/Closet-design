@@ -161,6 +161,9 @@ const clearances = computed(() => {
 
   let startConnected = false;
   let endConnected = false;
+  const startConnectedWalls: typeof room.walls = [];
+  const endConnectedWalls: typeof room.walls = [];
+
   for (const other of room.walls) {
     if (other.id === wall.id) continue;
     const oStart: [number, number] = [other.position[0], other.position[1]];
@@ -170,11 +173,15 @@ const clearances = computed(() => {
     ];
     const hit = (a: [number, number], b: [number, number]) =>
       Math.hypot(a[0] - b[0], a[1] - b[1]) <= CONN_TOL;
-    if (!startConnected && (hit(wallStartPt, oStart) || hit(wallStartPt, oEnd)))
+
+    if (hit(wallStartPt, oStart) || hit(wallStartPt, oEnd)) {
       startConnected = true;
-    if (!endConnected && (hit(wallEndPt, oStart) || hit(wallEndPt, oEnd)))
+      startConnectedWalls.push(other);
+    }
+    if (hit(wallEndPt, oStart) || hit(wallEndPt, oEnd)) {
       endConnected = true;
-    if (startConnected && endConnected) break;
+      endConnectedWalls.push(other);
+    }
   }
 
   const halfThickness = wallThickness / 2;
@@ -226,7 +233,94 @@ const clearances = computed(() => {
     }
   }
 
-  // ── 3. Other towers on the same wall ──────────────────────────────────────
+  // ── 3. Towers on adjacent connected walls ──────────────────────────────────
+  // If a tower on an adjacent wall is close to the corner, its depth protrudes
+  // along our current wall and can block the corner space.
+  for (const otherTower of closet.towers) {
+    if (otherTower.id === tower.id) continue;
+
+    const isAtStart = startConnectedWalls.some(
+      (w) => w.id === otherTower.wallId,
+    );
+    const isAtEnd = endConnectedWalls.some((w) => w.id === otherTower.wallId);
+    if (!isAtStart && !isAtEnd) continue;
+
+    const otherWall = room.walls.find((w) => w.id === otherTower.wallId);
+    if (!otherWall) continue;
+
+    const otherElevationCm =
+      typeof otherTower.elevation === "number" && !isNaN(otherTower.elevation)
+        ? Math.max(0, otherTower.elevation)
+        : 0;
+    const otherTopCm = otherElevationCm + otherTower.height;
+
+    const verticalOverlap =
+      otherElevationCm < towerTopCm && otherTopCm > towerElevationCm;
+    if (!verticalOverlap) continue;
+
+    const otherPos = otherTower.positionAlongWall ?? 0.5;
+    const otherCenterCm = otherPos * otherWall.length;
+    const otherHalfW = otherTower.width / 2;
+    const otherLeft = otherCenterCm - otherHalfW;
+    const otherRight = otherCenterCm + otherHalfW;
+
+    if (isAtStart) {
+      const oStart: [number, number] = [
+        otherWall.position[0],
+        otherWall.position[1],
+      ];
+      const oEnd: [number, number] = [
+        otherWall.position[0] + Math.cos(otherWall.angle) * otherWall.length,
+        otherWall.position[1] + Math.sin(otherWall.angle) * otherWall.length,
+      ];
+      const hit = (a: [number, number], b: [number, number]) =>
+        Math.hypot(a[0] - b[0], a[1] - b[1]) <= CONN_TOL;
+
+      let distFromCorner = Infinity;
+      if (hit(wallStartPt, oStart)) {
+        distFromCorner = Math.max(0, otherLeft);
+      } else if (hit(wallStartPt, oEnd)) {
+        distFromCorner = Math.max(0, otherWall.length - otherRight);
+      }
+
+      if (distFromCorner <= tower.depth + epsilon) {
+        effectiveLeft = Math.max(effectiveLeft, otherTower.depth);
+      }
+    }
+
+    if (isAtEnd) {
+      const oStart: [number, number] = [
+        otherWall.position[0],
+        otherWall.position[1],
+      ];
+      const oEnd: [number, number] = [
+        otherWall.position[0] + Math.cos(otherWall.angle) * otherWall.length,
+        otherWall.position[1] + Math.sin(otherWall.angle) * otherWall.length,
+      ];
+      const hit = (a: [number, number], b: [number, number]) =>
+        Math.hypot(a[0] - b[0], a[1] - b[1]) <= CONN_TOL;
+
+      let distFromCorner = Infinity;
+      if (hit(wallEndPt, oStart)) {
+        distFromCorner = Math.max(0, otherLeft);
+      } else if (hit(wallEndPt, oEnd)) {
+        distFromCorner = Math.max(0, otherWall.length - otherRight);
+      }
+
+      if (distFromCorner <= tower.depth + epsilon) {
+        effectiveRight = Math.min(
+          effectiveRight,
+          wall.length - otherTower.depth,
+        );
+      }
+    }
+  }
+
+  // Save the global boundaries before same-wall towers restrict it further
+  const globalEffectiveLeft = effectiveLeft;
+  const globalEffectiveRight = effectiveRight;
+
+  // ── 4. Other towers on the same wall ──────────────────────────────────────
   for (const otherTower of closet.towers) {
     if (otherTower.id === tower.id) continue;
     if (otherTower.wallId !== wall.id) continue;
@@ -260,33 +354,38 @@ const clearances = computed(() => {
   const rawLeft = towerLeft - effectiveLeft;
   const rawRight = effectiveRight - towerRight;
 
-  // ── 4. Consistent gap scale (global, not per-tower) ───────────────────────
-  // The physical usable range is [startMargin, wall.length − endMargin] = 248 cm
-  // for a default 6cm wall thickness, while the nominal display width = wall.length
-  // (e.g. 254 cm = 100"). To satisfy the user invariant
-  //   LeftClearance + TowerWidth + RightClearance = WallDisplayWidth
-  // we scale all gaps by the same factor:
-  //   gapScale = totalNominalGap / totalPhysicalGap
-  // where totalPhysicalGap = (physical usable) − (sum of all tower widths on this wall)
-  //       totalNominalGap   = wall.length       − (sum of all tower widths on this wall)
-  // Using a single consistent scale keeps the inter-tower gap equal from both
-  // towers' perspectives (fixes the "50.4" vs "50" inconsistency).
+  // ── 5. Consistent gap scale (global, not per-tower) ───────────────────────
+  // The physical usable range considers corner margins and corner blockages.
+  // We satisfy the user invariant: LeftClearance + TowerWidth + RightClearance = WallDisplayWidth
   const totalTowerWidthCm = closet.towers
     .filter((t) => t.wallId === wall.id)
     .reduce((sum, t) => sum + t.width, 0);
 
-  const physicalUsable = wall.length - startMargin - endMargin;
+  const isLeftWall = Math.abs(globalEffectiveLeft - startMargin) < 0.1;
+  const isRightWall =
+    Math.abs(globalEffectiveRight - (wall.length - endMargin)) < 0.1;
+
+  const nominalGlobalLeft = isLeftWall ? 0 : globalEffectiveLeft;
+  const nominalGlobalRight = isRightWall ? wall.length : globalEffectiveRight;
+
+  const physicalUsable = globalEffectiveRight - globalEffectiveLeft;
+  const nominalUsable = nominalGlobalRight - nominalGlobalLeft;
+
   const totalPhysicalGap = Math.max(0, physicalUsable - totalTowerWidthCm);
-  const totalNominalGap = Math.max(0, wall.length - totalTowerWidthCm);
-  const gapScale = totalPhysicalGap > 0.1 ? totalNominalGap / totalPhysicalGap : 1;
+  const totalNominalGap = Math.max(0, nominalUsable - totalTowerWidthCm);
+  const gapScale =
+    totalPhysicalGap > 0.1 ? totalNominalGap / totalPhysicalGap : 1;
 
   let uiLeft = rawLeft * gapScale;
   let uiRight = rawRight * gapScale;
 
   // When the tower has no room to slide (fits exactly), centre it nominally.
-  const physicalSlide = (effectiveRight - effectiveLeft) - tower.width;
+  const physicalSlide = effectiveRight - effectiveLeft - tower.width;
   if (physicalSlide <= 0.1) {
-    const nominalSlide = Math.max(0, (effectiveRight - effectiveLeft) * gapScale - tower.width);
+    const nominalSlide = Math.max(
+      0,
+      (effectiveRight - effectiveLeft) * gapScale - tower.width,
+    );
     uiLeft = nominalSlide / 2;
     uiRight = nominalSlide / 2;
   }
