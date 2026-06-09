@@ -260,33 +260,35 @@ const clearances = computed(() => {
   const rawLeft = towerLeft - effectiveLeft;
   const rawRight = effectiveRight - towerRight;
 
-  // To satisfy user expectation that Left + Width + Right = Wall Length,
-  // we map the physical usable bounds back to the nominal bounds (0 to wall.length).
-  // The hidden physical margins (startMargin and endMargin) are subtracted from the physical space.
-  // We restore the nominal bounds by subtracting startMargin from effectiveLeft
-  // and adding endMargin to effectiveRight.
-  const nominalEffectiveLeft = Math.max(0, effectiveLeft - startMargin);
-  const nominalEffectiveRight = Math.min(
-    wall.length,
-    effectiveRight + endMargin,
-  );
+  // ── 4. Consistent gap scale (global, not per-tower) ───────────────────────
+  // The physical usable range is [startMargin, wall.length − endMargin] = 248 cm
+  // for a default 6cm wall thickness, while the nominal display width = wall.length
+  // (e.g. 254 cm = 100"). To satisfy the user invariant
+  //   LeftClearance + TowerWidth + RightClearance = WallDisplayWidth
+  // we scale all gaps by the same factor:
+  //   gapScale = totalNominalGap / totalPhysicalGap
+  // where totalPhysicalGap = (physical usable) − (sum of all tower widths on this wall)
+  //       totalNominalGap   = wall.length       − (sum of all tower widths on this wall)
+  // Using a single consistent scale keeps the inter-tower gap equal from both
+  // towers' perspectives (fixes the "50.4" vs "50" inconsistency).
+  const totalTowerWidthCm = closet.towers
+    .filter((t) => t.wallId === wall.id)
+    .reduce((sum, t) => sum + t.width, 0);
 
-  const actualUsable = effectiveRight - effectiveLeft;
-  const nominalUsable = nominalEffectiveRight - nominalEffectiveLeft;
+  const physicalUsable = wall.length - startMargin - endMargin;
+  const totalPhysicalGap = Math.max(0, physicalUsable - totalTowerWidthCm);
+  const totalNominalGap = Math.max(0, wall.length - totalTowerWidthCm);
+  const gapScale = totalPhysicalGap > 0.1 ? totalNominalGap / totalPhysicalGap : 1;
 
-  let uiLeft = rawLeft;
-  let uiRight = rawRight;
+  let uiLeft = rawLeft * gapScale;
+  let uiRight = rawRight * gapScale;
 
-  if (actualUsable >= tower.width) {
-    const slideRange = actualUsable - tower.width;
-    const nominalSlideRange = Math.max(0, nominalUsable - tower.width);
-    if (slideRange > 0.1) {
-      uiLeft = (rawLeft / slideRange) * nominalSlideRange;
-      uiRight = (rawRight / slideRange) * nominalSlideRange;
-    } else {
-      uiLeft = nominalSlideRange / 2;
-      uiRight = nominalSlideRange / 2;
-    }
+  // When the tower has no room to slide (fits exactly), centre it nominally.
+  const physicalSlide = (effectiveRight - effectiveLeft) - tower.width;
+  if (physicalSlide <= 0.1) {
+    const nominalSlide = Math.max(0, (effectiveRight - effectiveLeft) * gapScale - tower.width);
+    uiLeft = nominalSlide / 2;
+    uiRight = nominalSlide / 2;
   }
 
   return {
@@ -294,8 +296,7 @@ const clearances = computed(() => {
     right: uiRight < epsilon ? 0 : Math.max(0, uiRight),
     effectiveLeft,
     effectiveRight,
-    nominalEffectiveLeft,
-    nominalEffectiveRight,
+    gapScale,
   };
 });
 
@@ -508,28 +509,14 @@ function onClearanceInput(side: "left" | "right", event: Event) {
 
   let newCenterCm = 0;
 
-  const actualUsable = c.effectiveRight - c.effectiveLeft;
-  const nominalUsable = c.nominalEffectiveRight - c.nominalEffectiveLeft;
+  // Reverse the same global gap scale used for display.
+  const gapScale = c.gapScale;
+  const rawValueCm = gapScale > 0.01 ? valueCm / gapScale : valueCm;
 
-  if (actualUsable >= tower.width) {
-    const slideRange = actualUsable - tower.width;
-    const nominalSlideRange = Math.max(0.1, nominalUsable - tower.width);
-
-    // Reverse the scale from UI value to raw physical value
-    const rawValueCm = (valueCm / nominalSlideRange) * slideRange;
-
-    if (side === "left") {
-      newCenterCm = c.effectiveLeft + rawValueCm + halfW;
-    } else {
-      newCenterCm = c.effectiveRight - rawValueCm - halfW;
-    }
+  if (side === "left") {
+    newCenterCm = c.effectiveLeft + rawValueCm + halfW;
   } else {
-    // Fallback if no sliding space
-    if (side === "left") {
-      newCenterCm = c.effectiveLeft + valueCm + halfW;
-    } else {
-      newCenterCm = c.effectiveRight - valueCm - halfW;
-    }
+    newCenterCm = c.effectiveRight - rawValueCm - halfW;
   }
 
   // Ensure center stays within raw wall bounds
