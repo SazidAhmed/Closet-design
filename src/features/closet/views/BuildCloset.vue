@@ -882,10 +882,10 @@ function towerSubtitle(tower: {
                 <input
                   class="number-input"
                   type="number"
-                  step="0.1"
+                  step="0.0001"
                   min="0"
                   :max="fromCmDisplay(clearances.left + clearances.right)"
-                  :value="fromCmDisplay(clearances.left)"
+                  :value="Number(fromCmDisplay(clearances.left)).toFixed(4)"
                   @change="onClearanceInput('left', $event)"
                 />
               </div>
@@ -898,10 +898,10 @@ function towerSubtitle(tower: {
                 <input
                   class="number-input"
                   type="number"
-                  step="0.1"
+                  step="0.0001"
                   min="0"
                   :max="fromCmDisplay(clearances.left + clearances.right)"
-                  :value="fromCmDisplay(clearances.right)"
+                  :value="Number(fromCmDisplay(clearances.right)).toFixed(4)"
                   @change="onClearanceInput('right', $event)"
                 />
               </div>

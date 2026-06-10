@@ -16,8 +16,6 @@ So everything is working exactly as it should! The gap just looks smaller on-scr
 
 "
 
-
-
  **Root Cause** : The clearance scaling logic was computing a different scale factor (`nominalSlideRange/slideRange`) for each individual tower based on only that tower's local effective boundaries. This caused the **same physical gap** between D1 and D2 to be displayed with different values depending on which tower was selected:
 
 * From  **D1's perspective** : gap × (D1's nominalSlideRange / D1's slideRange) = 50.0"
@@ -35,4 +33,34 @@ This same scale applies to **all** gaps on the wall (between towers, and between
 
 > `Wall_width - (D1_width + D1_left) - (D2_width + D2_right) = D2_left`
 > `100 - (20 + 10) - (20 + 0) = **50"** ✓`
->
+
+
+
+In my closet project:
+In the build closet UI, When I have one Shelve, the width is 20; Left clearance 0 right 80. This is correct.
+Then I added another Shelve, the width is 20; right clearance 0 left, 60. This is also correct.
+
+Then for drawer 1, changed the left clearance to 10. Now right clearnace is 50. This is also correct
+But when I click on drawer 2, the right clearance is 0, left clearance is 50.4. This is not correct. It should be 50. Because Wall_width - (Drawer_1_width + drawer 1 left clearance ) + (Drawer_2_width + drawer 2 right clearance)
+= 100 - (20 + 10)  + (20 + 0)
+= 50
+
+I completely understand the situation. The issue was that the clearance calculation was only looking for obstructions from doors, windows, and other towers on the **same** wall. It wasn't accounting for the fact that towers placed on an **adjacent** wall (like Drawers 2) can protrude into the room and physically block the corner space of the current wall (Wall 2).
+
+Since Drawers 2 is 10" from the corner and has a depth of 20", and Drawers 3 has a depth of 15", placing Drawers 3 all the way into the corner would cause them to collide! Therefore, the physical space occupied by Drawers 2's depth (20") must be treated as "dead space" on Wall 2, meaning the usable wall length is effectively reduced.
+
+I have updated the clearance calculations in `BuildCloset.vue` to fix this. Here is what the new logic does:
+
+1. **Detects Intersecting Adjacent Towers** : It checks all adjacent connected walls for towers that are close enough to the corner to cause an overlap (distance to corner `<` the current tower's depth).
+2. **Adjusts Boundaries** : If an adjacent tower overlaps, the effective boundary of the current wall is pushed inward by the depth of that adjacent tower (in this case, by 20").
+3. **Consistent Gap Scaling** : The nominal gap scale now bases its calculation on the true available space *after* accounting for this corner blockage.
+
+For your specific scenario:
+
+* Wall 2 is 100" long.
+* Drawers 2 blocks the first 20" of Wall 2.
+* The available nominal space on Wall 2 is now `100" - 20" = 80"`.
+* Drawers 3 is 20" wide and is placed flush right (right clearance = 0").
+* The left clearance for Drawers 3 now correctly displays as `80" - 20" = 60"`.
+
+The dev server is still running with the updated code. Please test it out and let me know if the clearance calculations behave exactly as you expect them to now!

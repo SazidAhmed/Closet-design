@@ -4268,9 +4268,9 @@ function dimLinePoints(wall: {
                 class="prop-input"
                 type="number"
                 min="0"
-                step="0.001"
+                step="0.0001"
                 data-testid="left-position-input"
-                :value="Number(selectedDoorWindowItem.leftPosition).toFixed(3)"
+                :value="Number(selectedDoorWindowItem.leftPosition).toFixed(4)"
                 @change="onSelectedItemSideInput('leftPosition', $event)"
               />
             </div>
@@ -4281,9 +4281,9 @@ function dimLinePoints(wall: {
                 class="prop-input"
                 type="number"
                 min="0"
-                step="0.001"
+                step="0.0001"
                 data-testid="right-position-input"
-                :value="Number(selectedDoorWindowItem.rightPosition).toFixed(3)"
+                :value="Number(selectedDoorWindowItem.rightPosition).toFixed(4)"
                 @change="onSelectedItemSideInput('rightPosition', $event)"
               />
             </div>
@@ -4294,8 +4294,8 @@ function dimLinePoints(wall: {
                 class="prop-input"
                 type="number"
                 min="0"
-                step="0.001"
-                :value="Number(selectedDoorWindowItem.elevation).toFixed(3)"
+                step="0.0001"
+                :value="Number(selectedDoorWindowItem.elevation).toFixed(4)"
                 @change="onSelectedItemElevationInput($event)"
               />
             </div>
@@ -4363,7 +4363,7 @@ function dimLinePoints(wall: {
 
 /* Sidebars */
 .sidebar {
-  width: 200px;
+  width: 240px;
   flex-shrink: 0;
   overflow-y: auto;
   border-color: rgba(255, 255, 255, 0.06);
@@ -5113,7 +5113,7 @@ function dimLinePoints(wall: {
 }
 
 .prop-input {
-  width: 80px;
+  width: 100px;
   padding: 5px 8px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
