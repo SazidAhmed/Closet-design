@@ -200,7 +200,7 @@ const clearances = computed(() => {
 
   // ── 2. Door / window obstructions ───────────────────────────────────────
   const CM_PER_INCH = 2.54;
-  const epsilon = 0.5; // tolerance to handle floating point rounding when flush
+  const epsilon = 0.0001; // tolerance to handle floating point rounding when flush
 
   for (const item of room.items) {
     if (item.wallId !== wall.id) continue;
@@ -378,17 +378,6 @@ const clearances = computed(() => {
 
   let uiLeft = rawLeft * gapScale;
   let uiRight = rawRight * gapScale;
-
-  // When the tower has no room to slide (fits exactly), centre it nominally.
-  const physicalSlide = effectiveRight - effectiveLeft - tower.width;
-  if (physicalSlide <= 0.1) {
-    const nominalSlide = Math.max(
-      0,
-      (effectiveRight - effectiveLeft) * gapScale - tower.width,
-    );
-    uiLeft = nominalSlide / 2;
-    uiRight = nominalSlide / 2;
-  }
 
   return {
     left: uiLeft < epsilon ? 0 : Math.max(0, uiLeft),
@@ -884,8 +873,8 @@ function towerSubtitle(tower: {
                   type="number"
                   step="0.0001"
                   min="0"
-                  :max="fromCmDisplay(clearances.left + clearances.right)"
-                  :value="Number(fromCmDisplay(clearances.left)).toFixed(4)"
+                  :max="fromCm(clearances.left + clearances.right)"
+                  :value="Number(fromCm(clearances.left)).toFixed(4)"
                   @change="onClearanceInput('left', $event)"
                 />
               </div>
@@ -900,8 +889,8 @@ function towerSubtitle(tower: {
                   type="number"
                   step="0.0001"
                   min="0"
-                  :max="fromCmDisplay(clearances.left + clearances.right)"
-                  :value="Number(fromCmDisplay(clearances.right)).toFixed(4)"
+                  :max="fromCm(clearances.left + clearances.right)"
+                  :value="Number(fromCm(clearances.right)).toFixed(4)"
                   @change="onClearanceInput('right', $event)"
                 />
               </div>
