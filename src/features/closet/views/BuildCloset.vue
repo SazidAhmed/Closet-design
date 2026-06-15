@@ -498,7 +498,7 @@ function addCategoryTower(category: ClosetCatalogCategory) {
   }
 }
 
-function moveTowerLeft() {
+function nudgeTowerLeft() {
   const tower = selectedTower.value;
   const wall = selectedTowerWall.value;
   if (!tower || !wall) return;
@@ -506,7 +506,7 @@ function moveTowerLeft() {
   clampSelectedTowerToUsableBounds();
 }
 
-function moveTowerRight() {
+function nudgeTowerRight() {
   const tower = selectedTower.value;
   const wall = selectedTowerWall.value;
   if (!tower || !wall) return;
@@ -632,6 +632,52 @@ function distributeTowers() {
   // doors, windows, and wall boundaries — so other towers stay untouched.
   const availableSpace = c.effectiveRight - c.effectiveLeft;
   const newCenter = c.effectiveLeft + availableSpace / 2;
+  const positionAlongWall = Math.max(
+    tower.width / 2 / wall.length,
+    Math.min(
+      (wall.length - tower.width / 2) / wall.length,
+      newCenter / wall.length,
+    ),
+  );
+  closet.updateTower(tower.id, { positionAlongWall });
+}
+
+/**
+ * Move the selected tower all the way to the left boundary.
+ * The left edge of the tower will be flush against the nearest obstacle on the
+ * left: a wall corner margin, a door/window, or another tower.
+ */
+function moveTowerLeft() {
+  const tower = selectedTower.value;
+  const wall = selectedTowerWall.value;
+  const c = clearances.value;
+  if (!tower || !wall || !c) return;
+
+  // Place the tower's left edge at effectiveLeft.
+  const newCenter = c.effectiveLeft + tower.width / 2;
+  const positionAlongWall = Math.max(
+    tower.width / 2 / wall.length,
+    Math.min(
+      (wall.length - tower.width / 2) / wall.length,
+      newCenter / wall.length,
+    ),
+  );
+  closet.updateTower(tower.id, { positionAlongWall });
+}
+
+/**
+ * Move the selected tower all the way to the right boundary.
+ * The right edge of the tower will be flush against the nearest obstacle on the
+ * right: a wall corner margin, a door/window, or another tower.
+ */
+function moveTowerRight() {
+  const tower = selectedTower.value;
+  const wall = selectedTowerWall.value;
+  const c = clearances.value;
+  if (!tower || !wall || !c) return;
+
+  // Place the tower's right edge at effectiveRight.
+  const newCenter = c.effectiveRight - tower.width / 2;
   const positionAlongWall = Math.max(
     tower.width / 2 / wall.length,
     Math.min(
@@ -895,11 +941,17 @@ function towerSubtitle(tower: {
                 />
               </div>
               <div
-                class="dimension-control"
+                class="dimension-control snap-btn-row"
                 style="grid-column: span 2; margin-top: 4px"
               >
-                <button class="center-btn" @click="distributeTowers">
-                  Distribute Evenly
+                <button class="center-btn snap-btn" @click="moveTowerLeft">
+                  ← Left
+                </button>
+                <button class="center-btn snap-btn center-btn-sm" @click="distributeTowers">
+                  Center
+                </button>
+                <button class="center-btn snap-btn" @click="moveTowerRight">
+                  Right →
                 </button>
               </div>
             </div>
@@ -1247,6 +1299,24 @@ function towerSubtitle(tower: {
 .center-btn:hover {
   background: rgba(251, 191, 36, 0.2);
   border-color: rgba(251, 191, 36, 0.5);
+}
+
+.snap-btn-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.snap-btn {
+  flex: 1;
+}
+
+.center-btn-sm {
+  flex: 0 0 auto;
+  width: 56px;
+  padding-left: 4px;
+  padding-right: 4px;
+  font-size: 11px;
 }
 
 @media (max-width: 1100px) {
