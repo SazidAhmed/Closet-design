@@ -784,7 +784,11 @@ function towerSubtitle(tower: {
             position: relative;
           "
         >
-          <FloorPlan :elevation-only="true" @close="showElevation = false" />
+          <FloorPlan
+            :elevation-only="true"
+            :initial-wall-id="selectedTower?.wallId ?? selection.selectedWallId ?? undefined"
+            @close="showElevation = false"
+          />
         </div>
         <div
           v-show="!showElevation"

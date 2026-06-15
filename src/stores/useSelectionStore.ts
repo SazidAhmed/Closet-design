@@ -16,12 +16,16 @@ export const useSelectionStore = defineStore('selection', {
   actions: {
     selectTower(id: string | null) {
       this.selectedTowerId = id
+      // Selecting a tower clears any directly-selected wall
+      if (id !== null) this.selectedWallId = null
     },
     selectItem(id: string | null) {
       this.selectedItemId = id
     },
     selectWall(id: string | null) {
       this.selectedWallId = id
+      // Selecting a wall clears any selected tower
+      if (id !== null) this.selectedTowerId = null
     },
     clearAll() {
       this.selectedTowerId = null

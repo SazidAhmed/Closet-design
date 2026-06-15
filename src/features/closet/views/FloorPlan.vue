@@ -40,7 +40,7 @@ import type {
   PlacedItem,
 } from "../domain/types/room";
 
-const props = defineProps<{ elevationOnly?: boolean }>();
+const props = defineProps<{ elevationOnly?: boolean; initialWallId?: string }>();
 const emit = defineEmits<{ (e: "close"): void }>();
 
 const roomStore = useRoomStore();
@@ -136,11 +136,16 @@ function screenToSvg(
 onMounted(() => {
   if (props.elevationOnly) {
     if (roomStore.walls.length > 0) {
-      const firstWall = roomStore.walls[0];
-      if (firstWall) {
-        elevationWallId.value = firstWall.id;
-        if (!elevationClosetBlocksByWall[firstWall.id]) {
-          elevationClosetBlocksByWall[firstWall.id] = [];
+      // Prefer the wall passed in from the parent (selected tower's wall),
+      // fall back to the first wall if none was specified.
+      const targetWall =
+        (props.initialWallId &&
+          roomStore.walls.find((w) => w.id === props.initialWallId)) ||
+        roomStore.walls[0];
+      if (targetWall) {
+        elevationWallId.value = targetWall.id;
+        if (!elevationClosetBlocksByWall[targetWall.id]) {
+          elevationClosetBlocksByWall[targetWall.id] = [];
         }
         showElevationOverlay.value = true;
       }
@@ -2077,6 +2082,21 @@ watch(
     }
   },
   { deep: true },
+);
+
+// When the parent changes which wall to display (e.g. user selects a different
+// tower or wall while the elevation panel is already open), follow the change.
+watch(
+  () => props.initialWallId,
+  (newWallId) => {
+    if (!props.elevationOnly || !newWallId) return;
+    const wall = roomStore.walls.find((w) => w.id === newWallId);
+    if (!wall) return;
+    if (!elevationClosetBlocksByWall[wall.id]) {
+      elevationClosetBlocksByWall[wall.id] = [];
+    }
+    elevationWallId.value = wall.id;
+  },
 );
 
 // Register item drag listeners
