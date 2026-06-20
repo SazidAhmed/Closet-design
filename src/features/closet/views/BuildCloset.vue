@@ -489,10 +489,14 @@ function addCategoryTower(category: ClosetCatalogCategory) {
   closet.addTowerFromCatalog(category.doorMode, category.categoryCode);
   const added = closet.towers[closet.towers.length - 1];
   if (!added) return;
+
+  // Capture the selected wall ID BEFORE selectTower() clears it
+  // (selectTower clears selectedWallId per the selection store contract)
+  const wallId = selection.selectedWallId ?? room.closetWall?.id ?? null;
+
   selection.selectTower(added.id);
 
   // Place on the selected wall, or fall back to the closet wall
-  const wallId = selection.selectedWallId ?? room.closetWall?.id ?? null;
   if (wallId) {
     closet.setTowerWall(added.id, wallId, 0.5);
   }
@@ -786,7 +790,9 @@ function towerSubtitle(tower: {
         >
           <FloorPlan
             :elevation-only="true"
-            :initial-wall-id="selectedTower?.wallId ?? selection.selectedWallId ?? undefined"
+            :initial-wall-id="
+              selectedTower?.wallId ?? selection.selectedWallId ?? undefined
+            "
             @close="showElevation = false"
           />
         </div>
@@ -951,7 +957,10 @@ function towerSubtitle(tower: {
                 <button class="center-btn snap-btn" @click="moveTowerLeft">
                   ← Left
                 </button>
-                <button class="center-btn snap-btn center-btn-sm" @click="distributeTowers">
+                <button
+                  class="center-btn snap-btn center-btn-sm"
+                  @click="distributeTowers"
+                >
                   Center
                 </button>
                 <button class="center-btn snap-btn" @click="moveTowerRight">
