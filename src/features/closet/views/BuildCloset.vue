@@ -284,7 +284,17 @@ const clearances = computed(() => {
       }
 
       if (distFromCorner <= tower.depth + epsilon) {
-        effectiveLeft = Math.max(effectiveLeft, otherTower.depth);
+        // The adjacent wall's tower footprint starts at otherWall.thickness/2
+        // from the centerline and extends otherTower.depth into the room.
+        // Both offsets consume space along our wall's axis from the corner.
+        const otherHalfThickness =
+          typeof otherWall.thickness === "number" && otherWall.thickness > 0
+            ? otherWall.thickness / 2
+            : 0;
+        effectiveLeft = Math.max(
+          effectiveLeft,
+          otherTower.depth + otherHalfThickness,
+        );
       }
     }
 
@@ -308,9 +318,14 @@ const clearances = computed(() => {
       }
 
       if (distFromCorner <= tower.depth + epsilon) {
+        // Symmetric: account for the adjacent wall's half-thickness on the right.
+        const otherHalfThickness =
+          typeof otherWall.thickness === "number" && otherWall.thickness > 0
+            ? otherWall.thickness / 2
+            : 0;
         effectiveRight = Math.min(
           effectiveRight,
-          wall.length - otherTower.depth,
+          wall.length - (otherTower.depth + otherHalfThickness),
         );
       }
     }

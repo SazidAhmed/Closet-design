@@ -40,7 +40,10 @@ import type {
   PlacedItem,
 } from "../domain/types/room";
 
-const props = defineProps<{ elevationOnly?: boolean; initialWallId?: string }>();
+const props = defineProps<{
+  elevationOnly?: boolean;
+  initialWallId?: string;
+}>();
 const emit = defineEmits<{ (e: "close"): void }>();
 
 const roomStore = useRoomStore();
@@ -543,6 +546,158 @@ const elevationTowerDrag = reactive({
 const activeElevationTowers = computed(() => {
   if (!elevationWallId.value) return [];
   return closetStore.towers.filter((t) => t.wallId === elevationWallId.value);
+});
+
+/**
+ * Compute zones in the elevation view that are blocked by towers on adjacent
+ * (perpendicularly connected) walls. Each zone describes a strip from a corner
+ * edge into the wall space where no tower on the current wall can reach.
+ *
+ * Returns an array of { side: 'start' | 'end', depthCm: number } objects.
+ * `depthCm` is the width of the blocked zone measured from the corner edge.
+ */
+const adjacentTowerBlockedZones = computed<
+  Array<{ side: "start" | "end"; depthCm: number }>
+>(() => {
+  const wall = elevationWall.value;
+  if (!wall) return [];
+
+  const CONN_TOL = 1; // cm — same tolerance used in wallConnectivityForWall
+  const wallStartPt: [number, number] = [wall.position[0], wall.position[1]];
+  const wallEndPt: [number, number] = [
+    wall.position[0] + Math.cos(wall.angle) * wall.length,
+    wall.position[1] + Math.sin(wall.angle) * wall.length,
+  ];
+
+  const hit = (a: [number, number], b: [number, number]) =>
+    Math.hypot(a[0] - b[0], a[1] - b[1]) <= CONN_TOL;
+
+  // Identify which other walls connect at the start and end of this wall
+  const startConnectedWalls: typeof roomStore.walls = [];
+  const endConnectedWalls: typeof roomStore.walls = [];
+
+  for (const other of roomStore.walls) {
+    if (other.id === wall.id) continue;
+    const oStart: [number, number] = [other.position[0], other.position[1]];
+    const oEnd: [number, number] = [
+      other.position[0] + Math.cos(other.angle) * other.length,
+      other.position[1] + Math.sin(other.angle) * other.length,
+    ];
+    if (hit(wallStartPt, oStart) || hit(wallStartPt, oEnd)) {
+      startConnectedWalls.push(other);
+    }
+    if (hit(wallEndPt, oStart) || hit(wallEndPt, oEnd)) {
+      endConnectedWalls.push(other);
+    }
+  }
+
+  const zones: Array<{ side: "start" | "end"; depthCm: number }> = [];
+
+  // Determine the threshold depth to check against.
+  // We use the selected tower's depth if it's on this wall, otherwise the max depth of towers on this wall,
+  // or a default 61cm (24") if the wall is empty.
+  const currentTowersOnWall = closetStore.towers.filter(
+    (t) => t.wallId === wall.id,
+  );
+  const selectedOnWall = currentTowersOnWall.find(
+    (t) => t.id === selectionStore.selectedTowerId,
+  );
+
+  let thresholdDepth = 61;
+  if (
+    selectedOnWall &&
+    typeof selectedOnWall.depth === "number" &&
+    !isNaN(selectedOnWall.depth)
+  ) {
+    thresholdDepth = selectedOnWall.depth;
+  } else if (currentTowersOnWall.length > 0) {
+    thresholdDepth = Math.max(
+      ...currentTowersOnWall.map((t) =>
+        typeof t.depth === "number" && !isNaN(t.depth) ? t.depth : 0,
+      ),
+    );
+  }
+  const epsilon = 0.1;
+
+  // For each connected wall group, find towers close enough to the corner
+  // that their depth protrudes into the current wall's space.
+  const checkSide = (
+    side: "start" | "end",
+    connectedWalls: typeof roomStore.walls,
+    cornerPt: [number, number],
+  ) => {
+    let maxBlockedDepth = 0;
+
+    for (const adjWall of connectedWalls) {
+      const adjStart: [number, number] = [
+        adjWall.position[0],
+        adjWall.position[1],
+      ];
+      const adjEnd: [number, number] = [
+        adjWall.position[0] + Math.cos(adjWall.angle) * adjWall.length,
+        adjWall.position[1] + Math.sin(adjWall.angle) * adjWall.length,
+      ];
+
+      // Determine which endpoint of the adjacent wall touches the corner
+      const cornerIsStart = hit(cornerPt, adjStart);
+      const cornerIsEnd = hit(cornerPt, adjEnd);
+
+      for (const adjTower of closetStore.towers) {
+        if (adjTower.wallId !== adjWall.id) continue;
+
+        const adjDepth =
+          typeof adjTower.depth === "number" && !isNaN(adjTower.depth)
+            ? adjTower.depth
+            : 0;
+        if (adjDepth <= 0) continue;
+
+        const adjPos =
+          typeof adjTower.positionAlongWall === "number" &&
+          !isNaN(adjTower.positionAlongWall)
+            ? adjTower.positionAlongWall
+            : 0.5;
+        const adjCenterCm = adjPos * adjWall.length;
+        const adjHalfW =
+          (typeof adjTower.width === "number" ? adjTower.width : 0) / 2;
+        const adjLeft = adjCenterCm - adjHalfW;
+        const adjRight = adjCenterCm + adjHalfW;
+
+        // Distance of the tower's nearest edge from the corner on the adjacent wall
+        let distFromCorner = Infinity;
+        if (cornerIsStart) {
+          // Corner is at the start of the adjacent wall → distance is adjLeft
+          distFromCorner = Math.max(0, adjLeft);
+        } else if (cornerIsEnd) {
+          // Corner is at the end of the adjacent wall → distance is (adjWall.length - adjRight)
+          distFromCorner = Math.max(0, adjWall.length - adjRight);
+        }
+
+        // The adjacent tower protrudes into current wall's space if it sits close enough
+        // to the corner that it overlaps with the current tower's depth.
+        // The blocked depth includes the adjacent wall's half-thickness, because the
+        // tower's back face starts at adjWall.thickness/2 from the corner centerline.
+        if (distFromCorner <= thresholdDepth + epsilon) {
+          const adjWallHalfThickness =
+            typeof adjWall.thickness === "number" && adjWall.thickness > 0
+              ? adjWall.thickness / 2
+              : 0;
+          maxBlockedDepth = Math.max(
+            maxBlockedDepth,
+            adjDepth + adjWallHalfThickness,
+          );
+        }
+      }
+    }
+
+    if (maxBlockedDepth > 0) {
+      zones.push({ side, depthCm: maxBlockedDepth });
+    }
+  };
+
+  checkSide("start", startConnectedWalls, wallStartPt);
+  checkSide("end", endConnectedWalls, wallEndPt);
+
+  return zones;
 });
 
 function towerElevationGeometryCm(tower: Tower) {
@@ -1691,7 +1846,8 @@ function clampTowerCenter(towerId: string, targetCenterCm: number): number {
 
   for (const op of openings) {
     // Check if opening vertically overlaps with the tower [towerElevationCm, towerTopCm]
-    const verticalOverlap = op.bottomCm < towerTopCm && op.topCm > towerElevationCm;
+    const verticalOverlap =
+      op.bottomCm < towerTopCm && op.topCm > towerElevationCm;
     if (verticalOverlap) {
       // Forbidden range for tower center
       forbiddenIntervals.push({
@@ -1701,15 +1857,36 @@ function clampTowerCenter(towerId: string, targetCenterCm: number): number {
     }
   }
 
+  // Add cross-section zones (blocked by adjacent-wall towers) to forbidden intervals.
+  // A 'start' zone blocks [0, depthCm] of the wall; the tower center must stay
+  // above depthCm + halfW so the tower's left edge clears the blocked strip.
+  // An 'end' zone blocks [wallLength - depthCm, wallLength]; the tower center
+  // must stay below wallLength - depthCm - halfW.
+  const halfW = widthCm / 2;
+  for (const zone of adjacentTowerBlockedZones.value) {
+    if (zone.side === "start") {
+      forbiddenIntervals.push({
+        min: -Infinity,
+        max: zone.depthCm + halfW,
+      });
+    } else {
+      forbiddenIntervals.push({
+        min: wall.length - zone.depthCm - halfW,
+        max: Infinity,
+      });
+    }
+  }
+
   // Add other towers on the same wall to forbidden intervals
   const otherTowers = closetStore.towers.filter(
-    (t) => t.wallId === wall.id && t.id !== towerId
+    (t) => t.wallId === wall.id && t.id !== towerId,
   );
   for (const other of otherTowers) {
     const otherWidth = Number(other.width) || 0;
     const otherHeight = Number(other.height) || 0;
     const otherPos =
-      typeof other.positionAlongWall === "number" && !isNaN(other.positionAlongWall)
+      typeof other.positionAlongWall === "number" &&
+      !isNaN(other.positionAlongWall)
         ? other.positionAlongWall
         : 0.5;
     const otherCenterCm = otherPos * wall.length;
@@ -3396,6 +3573,24 @@ function dimLinePoints(wall: {
                     <stop offset="50%" stop-color="#ca8a04" />
                     <stop offset="100%" stop-color="#854d0e" />
                   </linearGradient>
+
+                  <!-- Cross-hatch pattern for adjacent-wall tower blockage -->
+                  <pattern
+                    id="adj-tower-hatch"
+                    patternUnits="userSpaceOnUse"
+                    width="10"
+                    height="10"
+                    patternTransform="rotate(45)"
+                  >
+                    <line
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="10"
+                      stroke="rgba(239,68,68,0.7)"
+                      stroke-width="2"
+                    />
+                  </pattern>
                 </defs>
 
                 <g
@@ -3507,7 +3702,6 @@ function dimLinePoints(wall: {
                     {{ formatLength(item.width) }} x
                     {{ formatLength(item.height) }}
                   </text>
-
 
                   <g
                     v-if="selectedItemId === item.id"
@@ -3870,39 +4064,187 @@ function dimLinePoints(wall: {
                     :height="towerElevationRect(tower).height + 4"
                     class="elevation-tower-selection-highlight"
                   />
+                </g>
 
-
+                <!-- Cross-section zones: areas blocked by towers on adjacent walls -->
+                <g
+                  v-for="zone in adjacentTowerBlockedZones"
+                  :key="`adj-zone-${zone.side}`"
+                  class="adj-tower-blocked-zone"
+                  pointer-events="none"
+                >
+                  <!-- Filled semi-transparent red zone -->
+                  <rect
+                    :x="
+                      zone.side === 'start'
+                        ? elevationLayout.wallX
+                        : elevationLayout.wallX +
+                          elevationLayout.wallWidthPx -
+                          zone.depthCm * elevationLayout.scale
+                    "
+                    :y="elevationLayout.wallY"
+                    :width="zone.depthCm * elevationLayout.scale"
+                    :height="elevationLayout.wallHeightPx"
+                    fill="url(#adj-tower-hatch)"
+                    opacity="0.55"
+                  />
+                  <!-- Solid red border on the inner edge of the zone -->
+                  <line
+                    :x1="
+                      zone.side === 'start'
+                        ? elevationLayout.wallX +
+                          zone.depthCm * elevationLayout.scale
+                        : elevationLayout.wallX +
+                          elevationLayout.wallWidthPx -
+                          zone.depthCm * elevationLayout.scale
+                    "
+                    :y1="elevationLayout.wallY"
+                    :x2="
+                      zone.side === 'start'
+                        ? elevationLayout.wallX +
+                          zone.depthCm * elevationLayout.scale
+                        : elevationLayout.wallX +
+                          elevationLayout.wallWidthPx -
+                          zone.depthCm * elevationLayout.scale
+                    "
+                    :y2="elevationLayout.wallY + elevationLayout.wallHeightPx"
+                    stroke="rgba(239,68,68,0.9)"
+                    stroke-width="2"
+                    stroke-dasharray="6,3"
+                  />
+                  <!-- Label showing blocked depth -->
+                  <text
+                    :x="
+                      zone.side === 'start'
+                        ? elevationLayout.wallX +
+                          (zone.depthCm * elevationLayout.scale) / 2
+                        : elevationLayout.wallX +
+                          elevationLayout.wallWidthPx -
+                          (zone.depthCm * elevationLayout.scale) / 2
+                    "
+                    :y="
+                      elevationLayout.wallY +
+                      elevationLayout.wallHeightPx / 2 -
+                      12
+                    "
+                    text-anchor="middle"
+                    dominant-baseline="middle"
+                    fill="rgba(239,68,68,0.95)"
+                    font-size="10"
+                    font-weight="700"
+                    transform-origin="center"
+                  >
+                    Blocked
+                  </text>
+                  <text
+                    :x="
+                      zone.side === 'start'
+                        ? elevationLayout.wallX +
+                          (zone.depthCm * elevationLayout.scale) / 2
+                        : elevationLayout.wallX +
+                          elevationLayout.wallWidthPx -
+                          (zone.depthCm * elevationLayout.scale) / 2
+                    "
+                    :y="
+                      elevationLayout.wallY +
+                      elevationLayout.wallHeightPx / 2 +
+                      4
+                    "
+                    text-anchor="middle"
+                    dominant-baseline="middle"
+                    fill="rgba(239,68,68,0.85)"
+                    font-size="9"
+                    font-weight="600"
+                  >
+                    {{ formatLength(zone.depthCm) }}
+                  </text>
                 </g>
               </svg>
 
               <!-- Elevation info bar -->
               <div class="elevation-info-bar">
                 <!-- Selected tower chip -->
-                <template v-if="selectionStore.selectedTowerId && activeElevationTowers.find(t => t.id === selectionStore.selectedTowerId)">
+                <template
+                  v-if="
+                    selectionStore.selectedTowerId &&
+                    activeElevationTowers.find(
+                      (t) => t.id === selectionStore.selectedTowerId,
+                    )
+                  "
+                >
                   <div class="elev-info-chip tower-chip">
                     <span class="elev-info-icon">&#9635;</span>
-                    <span class="elev-info-label">{{ activeElevationTowers.find(t => t.id === selectionStore.selectedTowerId)!.label }}</span>
+                    <span class="elev-info-label">{{
+                      activeElevationTowers.find(
+                        (t) => t.id === selectionStore.selectedTowerId,
+                      )!.label
+                    }}</span>
                     <span class="elev-info-sep">&middot;</span>
-                    <span class="elev-info-value">{{ formatLength(activeElevationTowers.find(t => t.id === selectionStore.selectedTowerId)!.width) }}</span>
+                    <span class="elev-info-value">{{
+                      formatLength(
+                        activeElevationTowers.find(
+                          (t) => t.id === selectionStore.selectedTowerId,
+                        )!.width,
+                      )
+                    }}</span>
                     <span class="elev-info-dim-sep">&times;</span>
-                    <span class="elev-info-value">{{ formatLength(activeElevationTowers.find(t => t.id === selectionStore.selectedTowerId)!.depth) }}</span>
+                    <span class="elev-info-value">{{
+                      formatLength(
+                        activeElevationTowers.find(
+                          (t) => t.id === selectionStore.selectedTowerId,
+                        )!.depth,
+                      )
+                    }}</span>
                     <span class="elev-info-sep">&middot;</span>
-                    <span class="elev-info-seg"><span class="elev-seg-label">E</span> {{ formatLength(activeElevationTowers.find(t => t.id === selectionStore.selectedTowerId)!.elevation ?? 0) }}</span>
+                    <span class="elev-info-seg"
+                      ><span class="elev-seg-label">E</span>
+                      {{
+                        formatLength(
+                          activeElevationTowers.find(
+                            (t) => t.id === selectionStore.selectedTowerId,
+                          )!.elevation ?? 0,
+                        )
+                      }}</span
+                    >
                   </div>
                 </template>
                 <!-- Selected item L/R/E chip -->
                 <template v-if="selectedDoorWindowItem">
                   <div class="elev-info-chip clearance-chip">
                     <span class="elev-info-icon">&#8596;</span>
-                    <span class="elev-info-seg"><span class="elev-seg-label">L</span> {{ formatPositionInches(selectedDoorWindowItem.leftPosition) }}"</span>
+                    <span class="elev-info-seg"
+                      ><span class="elev-seg-label">L</span>
+                      {{
+                        formatPositionInches(
+                          selectedDoorWindowItem.leftPosition,
+                        )
+                      }}"</span
+                    >
                     <span class="elev-info-sep">&middot;</span>
-                    <span class="elev-info-seg"><span class="elev-seg-label">R</span> {{ formatPositionInches(selectedDoorWindowItem.rightPosition) }}"</span>
+                    <span class="elev-info-seg"
+                      ><span class="elev-seg-label">R</span>
+                      {{
+                        formatPositionInches(
+                          selectedDoorWindowItem.rightPosition,
+                        )
+                      }}"</span
+                    >
                     <span class="elev-info-sep">&middot;</span>
-                    <span class="elev-info-seg"><span class="elev-seg-label">E</span> {{ formatPositionInches(selectedDoorWindowItem.elevation) }}"</span>
+                    <span class="elev-info-seg"
+                      ><span class="elev-seg-label">E</span>
+                      {{
+                        formatPositionInches(selectedDoorWindowItem.elevation)
+                      }}"</span
+                    >
                   </div>
                 </template>
                 <!-- Fallback when nothing selected -->
-                <span v-if="!selectionStore.selectedTowerId && !selectedDoorWindowItem" class="elev-info-hint">
+                <span
+                  v-if="
+                    !selectionStore.selectedTowerId && !selectedDoorWindowItem
+                  "
+                  class="elev-info-hint"
+                >
                   Click a tower or opening to inspect
                 </span>
               </div>
