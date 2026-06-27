@@ -512,6 +512,8 @@ type ElevationHorizontalBoundsCm = {
   minLeftCm: number;
   maxRightCm: number;
   usableSpanCm: number;
+  startLabelCm?: number;
+  endLabelCm?: number;
 };
 
 const MAX_ELEVATION_CLOSETS_PER_WALL = 8;
@@ -567,7 +569,7 @@ const activeElevationTowers = computed(() => {
  * `depthCm` is the width of the blocked zone measured from the corner edge.
  */
 const adjacentTowerBlockedZones = computed<
-  Array<{ side: "start" | "end"; depthCm: number }>
+  Array<{ side: "start" | "end"; depthCm: number; labelCm: number }>
 >(() => {
   const wall = elevationWall.value;
   if (!wall) return [];
@@ -601,7 +603,7 @@ const adjacentTowerBlockedZones = computed<
     }
   }
 
-  const zones: Array<{ side: "start" | "end"; depthCm: number }> = [];
+  const zones: Array<{ side: "start" | "end"; depthCm: number; labelCm: number }> = [];
 
   // Determine the threshold depth to check against.
   // We use the selected tower's depth if it's on this wall, otherwise the max depth of towers on this wall,
@@ -637,6 +639,7 @@ const adjacentTowerBlockedZones = computed<
     cornerPt: [number, number],
   ) => {
     let maxBlockedDepth = 0;
+    let maxLabelDepth = 0;
 
     for (const adjWall of connectedWalls) {
       const adjStart: [number, number] = [
@@ -684,23 +687,21 @@ const adjacentTowerBlockedZones = computed<
 
         // The adjacent tower protrudes into current wall's space if it sits close enough
         // to the corner that it overlaps with the current tower's depth.
-        // The blocked depth includes the adjacent wall's half-thickness, because the
-        // tower's back face starts at adjWall.thickness/2 from the corner centerline.
+        // The physical blocked depth includes the adjacent wall's half-thickness.
+        // We track the raw adjDepth separately for user-facing labels.
         if (distFromCorner <= thresholdDepth + epsilon) {
           const adjWallHalfThickness =
             typeof adjWall.thickness === "number" && adjWall.thickness > 0
               ? adjWall.thickness / 2
               : 0;
-          maxBlockedDepth = Math.max(
-            maxBlockedDepth,
-            adjDepth + adjWallHalfThickness,
-          );
+          maxBlockedDepth = Math.max(maxBlockedDepth, adjDepth + adjWallHalfThickness);
+          maxLabelDepth = Math.max(maxLabelDepth, adjDepth);
         }
       }
     }
 
     if (maxBlockedDepth > 0) {
-      zones.push({ side, depthCm: maxBlockedDepth });
+      zones.push({ side, depthCm: maxBlockedDepth, labelCm: maxLabelDepth });
     }
   };
 
@@ -1060,6 +1061,8 @@ function elevationHorizontalBoundsForWall(
       minLeftCm: 0,
       maxRightCm: minLength,
       usableSpanCm: minLength,
+      startLabelCm: 0,
+      endLabelCm: 0,
     };
   }
 
@@ -1072,17 +1075,103 @@ function elevationHorizontalBoundsForWall(
   const rawEndMargin = connectivity.endConnected
     ? Math.max(0, wall.thickness / 2)
     : 0;
-  const startMarginCm = Math.min(rawStartMargin, minLength);
-  const endMarginCm = Math.min(rawEndMargin, minLength);
-  const minLeftCm = startMarginCm;
-  const maxRightCm = Math.max(minLeftCm, minLength - endMarginCm);
+
+  // ── Adjacent tower depth check ─────────────────────────────────────────────
+  // A tower on a connected adjacent wall that sits close to the shared corner
+  // protrudes into the room by its depth, physically blocking that corner
+  // space on the current wall. Increase the margin to reflect the full blockage.
+  const CONN_TOL = 1;
+  const wallStartPt: [number, number] = [wall.position[0], wall.position[1]];
+  const wallEndPt: [number, number] = wallEndPoint(wall);
+
+  // Collect adjacent walls at start/end corners
+  const startAdjacentWalls: (typeof roomStore.walls)[number][] = [];
+  const endAdjacentWalls: (typeof roomStore.walls)[number][] = [];
+  for (const other of roomStore.walls) {
+    if (other.id === wall.id) continue;
+    const oStart: [number, number] = [other.position[0], other.position[1]];
+    const oEnd: [number, number] = wallEndPoint(other);
+    const hit = (a: [number, number], b: [number, number]) =>
+      Math.hypot(a[0] - b[0], a[1] - b[1]) <= CONN_TOL;
+    if (hit(wallStartPt, oStart) || hit(wallStartPt, oEnd))
+      startAdjacentWalls.push(other);
+    if (hit(wallEndPt, oStart) || hit(wallEndPt, oEnd))
+      endAdjacentWalls.push(other);
+  }
+
+  let startAdjacentDepth = 0;
+  let endAdjacentDepth = 0;
+
+  for (const tower of closetStore.towers) {
+    const isAtStart = startAdjacentWalls.some((w) => w.id === tower.wallId);
+    const isAtEnd = endAdjacentWalls.some((w) => w.id === tower.wallId);
+    if (!isAtStart && !isAtEnd) continue;
+
+    const adjWall = roomStore.walls.find((w) => w.id === tower.wallId);
+    if (!adjWall) continue;
+
+    const otherPos = tower.positionAlongWall ?? 0.5;
+    const otherCenterCm = otherPos * adjWall.length;
+    const otherHalfW = tower.width / 2;
+    const otherLeft = otherCenterCm - otherHalfW;
+    const otherRight = otherCenterCm + otherHalfW;
+
+    const oStart: [number, number] = [adjWall.position[0], adjWall.position[1]];
+    const oEnd: [number, number] = wallEndPoint(adjWall);
+    const hit = (a: [number, number], b: [number, number]) =>
+      Math.hypot(a[0] - b[0], a[1] - b[1]) <= CONN_TOL;
+
+    if (isAtStart) {
+      let distFromCorner = Infinity;
+      if (hit(wallStartPt, oStart)) {
+        distFromCorner = Math.max(0, otherLeft);
+      } else if (hit(wallStartPt, oEnd)) {
+        distFromCorner = Math.max(0, adjWall.length - otherRight);
+      }
+      // Tower is close enough to the corner to protrude into our wall's space
+      if (distFromCorner <= tower.depth) {
+        startAdjacentDepth = Math.max(startAdjacentDepth, tower.depth);
+      }
+    }
+
+    if (isAtEnd) {
+      let distFromCorner = Infinity;
+      if (hit(wallEndPt, oStart)) {
+        distFromCorner = Math.max(0, otherLeft);
+      } else if (hit(wallEndPt, oEnd)) {
+        distFromCorner = Math.max(0, adjWall.length - otherRight);
+      }
+      if (distFromCorner <= tower.depth) {
+        endAdjacentDepth = Math.max(endAdjacentDepth, tower.depth);
+      }
+    }
+  }
+
+  // When an adjacent tower blocks the corner, the effective margin is the
+  // adjacent tower depth plus the wall half-thickness margin (for physical constraints).
+  // We provide the raw adjDepth as startLabelCm for user-facing UI.
+  const effectiveStartMargin = Math.min(
+    minLength,
+    startAdjacentDepth > 0
+      ? startAdjacentDepth + rawStartMargin
+      : rawStartMargin,
+  );
+  const effectiveEndMargin = Math.min(
+    minLength,
+    endAdjacentDepth > 0 ? endAdjacentDepth + rawEndMargin : rawEndMargin,
+  );
+
+  const minLeftCm = effectiveStartMargin;
+  const maxRightCm = Math.max(minLeftCm, minLength - effectiveEndMargin);
 
   return {
-    startMarginCm,
-    endMarginCm,
+    startMarginCm: effectiveStartMargin,
+    endMarginCm: effectiveEndMargin,
     minLeftCm,
     maxRightCm,
     usableSpanCm: Math.max(0, maxRightCm - minLeftCm),
+    startLabelCm: startAdjacentDepth,
+    endLabelCm: endAdjacentDepth,
   };
 }
 
@@ -1121,6 +1210,8 @@ const elevationHorizontalBounds = computed(() => {
       minLeftCm: 0,
       maxRightCm: 0,
       usableSpanCm: 0,
+      startLabelCm: 0,
+      endLabelCm: 0,
     } as ElevationHorizontalBoundsCm;
   }
   return elevationHorizontalBoundsForWall(wall.id, wall.length);
@@ -1270,8 +1361,8 @@ const elevationWallContextMetrics = computed(() => {
   return {
     wallLengthCm: wall.length,
     usableWidthCm: horizontalBounds.usableSpanCm,
-    blockedLeftCm: horizontalBounds.startMarginCm,
-    blockedRightCm: horizontalBounds.endMarginCm,
+    blockedLeftCm: horizontalBounds.startLabelCm || horizontalBounds.startMarginCm,
+    blockedRightCm: horizontalBounds.endLabelCm || horizontalBounds.endMarginCm,
     openingCount,
     closetCount,
   };
@@ -4166,7 +4257,7 @@ function dimLinePoints(wall: {
                     font-size="9"
                     font-weight="600"
                   >
-                    {{ formatLength(zone.depthCm) }}
+                    {{ formatLength(zone.labelCm) }}
                   </text>
                 </g>
               </svg>
