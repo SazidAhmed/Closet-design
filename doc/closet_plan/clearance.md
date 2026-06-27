@@ -198,3 +198,39 @@ leftClearance(0) + width(20) + rightClearance(60) = 80 = 100 − 20 ✓
 | Adjacent tower blocks start corner    | `L + W + R = wall.length − startAdjacentDepth`                 |
 | Adjacent tower blocks end corner      | `L + W + R = wall.length − endAdjacentDepth`                   |
 | Adjacent towers block both corners    | `L + W + R = wall.length − startAdjacentDepth − endAdjacentDepth` |
+
+---
+
+## Bug #4 — Elevation View Mismatch Between Visuals, Labels, and Physical Constraints
+
+### Symptom
+
+In the Elevation view for a wall with an adjacent tower, two issues occurred sequentially during fixing:
+1. The "Blocked Left/Right" label initially showed `1.1811"` (the wall's corner half-thickness) instead of the actual adjacent tower depth (e.g. `20.0"`).
+2. Changing the visual hatched zone's width to exactly `20.0"` created a visible `1.18"` gap between the tower and the hatched zone when the tower was pushed fully into the corner, and caused the Clearance fields in `BuildCloset.vue` to report `61.2295` instead of `60.0`.
+
+### Root Cause
+
+The underlying problem was a conflict between **physical constraints** and **user-facing labels**.
+
+Physically, the wall geometry uses centerlines. The usable space starts after the wall's inner face (at `wall.thickness / 2`). An adjacent tower's depth extends *from that inner face*. Thus, the total physically blocked dimension from the wall centerline is `adjacentTower.depth + wall.thickness / 2` (e.g. `20 + 1.18 = 21.18"`).
+
+When we shrank the SVG hatched zone and the `minLeftCm/maxRightCm` bounds to `20"`, we caused a physical mismatch with `BuildCloset.vue` (which correctly continued to enforce the `21.18"` constraint for collision avoidance). The gap was simply the wall's half-thickness (`1.18"`), but the mismatch broke the global gap scaling logic by creating mismatched nominal vs. physical usable boundaries.
+
+### Fix
+
+Decoupled the physical bounds calculation from the user-facing display label:
+
+1. **Restored Physical Constraints**: 
+   - `elevationHorizontalBoundsForWall` now computes margins as `adjDepth + wall.thickness/2`.
+   - `adjacentTowerBlockedZones` now computes SVG hatched widths as `adjDepth + wall.thickness/2`.
+   - This keeps `minLeftCm` and `maxRightCm` in absolute sync with `BuildCloset.vue` and removes the gap.
+2. **Abstracted Display Labels**:
+   - Both data structures now include a separate `labelCm` variable (set exactly to `adjDepth`).
+   - The Wall Context panel ("Blocked Left/Right") and the SVG `<text>` elements now render `labelCm` instead of the physical dimension.
+
+This allows the UI to show the user exactly the number they expect ("20.0") while the app enforces the mathematically rigorous physical bounds ("21.18") for dragging and SVG alignment.
+
+### Files Changed
+
+`src/features/closet/views/FloorPlan.vue` — `ElevationHorizontalBoundsCm`, `adjacentTowerBlockedZones`, and `elevationHorizontalBoundsForWall`.

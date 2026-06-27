@@ -603,7 +603,11 @@ const adjacentTowerBlockedZones = computed<
     }
   }
 
-  const zones: Array<{ side: "start" | "end"; depthCm: number; labelCm: number }> = [];
+  const zones: Array<{
+    side: "start" | "end";
+    depthCm: number;
+    labelCm: number;
+  }> = [];
 
   // Determine the threshold depth to check against.
   // We use the selected tower's depth if it's on this wall, otherwise the max depth of towers on this wall,
@@ -689,12 +693,15 @@ const adjacentTowerBlockedZones = computed<
         // to the corner that it overlaps with the current tower's depth.
         // The physical blocked depth includes the adjacent wall's half-thickness.
         // We track the raw adjDepth separately for user-facing labels.
-        if (distFromCorner <= thresholdDepth + epsilon) {
+        if (distFromCorner < thresholdDepth - epsilon) {
           const adjWallHalfThickness =
             typeof adjWall.thickness === "number" && adjWall.thickness > 0
               ? adjWall.thickness / 2
               : 0;
-          maxBlockedDepth = Math.max(maxBlockedDepth, adjDepth + adjWallHalfThickness);
+          maxBlockedDepth = Math.max(
+            maxBlockedDepth,
+            adjDepth + adjWallHalfThickness,
+          );
           maxLabelDepth = Math.max(maxLabelDepth, adjDepth);
         }
       }
@@ -1080,6 +1087,30 @@ function elevationHorizontalBoundsForWall(
   // A tower on a connected adjacent wall that sits close to the shared corner
   // protrudes into the room by its depth, physically blocking that corner
   // space on the current wall. Increase the margin to reflect the full blockage.
+
+  // Determine the threshold depth to check against (from towers on this wall)
+  const currentTowersOnWall = closetStore.towers.filter(
+    (t) => t.wallId === wallId,
+  );
+  const selectedOnWall = currentTowersOnWall.find(
+    (t) => t.id === selectionStore.selectedTowerId,
+  );
+
+  let thresholdDepth = 61;
+  if (
+    selectedOnWall &&
+    typeof selectedOnWall.depth === "number" &&
+    !isNaN(selectedOnWall.depth)
+  ) {
+    thresholdDepth = selectedOnWall.depth;
+  } else if (currentTowersOnWall.length > 0) {
+    thresholdDepth = Math.max(
+      ...currentTowersOnWall.map((t) =>
+        typeof t.depth === "number" && !isNaN(t.depth) ? t.depth : 0,
+      ),
+    );
+  }
+
   const CONN_TOL = 1;
   const wallStartPt: [number, number] = [wall.position[0], wall.position[1]];
   const wallEndPt: [number, number] = wallEndPoint(wall);
@@ -1129,7 +1160,7 @@ function elevationHorizontalBoundsForWall(
         distFromCorner = Math.max(0, adjWall.length - otherRight);
       }
       // Tower is close enough to the corner to protrude into our wall's space
-      if (distFromCorner <= tower.depth) {
+      if (distFromCorner < thresholdDepth - 0.1) {
         startAdjacentDepth = Math.max(startAdjacentDepth, tower.depth);
       }
     }
@@ -1141,7 +1172,7 @@ function elevationHorizontalBoundsForWall(
       } else if (hit(wallEndPt, oEnd)) {
         distFromCorner = Math.max(0, adjWall.length - otherRight);
       }
-      if (distFromCorner <= tower.depth) {
+      if (distFromCorner < thresholdDepth - 0.1) {
         endAdjacentDepth = Math.max(endAdjacentDepth, tower.depth);
       }
     }
@@ -1361,7 +1392,8 @@ const elevationWallContextMetrics = computed(() => {
   return {
     wallLengthCm: wall.length,
     usableWidthCm: horizontalBounds.usableSpanCm,
-    blockedLeftCm: horizontalBounds.startLabelCm || horizontalBounds.startMarginCm,
+    blockedLeftCm:
+      horizontalBounds.startLabelCm || horizontalBounds.startMarginCm,
     blockedRightCm: horizontalBounds.endLabelCm || horizontalBounds.endMarginCm,
     openingCount,
     closetCount,
