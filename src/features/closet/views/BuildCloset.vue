@@ -286,8 +286,30 @@ const clearances = computed(() => {
       } else if (hit(wallStartPt, oEnd)) {
         distFromCorner = Math.max(0, otherWall.length - otherRight);
       }
+      
+      const otherHalfThickness = typeof otherWall.thickness === "number" && otherWall.thickness > 0 ? otherWall.thickness / 2 : 0;
+      let oStartMargin = 0, oEndMargin = 0;
+      for (const w of room.walls) {
+        if (w.id === otherWall.id) continue;
+        const wStart: [number, number] = [w.position[0], w.position[1]];
+        const wEnd: [number, number] = [
+          w.position[0] + Math.cos(w.angle) * w.length,
+          w.position[1] + Math.sin(w.angle) * w.length,
+        ];
+        if (hit(oStart, wStart) || hit(oStart, wEnd)) oStartMargin = otherHalfThickness;
+        if (hit(oEnd, wStart) || hit(oEnd, wEnd)) oEndMargin = otherHalfThickness;
+      }
+      const totalOtherWidth = closet.towers
+        .filter((t) => t.wallId === otherWall.id)
+        .reduce((sum, t) => sum + (typeof t.width === "number" ? t.width : 0), 0);
+      const oPhysUsable = Math.max(0, otherWall.length - oStartMargin - oEndMargin);
+      const oPhysGap = Math.max(0, oPhysUsable - totalOtherWidth);
+      const oNomGap = Math.max(0, otherWall.length - totalOtherWidth);
+      const oGapScale = oPhysGap > 0.1 ? oNomGap / oPhysGap : 1;
 
-      if (distFromCorner <= tower.depth + epsilon) {
+      let uiClearance = Math.max(0, distFromCorner - (hit(wallStartPt, oStart) ? oStartMargin : oEndMargin)) * oGapScale;
+
+      if (uiClearance < tower.depth - epsilon) {
         // The adjacent wall's tower footprint starts at otherWall.thickness/2
         // from the centerline and extends otherTower.depth into the room.
         // Both offsets consume space along our wall's axis from the corner.
@@ -323,7 +345,29 @@ const clearances = computed(() => {
         distFromCorner = Math.max(0, otherWall.length - otherRight);
       }
 
-      if (distFromCorner <= tower.depth + epsilon) {
+      const otherHalfThickness = typeof otherWall.thickness === "number" && otherWall.thickness > 0 ? otherWall.thickness / 2 : 0;
+      let oStartMargin = 0, oEndMargin = 0;
+      for (const w of room.walls) {
+        if (w.id === otherWall.id) continue;
+        const wStart: [number, number] = [w.position[0], w.position[1]];
+        const wEnd: [number, number] = [
+          w.position[0] + Math.cos(w.angle) * w.length,
+          w.position[1] + Math.sin(w.angle) * w.length,
+        ];
+        if (hit(oStart, wStart) || hit(oStart, wEnd)) oStartMargin = otherHalfThickness;
+        if (hit(oEnd, wStart) || hit(oEnd, wEnd)) oEndMargin = otherHalfThickness;
+      }
+      const totalOtherWidth = closet.towers
+        .filter((t) => t.wallId === otherWall.id)
+        .reduce((sum, t) => sum + (typeof t.width === "number" ? t.width : 0), 0);
+      const oPhysUsable = Math.max(0, otherWall.length - oStartMargin - oEndMargin);
+      const oPhysGap = Math.max(0, oPhysUsable - totalOtherWidth);
+      const oNomGap = Math.max(0, otherWall.length - totalOtherWidth);
+      const oGapScale = oPhysGap > 0.1 ? oNomGap / oPhysGap : 1;
+
+      let uiClearance = Math.max(0, distFromCorner - (hit(wallEndPt, oStart) ? oStartMargin : oEndMargin)) * oGapScale;
+
+      if (uiClearance < tower.depth - epsilon) {
         // Symmetric: account for the adjacent wall's half-thickness on the right.
         const otherHalfThickness =
           typeof otherWall.thickness === "number" && otherWall.thickness > 0

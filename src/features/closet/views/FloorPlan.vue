@@ -633,7 +633,7 @@ const adjacentTowerBlockedZones = computed<
       ),
     );
   }
-  const epsilon = 0.1;
+  const epsilon = 0.0001;
 
   // For each connected wall group, find towers close enough to the corner
   // that their depth protrudes into the current wall's space.
@@ -689,15 +689,49 @@ const adjacentTowerBlockedZones = computed<
           distFromCorner = Math.max(0, adjWall.length - adjRight);
         }
 
+        const adjWallHalfThickness =
+          typeof adjWall.thickness === "number" && adjWall.thickness > 0
+            ? adjWall.thickness / 2
+            : 0;
+
+        let startMargin = 0;
+        let endMargin = 0;
+        for (const w of roomStore.walls) {
+          if (w.id === adjWall.id) continue;
+          const wStart: [number, number] = [w.position[0], w.position[1]];
+          const wEnd: [number, number] = [
+            w.position[0] + Math.cos(w.angle) * w.length,
+            w.position[1] + Math.sin(w.angle) * w.length,
+          ];
+          if (hit(adjStart, wStart) || hit(adjStart, wEnd))
+            startMargin = adjWallHalfThickness;
+          if (hit(adjEnd, wStart) || hit(adjEnd, wEnd))
+            endMargin = adjWallHalfThickness;
+        }
+
+        const cornerMargin = cornerIsStart ? startMargin : endMargin;
+        const totalWidth = closetStore.towers
+          .filter((t) => t.wallId === adjWall.id)
+          .reduce(
+            (sum, t) => sum + (typeof t.width === "number" ? t.width : 0),
+            0,
+          );
+
+        const physUsable = Math.max(
+          0,
+          adjWall.length - startMargin - endMargin,
+        );
+        const physGap = Math.max(0, physUsable - totalWidth);
+        const nomGap = Math.max(0, adjWall.length - totalWidth);
+        const gapScale = physGap > 0.1 ? nomGap / physGap : 1;
+
+        const uiClearance =
+          Math.max(0, distFromCorner - cornerMargin) * gapScale;
+
         // The adjacent tower protrudes into current wall's space if it sits close enough
         // to the corner that it overlaps with the current tower's depth.
-        // The physical blocked depth includes the adjacent wall's half-thickness.
-        // We track the raw adjDepth separately for user-facing labels.
-        if (distFromCorner < thresholdDepth - epsilon) {
-          const adjWallHalfThickness =
-            typeof adjWall.thickness === "number" && adjWall.thickness > 0
-              ? adjWall.thickness / 2
-              : 0;
+        // We evaluate this in UI clearance space to match exactly what the user inputs.
+        if (uiClearance < thresholdDepth - epsilon) {
           maxBlockedDepth = Math.max(
             maxBlockedDepth,
             adjDepth + adjWallHalfThickness,
@@ -1159,8 +1193,42 @@ function elevationHorizontalBoundsForWall(
       } else if (hit(wallStartPt, oEnd)) {
         distFromCorner = Math.max(0, adjWall.length - otherRight);
       }
+      const adjWallHalfThickness =
+        typeof adjWall.thickness === "number" && adjWall.thickness > 0
+          ? adjWall.thickness / 2
+          : 0;
+      let startMargin = 0,
+        endMargin = 0;
+      for (const w of roomStore.walls) {
+        if (w.id === adjWall.id) continue;
+        const wStart: [number, number] = [w.position[0], w.position[1]];
+        const wEnd: [number, number] = [
+          w.position[0] + Math.cos(w.angle) * w.length,
+          w.position[1] + Math.sin(w.angle) * w.length,
+        ];
+        if (hit(oStart, wStart) || hit(oStart, wEnd))
+          startMargin = adjWallHalfThickness;
+        if (hit(oEnd, wStart) || hit(oEnd, wEnd))
+          endMargin = adjWallHalfThickness;
+      }
+      const totalWidth = closetStore.towers
+        .filter((t) => t.wallId === adjWall.id)
+        .reduce(
+          (sum, t) => sum + (typeof t.width === "number" ? t.width : 0),
+          0,
+        );
+      const physUsable = Math.max(0, adjWall.length - startMargin - endMargin);
+      const physGap = Math.max(0, physUsable - totalWidth);
+      const nomGap = Math.max(0, adjWall.length - totalWidth);
+      const gapScale = physGap > 0.1 ? nomGap / physGap : 1;
+
+      let uiClearance =
+        Math.max(
+          0,
+          distFromCorner - (hit(wallStartPt, oStart) ? startMargin : endMargin),
+        ) * gapScale;
       // Tower is close enough to the corner to protrude into our wall's space
-      if (distFromCorner < thresholdDepth - 0.1) {
+      if (uiClearance < thresholdDepth - 0.0001) {
         startAdjacentDepth = Math.max(startAdjacentDepth, tower.depth);
       }
     }
@@ -1172,7 +1240,41 @@ function elevationHorizontalBoundsForWall(
       } else if (hit(wallEndPt, oEnd)) {
         distFromCorner = Math.max(0, adjWall.length - otherRight);
       }
-      if (distFromCorner < thresholdDepth - 0.1) {
+      const adjWallHalfThickness =
+        typeof adjWall.thickness === "number" && adjWall.thickness > 0
+          ? adjWall.thickness / 2
+          : 0;
+      let startMargin = 0,
+        endMargin = 0;
+      for (const w of roomStore.walls) {
+        if (w.id === adjWall.id) continue;
+        const wStart: [number, number] = [w.position[0], w.position[1]];
+        const wEnd: [number, number] = [
+          w.position[0] + Math.cos(w.angle) * w.length,
+          w.position[1] + Math.sin(w.angle) * w.length,
+        ];
+        if (hit(oStart, wStart) || hit(oStart, wEnd))
+          startMargin = adjWallHalfThickness;
+        if (hit(oEnd, wStart) || hit(oEnd, wEnd))
+          endMargin = adjWallHalfThickness;
+      }
+      const totalWidth = closetStore.towers
+        .filter((t) => t.wallId === adjWall.id)
+        .reduce(
+          (sum, t) => sum + (typeof t.width === "number" ? t.width : 0),
+          0,
+        );
+      const physUsable = Math.max(0, adjWall.length - startMargin - endMargin);
+      const physGap = Math.max(0, physUsable - totalWidth);
+      const nomGap = Math.max(0, adjWall.length - totalWidth);
+      const gapScale = physGap > 0.1 ? nomGap / physGap : 1;
+
+      let uiClearance =
+        Math.max(
+          0,
+          distFromCorner - (hit(wallEndPt, oStart) ? startMargin : endMargin),
+        ) * gapScale;
+      if (uiClearance < thresholdDepth - 0.0001) {
         endAdjacentDepth = Math.max(endAdjacentDepth, tower.depth);
       }
     }
