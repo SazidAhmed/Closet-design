@@ -1,66 +1,200 @@
-The clearance of **212 cm** is actually perfectly correct! There is a small unit confusion happening here — let me break down the math.
+# Clearance Calculation — Reference & Bug History
 
-If you look closely at the label on the top of the wall in your screenshot, it says **`100"`** (with the double-quote symbol for inches). **The wall is not 100 cm, it is 100 inches long.**
+This document explains how left/right clearance is calculated for a selected tower
+in `BuildCloset.vue`, and records each bug that was found and fixed.
 
-Because your app is currently set to display units in Centimeters (`cm`), here is what the math actually looks like:
+---
 
-1. **Wall Length:** 100 inches = **254 cm**
-2. **Left Corner Thickness:** The connected left wall takes up **6 cm** of that corner.
-3. **Right Corner Thickness:** The connected right wall takes up **6 cm** of that corner.
-4. **Usable Wall Space:** 254 cm - 6 cm - 6 cm = **242 cm**
-5. **Tower Width:** The "Long Hanging 2" tower is 12 inches wide, which is  **30.5 cm** .
+## How Clearance Works
 
-If you take the `242 cm` of usable space and subtract the `30.5 cm` tower (which is pushed all the way to the left), you are left with exactly **211.5 cm** of clearance on the right, which formats cleanly as  **`212 cm`** .
+For a selected tower on a wall, clearance is the usable empty space on each side:
 
-So everything is working exactly as it should! The gap just looks smaller on-screen because the 3D elevation view is scaled to fit the 100-inch wall, but the 212 cm number accurately reflects the real-world clearance.
+- **Left clearance** — space between the tower's left edge and the nearest obstacle to the left
+- **Right clearance** — space between the tower's right edge and the nearest obstacle to the right
 
-"
+Obstacles that restrict the effective boundary (in priority order):
 
- **Root Cause** : The clearance scaling logic was computing a different scale factor (`nominalSlideRange/slideRange`) for each individual tower based on only that tower's local effective boundaries. This caused the **same physical gap** between D1 and D2 to be displayed with different values depending on which tower was selected:
+1. **Wall corner margins** — connected perpendicular walls consume `wall.thickness / 2` from each end
+2. **Doors / windows** — openings on the same wall push the boundary inward if they vertically overlap the tower
+3. **Towers on adjacent connected walls** — a tower whose depth protrudes into the room blocks corner space on the current wall
+4. **Other towers on the same wall** — towers to the left/right of the selected tower
 
-* From  **D1's perspective** : gap × (D1's nominalSlideRange / D1's slideRange) = 50.0"
-* From  **D2's perspective** : gap × (D2's nominalSlideRange / D2's slideRange) = 50.4"
+### Gap Scale
 
-The discrepancy arose because D2's scaling ratio used `effectiveLeft - startMargin` as `nominalEffectiveLeft` even when the boundary was another tower (not the wall corner), inflating its nominal range by `startMargin = 3 cm`.
+Because wall-thickness corner margins are absorbed into the display (the user sees "0" when flush
+against the corner, not "3 cm"), a `gapScale` is applied so the display satisfies the invariant:
 
-**The Fix** (`BuildCloset.vue`):
+```
+leftClearance + towerWidth + rightClearance = displayWidth
+```
 
-Instead of computing a per-tower ratio, a single **global gap scale** is computed:
+where `displayWidth` depends on what is blocking each end (see Bug #3 below for the full formula).
 
-<pre><div class="relative whitespace-pre-wrap word-break-all my-2 rounded-xl bg-muted border" node="[object Object]"><div class="min-h-7 relative box-border flex flex-row items-center justify-between rounded-t border-b border-border px-2 py-0.5"><div class="font-sans text-sm text-muted-foreground"></div><div class="flex flex-row gap-2 justify-end"><button class="appearance-none bg-transparent border-0 p-0 cursor-pointer text-secondary-foreground hover:text-foreground transition-colors" aria-label="At mention code block"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 -960 960 960" fill="currentColor" class="h-3.5 w-3.5"><path d="M480-100q-78.77,0-148.11-29.96T211.23-211.23T129.96-331.89T100-480t29.96-148.11t81.27-120.65t120.65-81.27T480-860t148.11,29.96t120.65,81.27t81.27,120.65T860-480v48.77q0,54.77-37.62,93T730-300q-35.38,0-65.62-17.31t-47.77-47.62Q590.69-334 555.35-317T480-300q-74.92,0-127.46-52.54T300-480t52.54-127.46T480-660t127.46,52.54T660-480v48.77q0,29.46 20.27,50.35T730-360t49.73-20.88T800-431.23V-480q0-134-93-227T480-800T253-707T160-480t93,227t227,93H680v60H480Zm85-295q35-35 35-85t-35-85t-85-35t-85,35t-35,85t35,85t85,35t85-35Z"></path></svg></button><button class="appearance-none bg-transparent border-0 p-0 cursor-pointer text-secondary-foreground hover:text-foreground transition-colors" aria-label="Copy code"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 -960 960 960" fill="currentColor" class="h-3.5 w-3.5"><path d="M362.31-260Q332-260 311-281t-21-51.31V-787.69Q290-818 311-839t51.31-21H697.69Q728-860 749-839t21,51.31v455.38Q770-302 749-281t-51.31,21H362.31Zm0-60H697.69q4.62,0 8.46-3.85t3.85-8.46V-787.69q0-4.62-3.85-8.46T697.69-800H362.31q-4.62,0-8.46,3.85T350-787.69v455.38q0,4.62 3.85,8.46t8.46,3.85Zm-140,200Q192-120 171-141t-21-51.31V-707.69h60v515.38q0,4.62 3.85,8.46t8.46,3.85H617.69v60H222.31ZM350-320q0,0 0-3.85t0-8.46V-787.69q0-4.62 0-8.46t0-3.85q0,0 0,3.85t0,8.46v455.38q0,4.62 0,8.46t0,3.85Z"></path></svg></button></div></div><div class="p-3"><div class="w-full h-full text-xs cursor-text"><div class="code-block"><div class="code-line" data-line-number="1" data-line-start="1" data-line-end="1"><div class="line-content"><span>gapScale = totalNominalGap / totalPhysicalGap</span></div></div><div class="code-line" data-line-number="2" data-line-start="2" data-line-end="2"><div class="line-content"><span>         = (wall.length - sum_of_all_tower_widths) / (physicalUsable - sum_of_all_tower_widths)</span></div></div></div></div></div></div></pre>
+---
 
-This same scale applies to **all** gaps on the wall (between towers, and between towers and wall edges), so the same physical gap always maps to the same nominal display value regardless of which tower is selected. The result satisfies the user's invariant:
+## Bug #1 — Per-Tower Scale Caused Same Gap to Display Differently
 
-> `Wall_width - (D1_width + D1_left) - (D2_width + D2_right) = D2_left`
-> `100 - (20 + 10) - (20 + 0) = **50"** ✓`
+### Symptom
 
+With two towers (D1, D2) on the same wall (width = 100), D1 left clearance = 10:
+- From D1's perspective: gap between D1 and D2 showed as **50.0**
+- From D2's perspective: the same gap showed as **50.4**
 
+### Root Cause
 
-In my closet project:
-In the build closet UI, When I have one Shelve, the width is 20; Left clearance 0 right 80. This is correct.
-Then I added another Shelve, the width is 20; right clearance 0 left, 60. This is also correct.
+The scale factor (`nominalSlideRange / slideRange`) was computed separately for each tower
+using only that tower's local effective boundaries. D2's scaling ratio treated
+`effectiveLeft - startMargin` as its nominal boundary even when the boundary was set by
+another tower (not the wall corner), inflating its nominal range by `startMargin = 3 cm`.
 
-Then for drawer 1, changed the left clearance to 10. Now right clearnace is 50. This is also correct
-But when I click on drawer 2, the right clearance is 0, left clearance is 50.4. This is not correct. It should be 50. Because Wall_width - (Drawer_1_width + drawer 1 left clearance ) + (Drawer_2_width + drawer 2 right clearance)
-= 100 - (20 + 10)  + (20 + 0)
-= 50
+### Fix
 
-I completely understand the situation. The issue was that the clearance calculation was only looking for obstructions from doors, windows, and other towers on the **same** wall. It wasn't accounting for the fact that towers placed on an **adjacent** wall (like Drawers 2) can protrude into the room and physically block the corner space of the current wall (Wall 2).
+Replace per-tower scale with a single **global gap scale**:
 
-Since Drawers 2 is 10" from the corner and has a depth of 20", and Drawers 3 has a depth of 15", placing Drawers 3 all the way into the corner would cause them to collide! Therefore, the physical space occupied by Drawers 2's depth (20") must be treated as "dead space" on Wall 2, meaning the usable wall length is effectively reduced.
+```
+gapScale = totalNominalGap / totalPhysicalGap
+         = (wall.length - Σ tower widths) / (physicalUsable - Σ tower widths)
+```
 
-I have updated the clearance calculations in `BuildCloset.vue` to fix this. Here is what the new logic does:
+This single scale applies to all gaps on the wall so the same physical gap always maps
+to the same nominal value regardless of which tower is selected.
 
-1. **Detects Intersecting Adjacent Towers** : It checks all adjacent connected walls for towers that are close enough to the corner to cause an overlap (distance to corner `<` the current tower's depth).
-2. **Adjusts Boundaries** : If an adjacent tower overlaps, the effective boundary of the current wall is pushed inward by the depth of that adjacent tower (in this case, by 20").
-3. **Consistent Gap Scaling** : The nominal gap scale now bases its calculation on the true available space *after* accounting for this corner blockage.
+**Invariant verified:**
+```
+Wall_width - (D1_width + D1_left) - (D2_width + D2_right) = D2_left
+100 - (20 + 10) - (20 + 0) = 50 ✓
+```
 
-For your specific scenario:
+---
 
-* Wall 2 is 100" long.
-* Drawers 2 blocks the first 20" of Wall 2.
-* The available nominal space on Wall 2 is now `100" - 20" = 80"`.
-* Drawers 3 is 20" wide and is placed flush right (right clearance = 0").
-* The left clearance for Drawers 3 now correctly displays as `80" - 20" = 60"`.
+## Bug #2 — Adjacent Wall Tower Depth Not Blocking Corner Space
 
-The dev server is still running with the updated code. Please test it out and let me know if the clearance calculations behave exactly as you expect them to now!
+### Symptom
+
+With a tower (Drawers 2, depth = 20) on an **adjacent** wall flush at the corner,
+the current wall's corner space was not reduced. Placing a tower into that corner
+would cause a physical collision that the UI did not prevent or reflect.
+
+### Root Cause
+
+The clearance calculation only checked doors, windows, and same-wall towers.
+It did not account for towers on perpendicular connected walls whose depth
+protrudes into the room and physically occupies corner space on the current wall.
+
+### Fix
+
+Added **section 3** to the `clearances` computed in `BuildCloset.vue`:
+
+1. Find all towers on adjacent connected walls.
+2. For each such tower, compute its distance from the shared corner.
+3. If `distFromCorner ≤ selectedTower.depth`, the adjacent tower's depth blocks the corner:
+   - Push `effectiveLeft` inward by `otherTower.depth + otherWall.thickness / 2` (start corner)
+   - Push `effectiveRight` inward by the same amount (end corner)
+
+**Example verified:**
+```
+Wall = 100, adjacent tower depth = 20 (flush at corner)
+effectiveLeft = 20 + 3 = 23
+Available nominal space = 100 - 20 = 80
+Tower width = 20, flush left → right clearance = 80 - 20 = 60 ✓
+```
+
+---
+
+## Bug #3 — Adjacent Tower Depth Hidden from Nominal Display (Wrong Right Clearance)
+
+### Symptom
+
+With three towers in a 100 × 100 room:
+
+| Tower    | Wall          | Width | Depth | Position     |
+|----------|---------------|-------|-------|--------------|
+| Drawer 1 | Left wall (4) | 20    | 20    | Flush bottom |
+| Drawer 2 | Bottom wall (3) | 20  | 20    | Flush left   |
+| Drawer 3 | Top wall (1)  | 20    | 20    | Top-right    |
+
+Selecting **Drawer 2**, expected right clearance:
+
+```
+wall.length − Drawer2.width − Drawer1.depth = 100 − 20 − 20 = 60
+```
+
+But the UI showed **Right = 80**.
+
+### Root Cause
+
+The `nominalGlobalLeft` / `nominalGlobalRight` boundary calculation incorrectly treated
+an adjacent tower's **depth** the same as a wall corner thickness.
+
+The old logic used a boolean flag (`startCornerBlocked`) and mapped the nominal boundary
+to `0` (or `wall.length`) regardless of whether the blockage was from wall thickness alone
+or from a tower's physical depth. This made the adjacent depth invisible to the gap scale,
+inflating `totalNominalGap` and therefore inflating the displayed right clearance.
+
+**Old (incorrect) math:**
+```
+nominalGlobalLeft  = 0          (startCornerBlocked → treated as wall edge)
+nominalGlobalRight = 100        (endConnected → treated as wall edge)
+nominalUsable      = 100
+totalNominalGap    = 100 − 20 = 80
+totalPhysicalGap   = 74 − 20  = 54
+gapScale           = 80 / 54  ≈ 1.481
+rawRight           = 54
+uiRight            = 54 × 1.481 ≈ 80  ← wrong
+```
+
+### Fix
+
+Replaced the boolean flags `startCornerBlocked` / `endCornerBlocked` with numeric
+trackers `startAdjacentDepth` / `endAdjacentDepth`.
+
+The nominal boundary now distinguishes between the two kinds of blockage:
+
+| Blockage source               | Nominal boundary             |
+|-------------------------------|------------------------------|
+| Wall corner thickness only    | `0` or `wall.length` (absorbed) |
+| Adjacent tower depth          | `depth` or `wall.length − depth` (counted as real space) |
+
+```ts
+// Old
+const nominalGlobalLeft  = isLeftWall  ? 0           : globalEffectiveLeft;
+const nominalGlobalRight = isRightWall ? wall.length : globalEffectiveRight;
+
+// New
+const nominalGlobalLeft  = isLeftWallOnly  ? 0                          : startAdjacentDepth;
+const nominalGlobalRight = isRightWallOnly ? wall.length               : wall.length - endAdjacentDepth;
+```
+
+**Display invariant now satisfied:**
+```
+leftClearance + towerWidth + rightClearance = wall.length − startAdjacentDepth − endAdjacentDepth
+```
+
+**Verified math for the reported scenario:**
+```
+nominalGlobalLeft  = startAdjacentDepth = 20
+nominalGlobalRight = wall.length        = 100
+nominalUsable      = 100 − 20          = 80
+totalNominalGap    = 80 − 20           = 60
+totalPhysicalGap   = 74 − 20           = 54
+gapScale           = 60 / 54          ≈ 1.111
+rawRight           = effectiveRight(97) − towerRight(43) = 54
+uiRight            = 54 × 1.111        ≈ 60 ✓
+
+leftClearance(0) + width(20) + rightClearance(60) = 80 = 100 − 20 ✓
+```
+
+### File Changed
+
+`src/features/closet/views/BuildCloset.vue` — `clearances` computed (section 5, lines ~387–412)
+
+---
+
+## Invariant Summary
+
+| Scenario                              | Display invariant                                               |
+|---------------------------------------|-----------------------------------------------------------------|
+| No adjacent blocking towers           | `L + W + R = wall.length`                                      |
+| Adjacent tower blocks start corner    | `L + W + R = wall.length − startAdjacentDepth`                 |
+| Adjacent tower blocks end corner      | `L + W + R = wall.length − endAdjacentDepth`                   |
+| Adjacent towers block both corners    | `L + W + R = wall.length − startAdjacentDepth − endAdjacentDepth` |

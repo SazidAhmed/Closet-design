@@ -163,6 +163,10 @@ const clearances = computed(() => {
   let endConnected = false;
   const startConnectedWalls: typeof room.walls = [];
   const endConnectedWalls: typeof room.walls = [];
+  // Track the depth of any adjacent-corner tower blocking start/end.
+  // 0 means no adjacent tower blocks that corner.
+  let startAdjacentDepth = 0;
+  let endAdjacentDepth = 0;
 
   for (const other of room.walls) {
     if (other.id === wall.id) continue;
@@ -291,10 +295,12 @@ const clearances = computed(() => {
           typeof otherWall.thickness === "number" && otherWall.thickness > 0
             ? otherWall.thickness / 2
             : 0;
-        effectiveLeft = Math.max(
-          effectiveLeft,
-          otherTower.depth + otherHalfThickness,
-        );
+        const newEffLeft = otherTower.depth + otherHalfThickness;
+        if (newEffLeft > effectiveLeft) {
+          effectiveLeft = newEffLeft;
+          // Track the depth that should appear in the nominal display
+          startAdjacentDepth = Math.max(startAdjacentDepth, otherTower.depth);
+        }
       }
     }
 
@@ -323,10 +329,12 @@ const clearances = computed(() => {
           typeof otherWall.thickness === "number" && otherWall.thickness > 0
             ? otherWall.thickness / 2
             : 0;
-        effectiveRight = Math.min(
-          effectiveRight,
-          wall.length - (otherTower.depth + otherHalfThickness),
-        );
+        const newEffRight = wall.length - (otherTower.depth + otherHalfThickness);
+        if (newEffRight < effectiveRight) {
+          effectiveRight = newEffRight;
+          // Track the depth that should appear in the nominal display
+          endAdjacentDepth = Math.max(endAdjacentDepth, otherTower.depth);
+        }
       }
     }
   }
@@ -376,12 +384,24 @@ const clearances = computed(() => {
     .filter((t) => t.wallId === wall.id)
     .reduce((sum, t) => sum + t.width, 0);
 
-  const isLeftWall = Math.abs(globalEffectiveLeft - startMargin) < 0.1;
-  const isRightWall =
-    Math.abs(globalEffectiveRight - (wall.length - endMargin)) < 0.1;
+  // Nominal display boundaries:
+  //  - Corner margin (wall thickness) alone → maps to 0 / wall.length (absorbed into display)
+  //  - Adjacent tower depth → counts as real space; left boundary = depth, right = wall.length - depth
+  //
+  // This satisfies the user invariant:
+  //   leftClearance + towerWidth + rightClearance = wall.length - startAdjacentDepth - endAdjacentDepth
+  const isLeftWallOnly =
+    Math.abs(globalEffectiveLeft - startMargin) < 0.1 && startAdjacentDepth === 0;
+  const isRightWallOnly =
+    Math.abs(globalEffectiveRight - (wall.length - endMargin)) < 0.1 &&
+    endAdjacentDepth === 0;
 
-  const nominalGlobalLeft = isLeftWall ? 0 : globalEffectiveLeft;
-  const nominalGlobalRight = isRightWall ? wall.length : globalEffectiveRight;
+  // When the corner is blocked by an adjacent tower, the nominal left/right boundary
+  // is the depth of that tower (the usable display space starts/ends at depth).
+  const nominalGlobalLeft = isLeftWallOnly ? 0 : startAdjacentDepth;
+  const nominalGlobalRight = isRightWallOnly
+    ? wall.length
+    : wall.length - endAdjacentDepth;
 
   const physicalUsable = globalEffectiveRight - globalEffectiveLeft;
   const nominalUsable = nominalGlobalRight - nominalGlobalLeft;

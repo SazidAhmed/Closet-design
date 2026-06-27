@@ -8,12 +8,12 @@ import { CM_PER_INCH, createDefaultRoom, createItemId, createWallId } from '../f
 import { ROOM_CONSTRAINTS } from '../features/closet/domain/constraints'
 
 function clampWall(v: number): number {
-  return Math.max(ROOM_CONSTRAINTS.wallLength.min, Math.min(ROOM_CONSTRAINTS.wallLength.max, Math.round(v)))
+  return Math.max(ROOM_CONSTRAINTS.wallLength.min, Math.min(ROOM_CONSTRAINTS.wallLength.max, v))
 }
 
 function clampItemSize(v: number): number {
   if (!Number.isFinite(v)) return 1
-  return Math.max(1, Math.round(v))
+  return Math.max(1, v)
 }
 
 function roundToTenth(v: number): number {
@@ -66,8 +66,8 @@ function recalculateDoorWindowSidePositions(item: PlacedItem, walls: Room['walls
   const leftPosition = Math.max(0, centerOffsetIn - itemWidthIn / 2)
   const rightPosition = Math.max(0, wallLengthIn - (centerOffsetIn + itemWidthIn / 2))
 
-  item.leftPosition = roundToTenth(leftPosition)
-  item.rightPosition = roundToTenth(rightPosition)
+  item.leftPosition = leftPosition
+  item.rightPosition = rightPosition
 }
 
 function snapped45Segment(start: Vec2, target: Vec2): { angle: number; length: number; end: Vec2 } | null {
@@ -1128,7 +1128,7 @@ export const useRoomStore = defineStore('room', {
       }
       const segment = snapped45Segment(startPos, [x, y])
       if (!segment) return
-      const wallThickness = Math.max(1, Math.min(30, Math.round(thickness)))
+      const wallThickness = Math.max(1, Math.min(30, thickness))
 
       walls.push({
         id: createWallId(),
@@ -1157,7 +1157,7 @@ export const useRoomStore = defineStore('room', {
       const dy = first.position[1] - endOfLast[1]
       const dist = Math.sqrt(dx * dx + dy * dy)
       if (dist < 1) return // already closed
-      const wallThickness = Math.max(1, Math.min(30, Math.round(thickness)))
+      const wallThickness = Math.max(1, Math.min(30, thickness))
       const targetFirst: Vec2 = [first.position[0], first.position[1]]
       const snapped = snapped45Segment(endOfLast, targetFirst)
 

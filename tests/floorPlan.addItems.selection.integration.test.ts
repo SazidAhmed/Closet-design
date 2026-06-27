@@ -110,8 +110,8 @@ describe('FloorPlan add item selection behavior', () => {
     const doorWallLengthIn = doorWall.length / CM_PER_INCH
     const doorWidthIn = door.width / CM_PER_INCH
 
-    expect(door.leftPosition).toBe(roundToTenth((doorWallLengthIn - doorWidthIn) / 2))
-    expect(door.rightPosition).toBe(roundToTenth((doorWallLengthIn - doorWidthIn) / 2))
+    expect(door.leftPosition).toBeCloseTo((doorWallLengthIn - doorWidthIn) / 2, 2)
+    expect(door.rightPosition).toBeCloseTo((doorWallLengthIn - doorWidthIn) / 2, 2)
     expect(roomStore.items[0]?.elevation).toBe(0) // Door default elevation is 0
 
     const firstItemId = door.id
@@ -120,9 +120,9 @@ describe('FloorPlan add item selection behavior', () => {
 
     const movedDoor = roomStore.items[0]!
     const movedCenterIn = 0.2 * doorWallLengthIn
-    expect(movedDoor.leftPosition).toBe(roundToTenth(movedCenterIn - doorWidthIn / 2))
-    expect(movedDoor.rightPosition).toBe(
-      roundToTenth(doorWallLengthIn - (movedCenterIn + doorWidthIn / 2)),
+    expect(movedDoor.leftPosition).toBeCloseTo(movedCenterIn - doorWidthIn / 2, 2)
+    expect(movedDoor.rightPosition).toBeCloseTo(
+      doorWallLengthIn - (movedCenterIn + doorWidthIn / 2), 2,
     )
 
     roomStore.moveItem(firstItemId, 0)
@@ -130,13 +130,13 @@ describe('FloorPlan add item selection behavior', () => {
 
     const startClampedDoor = roomStore.items[0]!
     expect(startClampedDoor.leftPosition).toBe(0)
-    expect(startClampedDoor.rightPosition).toBe(roundToTenth(doorWallLengthIn - doorWidthIn))
+    expect(startClampedDoor.rightPosition).toBeCloseTo(doorWallLengthIn - doorWidthIn, 2)
 
     roomStore.moveItem(firstItemId, 1)
     await nextTick()
 
     const endClampedDoor = roomStore.items[0]!
-    expect(endClampedDoor.leftPosition).toBe(roundToTenth(doorWallLengthIn - doorWidthIn))
+    expect(endClampedDoor.leftPosition).toBeCloseTo(doorWallLengthIn - doorWidthIn, 2)
     expect(endClampedDoor.rightPosition).toBe(0)
 
     const leftPositionInput = wrapper.find('[data-testid="left-position-input"]')
@@ -146,7 +146,7 @@ describe('FloorPlan add item selection behavior', () => {
 
     const leftEditedDoor = roomStore.items[0]!
     expect(leftEditedDoor.leftPosition).toBe(10)
-    expect(leftEditedDoor.rightPosition).toBe(roundToTenth(doorWallLengthIn - (10 + doorWidthIn)))
+    expect(leftEditedDoor.rightPosition).toBeCloseTo(doorWallLengthIn - (10 + doorWidthIn), 2)
 
     const rightPositionInput = wrapper.find('[data-testid="right-position-input"]')
     expect(rightPositionInput.exists()).toBe(true)
@@ -155,7 +155,7 @@ describe('FloorPlan add item selection behavior', () => {
 
     const rightEditedDoor = roomStore.items[0]!
     expect(rightEditedDoor.rightPosition).toBe(20)
-    expect(rightEditedDoor.leftPosition).toBe(roundToTenth(doorWallLengthIn - (20 + doorWidthIn)))
+    expect(rightEditedDoor.leftPosition).toBeCloseTo(doorWallLengthIn - (20 + doorWidthIn), 2)
 
     const addWindowButton = findButtonByText(wrapper, 'Add Window')
     expect(addWindowButton).toBeTruthy()
@@ -173,8 +173,8 @@ describe('FloorPlan add item selection behavior', () => {
     const windowWallLengthIn = windowWall.length / CM_PER_INCH
     const windowWidthIn = window.width / CM_PER_INCH
 
-    expect(window.leftPosition).toBe(roundToTenth((windowWallLengthIn - windowWidthIn) / 2))
-    expect(window.rightPosition).toBe(roundToTenth((windowWallLengthIn - windowWidthIn) / 2))
+    expect(window.leftPosition).toBeCloseTo((windowWallLengthIn - windowWidthIn) / 2, 2)
+    expect(window.rightPosition).toBeCloseTo((windowWallLengthIn - windowWidthIn) / 2, 2)
     expect(roomStore.items[1]?.elevation).toBe(42) // Window default elevation is 42
 
     roomStore.moveItem(window.id, 0)
@@ -182,13 +182,13 @@ describe('FloorPlan add item selection behavior', () => {
 
     const startClampedWindow = roomStore.items[1]!
     expect(startClampedWindow.leftPosition).toBe(0)
-    expect(startClampedWindow.rightPosition).toBe(roundToTenth(windowWallLengthIn - windowWidthIn))
+    expect(startClampedWindow.rightPosition).toBeCloseTo(windowWallLengthIn - windowWidthIn, 2)
 
     roomStore.moveItem(window.id, 1)
     await nextTick()
 
     const endClampedWindow = roomStore.items[1]!
-    expect(endClampedWindow.leftPosition).toBe(roundToTenth(windowWallLengthIn - windowWidthIn))
+    expect(endClampedWindow.leftPosition).toBeCloseTo(windowWallLengthIn - windowWidthIn, 2)
     expect(endClampedWindow.rightPosition).toBe(0)
 
     wrapper.unmount()
