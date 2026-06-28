@@ -26,7 +26,7 @@ const selection = useSelectionStore();
 const { fmt, fromCm, toCm } = useUnit();
 
 function fromCmDisplay(cm: number): number {
-  return Math.round(fromCm(cm) * 10) / 10;
+  return Math.round(fromCm(cm) * 10000) / 10000;
 }
 
 const selectedDoorMode = ref<ClosetDoorMode>("without_doors");
@@ -918,7 +918,7 @@ function towerSubtitle(tower: {
             <input
               class="number-input"
               type="number"
-              step="0.1"
+              step="0.0001"
               :min="fromCmDisplay(selectedTowerLimits.minW)"
               :max="fromCmDisplay(selectedTowerLimits.maxW)"
               :value="fromCmDisplay(selectedTower.width)"
@@ -934,7 +934,7 @@ function towerSubtitle(tower: {
             <input
               class="number-input"
               type="number"
-              step="0.1"
+              step="0.0001"
               :min="fromCmDisplay(selectedTowerLimits.minD)"
               :max="fromCmDisplay(selectedTowerLimits.maxD)"
               :value="fromCmDisplay(selectedTower.depth)"
@@ -950,7 +950,7 @@ function towerSubtitle(tower: {
             <input
               class="number-input"
               type="number"
-              step="0.1"
+              step="0.0001"
               :min="fromCmDisplay(selectedTowerLimits.minH)"
               :max="
                 fromCmDisplay(Math.min(selectedTowerLimits.maxH, maxHeightCm))
@@ -969,7 +969,7 @@ function towerSubtitle(tower: {
               id="tower-outset-input"
               class="number-input"
               type="number"
-              step="0.1"
+              step="0.0001"
               min="0"
               :value="fromCmDisplay(selectedTower.outset ?? 0)"
               @change="onDimensionInput('outset', $event)"
@@ -985,7 +985,7 @@ function towerSubtitle(tower: {
               id="tower-elevation-input"
               class="number-input"
               type="number"
-              step="0.1"
+              step="0.0001"
               min="0"
               :max="fromCmDisplay(maxElevationCm)"
               :value="fromCmDisplay(selectedTower.elevation ?? 0)"

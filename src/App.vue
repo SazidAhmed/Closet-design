@@ -21,6 +21,22 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 onMounted(() => {
+  // Check for token passed via URL from the Website project.
+  // Use URLSearchParams directly — route.query may not be ready yet during
+  // the initial navigation when onMounted fires.
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("token");
+  if (token) {
+    // Save the token for API authentication
+    localStorage.setItem("access_token", token);
+
+    // Remove the token from the URL for security (so it isn't copied/shared)
+    params.delete("token");
+    const newSearch = params.toString();
+    const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : "");
+    window.history.replaceState({}, "", newUrl);
+  }
+
   // Try to restore a previously saved design
   history.loadFromLocalStorage();
   // Start recording undo history + auto-saving
@@ -38,3 +54,4 @@ onUnmounted(() => {
 <template>
   <RouterView />
 </template>
+
