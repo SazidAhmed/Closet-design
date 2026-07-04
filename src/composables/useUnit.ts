@@ -14,18 +14,28 @@ export function useUnit() {
   const isCm = computed(() => app.units === 'cm')
 
   /**
+   * Format a number to `d` decimal places (using rounding to handle floating point precision).
+   */
+  function truncateToDecimals(value: number, d: number): string {
+    const factor = Math.pow(10, d)
+    const truncated = Math.round(value * factor) / factor
+    return truncated.toFixed(d)
+  }
+
+  /**
    * Format a value (always stored internally in cm) for display.
+   * Rounds to the requested decimal places (default 4).
    * @param cm — the value in centimeters
-   * @param decimals — decimal places (default 1 for inches, 0 for cm)
+   * @param decimals — decimal places (default 4)
    */
   function fmt(cm: number, decimals?: number): string {
     if (app.units === 'in') {
       const inches = cm / CM_PER_INCH
-      const d = decimals ?? 1
-      return `${inches.toFixed(d)}″`
+      const d = decimals ?? 4
+      return `${truncateToDecimals(inches, d)}″`
     }
-    const d = decimals ?? 0
-    return `${cm.toFixed(d)} cm`
+    const d = decimals ?? 4
+    return `${truncateToDecimals(cm, d)} cm`
   }
 
   /**

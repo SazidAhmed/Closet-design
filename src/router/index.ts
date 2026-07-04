@@ -5,7 +5,7 @@ export const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: '/closet/type',
+      redirect: '/closet/floorplan',
     },
     {
       path: '/closet/type',
@@ -32,5 +32,30 @@ export const router = createRouter({
       name: 'Review',
       component: () => import('../features/closet/views/ReviewPage.vue'),
     },
+    {
+      path: '/unauthorized',
+      name: 'Unauthorized',
+      component: () => import('../views/UnauthorizedPage.vue'),
+      meta: { public: true },
+    },
   ],
+})
+
+// Navigation guard: require a valid auth token to access the app.
+// Token can come from:
+//   1. URL query param (?token=...) — set by the Dia-Website "Design Closet" button
+//   2. localStorage (access_token) — persisted from a previous session / tab refresh
+router.beforeEach((to) => {
+  // Allow the unauthorized page itself (avoid redirect loop)
+  if (to.meta.public) return true
+
+  const urlToken = to.query.token as string | undefined
+  const storedToken = localStorage.getItem('access_token')
+
+  if (urlToken || storedToken) {
+    return true
+  }
+
+  // No token found — block access
+  return { name: 'Unauthorized' }
 })

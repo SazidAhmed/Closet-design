@@ -29,6 +29,12 @@ function fromCmDisplay(cm: number): number {
   return Math.round(fromCm(cm) * 10000) / 10000;
 }
 
+/** Format a number to 4 decimal places (using rounding for precision). */
+function truncTo4(value: number): string {
+  const truncated = Math.round(value * 10000) / 10000;
+  return truncated.toFixed(4);
+}
+
 const selectedDoorMode = ref<ClosetDoorMode>("without_doors");
 const showElevation = ref(false);
 
@@ -286,9 +292,13 @@ const clearances = computed(() => {
       } else if (hit(wallStartPt, oEnd)) {
         distFromCorner = Math.max(0, otherWall.length - otherRight);
       }
-      
-      const otherHalfThickness = typeof otherWall.thickness === "number" && otherWall.thickness > 0 ? otherWall.thickness / 2 : 0;
-      let oStartMargin = 0, oEndMargin = 0;
+
+      const otherHalfThickness =
+        typeof otherWall.thickness === "number" && otherWall.thickness > 0
+          ? otherWall.thickness / 2
+          : 0;
+      let oStartMargin = 0,
+        oEndMargin = 0;
       for (const w of room.walls) {
         if (w.id === otherWall.id) continue;
         const wStart: [number, number] = [w.position[0], w.position[1]];
@@ -296,18 +306,31 @@ const clearances = computed(() => {
           w.position[0] + Math.cos(w.angle) * w.length,
           w.position[1] + Math.sin(w.angle) * w.length,
         ];
-        if (hit(oStart, wStart) || hit(oStart, wEnd)) oStartMargin = otherHalfThickness;
-        if (hit(oEnd, wStart) || hit(oEnd, wEnd)) oEndMargin = otherHalfThickness;
+        if (hit(oStart, wStart) || hit(oStart, wEnd))
+          oStartMargin = otherHalfThickness;
+        if (hit(oEnd, wStart) || hit(oEnd, wEnd))
+          oEndMargin = otherHalfThickness;
       }
       const totalOtherWidth = closet.towers
         .filter((t) => t.wallId === otherWall.id)
-        .reduce((sum, t) => sum + (typeof t.width === "number" ? t.width : 0), 0);
-      const oPhysUsable = Math.max(0, otherWall.length - oStartMargin - oEndMargin);
+        .reduce(
+          (sum, t) => sum + (typeof t.width === "number" ? t.width : 0),
+          0,
+        );
+      const oPhysUsable = Math.max(
+        0,
+        otherWall.length - oStartMargin - oEndMargin,
+      );
       const oPhysGap = Math.max(0, oPhysUsable - totalOtherWidth);
       const oNomGap = Math.max(0, otherWall.length - totalOtherWidth);
       const oGapScale = oPhysGap > 0.1 ? oNomGap / oPhysGap : 1;
 
-      let uiClearance = Math.max(0, distFromCorner - (hit(wallStartPt, oStart) ? oStartMargin : oEndMargin)) * oGapScale;
+      let uiClearance =
+        Math.max(
+          0,
+          distFromCorner -
+            (hit(wallStartPt, oStart) ? oStartMargin : oEndMargin),
+        ) * oGapScale;
 
       if (uiClearance < tower.depth - epsilon) {
         // The adjacent wall's tower footprint starts at otherWall.thickness/2
@@ -345,8 +368,12 @@ const clearances = computed(() => {
         distFromCorner = Math.max(0, otherWall.length - otherRight);
       }
 
-      const otherHalfThickness = typeof otherWall.thickness === "number" && otherWall.thickness > 0 ? otherWall.thickness / 2 : 0;
-      let oStartMargin = 0, oEndMargin = 0;
+      const otherHalfThickness =
+        typeof otherWall.thickness === "number" && otherWall.thickness > 0
+          ? otherWall.thickness / 2
+          : 0;
+      let oStartMargin = 0,
+        oEndMargin = 0;
       for (const w of room.walls) {
         if (w.id === otherWall.id) continue;
         const wStart: [number, number] = [w.position[0], w.position[1]];
@@ -354,18 +381,30 @@ const clearances = computed(() => {
           w.position[0] + Math.cos(w.angle) * w.length,
           w.position[1] + Math.sin(w.angle) * w.length,
         ];
-        if (hit(oStart, wStart) || hit(oStart, wEnd)) oStartMargin = otherHalfThickness;
-        if (hit(oEnd, wStart) || hit(oEnd, wEnd)) oEndMargin = otherHalfThickness;
+        if (hit(oStart, wStart) || hit(oStart, wEnd))
+          oStartMargin = otherHalfThickness;
+        if (hit(oEnd, wStart) || hit(oEnd, wEnd))
+          oEndMargin = otherHalfThickness;
       }
       const totalOtherWidth = closet.towers
         .filter((t) => t.wallId === otherWall.id)
-        .reduce((sum, t) => sum + (typeof t.width === "number" ? t.width : 0), 0);
-      const oPhysUsable = Math.max(0, otherWall.length - oStartMargin - oEndMargin);
+        .reduce(
+          (sum, t) => sum + (typeof t.width === "number" ? t.width : 0),
+          0,
+        );
+      const oPhysUsable = Math.max(
+        0,
+        otherWall.length - oStartMargin - oEndMargin,
+      );
       const oPhysGap = Math.max(0, oPhysUsable - totalOtherWidth);
       const oNomGap = Math.max(0, otherWall.length - totalOtherWidth);
       const oGapScale = oPhysGap > 0.1 ? oNomGap / oPhysGap : 1;
 
-      let uiClearance = Math.max(0, distFromCorner - (hit(wallEndPt, oStart) ? oStartMargin : oEndMargin)) * oGapScale;
+      let uiClearance =
+        Math.max(
+          0,
+          distFromCorner - (hit(wallEndPt, oStart) ? oStartMargin : oEndMargin),
+        ) * oGapScale;
 
       if (uiClearance < tower.depth - epsilon) {
         // Symmetric: account for the adjacent wall's half-thickness on the right.
@@ -373,7 +412,8 @@ const clearances = computed(() => {
           typeof otherWall.thickness === "number" && otherWall.thickness > 0
             ? otherWall.thickness / 2
             : 0;
-        const newEffRight = wall.length - (otherTower.depth + otherHalfThickness);
+        const newEffRight =
+          wall.length - (otherTower.depth + otherHalfThickness);
         if (newEffRight < effectiveRight) {
           effectiveRight = newEffRight;
           // Track the depth that should appear in the nominal display
@@ -435,7 +475,8 @@ const clearances = computed(() => {
   // This satisfies the user invariant:
   //   leftClearance + towerWidth + rightClearance = wall.length - startAdjacentDepth - endAdjacentDepth
   const isLeftWallOnly =
-    Math.abs(globalEffectiveLeft - startMargin) < 0.1 && startAdjacentDepth === 0;
+    Math.abs(globalEffectiveLeft - startMargin) < 0.1 &&
+    startAdjacentDepth === 0;
   const isRightWallOnly =
     Math.abs(globalEffectiveRight - (wall.length - endMargin)) < 0.1 &&
     endAdjacentDepth === 0;
@@ -835,6 +876,26 @@ function towerSubtitle(tower: {
             </button>
           </div>
         </section>
+
+        <section class="panel-section">
+          <h2 class="section-title">Custom Parts</h2>
+          <div class="category-list">
+            <button class="category-card">
+              <div>
+                <strong>Panel</strong>
+                <span>W: 0.7500"</span>
+              </div>
+              <Plus :size="16" />
+            </button>
+            <button class="category-card">
+              <div>
+                <strong>Filler</strong>
+                <span>D: 0.7500"</span>
+              </div>
+              <Plus :size="16" />
+            </button>
+          </div>
+        </section>
       </aside>
 
       <main class="builder-workspace">
@@ -1009,7 +1070,7 @@ function towerSubtitle(tower: {
                   step="0.0001"
                   min="0"
                   :max="fromCm(clearances.left + clearances.right)"
-                  :value="Number(fromCm(clearances.left)).toFixed(4)"
+                  :value="truncTo4(fromCm(clearances.left))"
                   @change="onClearanceInput('left', $event)"
                 />
               </div>
@@ -1025,7 +1086,7 @@ function towerSubtitle(tower: {
                   step="0.0001"
                   min="0"
                   :max="fromCm(clearances.left + clearances.right)"
-                  :value="Number(fromCm(clearances.right)).toFixed(4)"
+                  :value="truncTo4(fromCm(clearances.right))"
                   @change="onClearanceInput('right', $event)"
                 />
               </div>

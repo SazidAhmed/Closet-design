@@ -1,0 +1,186 @@
+# Closet Catalog Data from Database — Implementation Plan
+
+## Overview
+
+The closet app currently uses **static catalog data** hardcoded in `closetCatalogs.ts`. The goal is to replace this with **live data from the backend database** via a new API endpoint, while keeping all existing catalog selection logic in the domain helper so the UI doesn't care where the data came from.
+
+The plan follows the backend/API follow-up section in `plan.md`, and requires coordinated changes in both the **Laravel backend** and the **Vue Closet frontend**.
+
+---
+
+## What We're Building
+
+### API Shape (from `plan.md`)
+
+```
+GET /api/closet/catalog-categories?doorMode=without_doors
+GET /api/closet/catalog-categories?doorMode=with_doors
+```
+
+**Response:** `ClosetCatalogCategory[]` — the same shape already used in `closetCatalogs.ts`.
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Database columns `min_w`, `max_w`, `min_d`, `max_d`, `min_h`, `max_h` do NOT yet exist on the `catalogs` table.**
+> The `table.md` doc specifies an `ALTER TABLE` to add these. We need to create a migration for this.
+
+> [!IMPORTANT]
+> **A new mapping table `closet_catalog_groups` is recommended in `table.md`** to store the closet door mode / category groupings, instead of hardcoding `UNION ALL` lists. This plan includes creating that table and its seeder.
+
+> [!WARNING]
+> **The frontend currently reads from the static `CLOSET_CATALOG_CATEGORIES` array directly.** Switching to an async API call means we need a loading state and a graceful fallback (use static data as default until the API response arrives).
+
+---
+
+## Open Questions
+
+> [!IMPORTANT]
+> 1. Should the new `/api/closet/catalog-categories` endpoint be **public** (no auth) or **protected** (require Sanctum token)? The Closet app already passes a token via URL, so protected is likely fine.
+> 2. Catalogs 214 and 215 are corner catalogs. Should they appear in the API response under `cornerCatalogIds`, or are they handled separately?
+> 3. Should we seed the `closet_catalog_groups` table now with the data from `table.md`, or do you want to manage it manually through the admin panel?
+
+---
+
+## Proposed Changes
+
+---
+
+### Backend — `h:\laragon\www\Dia-Backend`
+
+#### [NEW] Migration: add dimension columns to `catalogs`
+
+#### `[NEW]` `database/migrations/2026_06_28_000001_add_closet_dimensions_to_catalogs_table.php`
+
+Adds `min_w`, `max_w`, `min_d`, `max_d`, `min_h`, `max_h` nullable decimal columns to the `catalogs` table (as specified in `table.md`).
+
+---
+
+#### [NEW] Migration: create `closet_catalog_groups` table
+
+#### `[NEW]` `database/migrations/2026_06_28_000002_create_closet_catalog_groups_table.php`
+
+Creates the mapping table that links `door_mode + category_code + category_name` → `catalog_id`, with `sort_order` and `is_corner_catalog` columns.
+
+---
+
+#### [NEW] Seeder: `ClosetCatalogGroupsSeeder`
+
+#### `[NEW]` `database/seeders/ClosetCatalogGroupsSeeder.php`
+
+Seeds all 25 rows from the mapping defined in `table.md` (15 without-doors rows + 8 with-doors rows + 2 corner catalog rows for 214, 215).
+
+---
+
+#### [MODIFY] `app/Models/Catalog.php`
+
+Add `min_w`, `max_w`, `min_d`, `max_d`, `min_h`, `max_h` to `$fillable` and `$casts`.
+
+---
+
+#### [NEW] `app/Models/ClosetCatalogGroup.php`
+
+New Eloquent model for the `closet_catalog_groups` table.
+
+---
+
+#### [NEW] `app/Http/Controllers/Product/ClosetCatalogController.php`
+
+New controller with one public method:
+
+```php
+public function catalogCategories(Request $request)
+```
+
+Query logic:
+1. Accept `doorMode` query param (`without_doors` | `with_doors`).
+2. Join `closet_catalog_groups` → `catalogs` (to get `min_w/max_w` etc.).
+3. Aggregate per `(door_mode, category_code, category_name)` — MIN/MAX of dimensions.
+4. Return `ClosetCatalogCategory[]` JSON shaped to match what the frontend expects.
+
+---
+
+#### [MODIFY] `routes/api.php`
+
+Register the new route inside the existing `auth:sanctum` middleware group:
+
+```php
+// Closet Catalog
+Route::get('/closet/catalog-categories', [ClosetCatalogController::class, 'catalogCategories']);
+```
+
+---
+
+### Frontend — `h:\Vue\Closet`
+
+#### [NEW] `src/api/closetApi.ts`
+
+Thin API module using `fetch` (or `axios` if already available):
+
+```ts
+export async function fetchClosetCatalogCategories(
+  doorMode: ClosetDoorMode,
+): Promise<ClosetCatalogCategory[]>
+```
+
+- Reads the auth token from `localStorage` (already stored from the previous token-sharing feature).
+- Calls `GET /api/closet/catalog-categories?doorMode={doorMode}`.
+- Maps the JSON response into `ClosetCatalogCategory[]`.
+
+---
+
+#### [MODIFY] `src/features/closet/domain/closetCatalogs.ts`
+
+- Keep all types, helpers (`resolveCatalogForTower`, `clampTowerWidth`, etc.) and `CLOSET_CATALOG_CATEGORIES` static fallback **unchanged**.
+- Add an exported `loadCatalogCategories(doorMode)` async function that:
+  1. Calls `fetchClosetCatalogCategories`.
+  2. Returns the result, or falls back to static data on error.
+
+---
+
+#### [MODIFY] `src/features/closet/views/DesignCloset.vue` (or the store)
+
+- On mount, call `loadCatalogCategories` for both door modes and store the result.
+- Show a loading indicator until data arrives.
+- Fall back to the static `CLOSET_CATALOG_CATEGORIES` if the API fails.
+
+**Option A — Store-level loading (recommended):**  
+Add `catalogCategories` state + `loadCatalogs()` action to `useClosetStore` or a new `useCatalogStore`.
+
+**Option B — Component-level loading:**  
+Load in `DesignCloset.vue` `onMounted` and keep result in local reactive state.
+
+> [!IMPORTANT]
+> **Decision needed:** Should catalog data live in `useClosetStore`, or in a separate lightweight `useCatalogStore`? A separate store keeps concerns clean.
+
+---
+
+## Verification Plan
+
+### Backend
+```bash
+# In h:\laragon\www\Dia-Backend
+php artisan migrate
+php artisan db:seed --class=ClosetCatalogGroupsSeeder
+```
+
+Then hit the API manually:
+```
+GET http://localhost/api/closet/catalog-categories?doorMode=without_doors
+GET http://localhost/api/closet/catalog-categories?doorMode=with_doors
+```
+
+### Frontend
+```bash
+# In h:\Vue\Closet
+npm run build
+npm test
+```
+
+Manually verify in the running dev server:
+- Open the Design Closet step.
+- Confirm categories load from the API (not static data).
+- Confirm fallback works by temporarily breaking the API URL.
+- Confirm door mode switching still shows correct categories.

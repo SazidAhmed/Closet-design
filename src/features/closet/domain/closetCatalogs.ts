@@ -307,3 +307,46 @@ export function createTowerFromCategory(
     accessories: accessoriesForCategory(categoryCode),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Async loading — fetches live catalog data from the backend and falls back
+// to the static CLOSET_CATALOG_CATEGORIES array if the API is unavailable.
+// ---------------------------------------------------------------------------
+
+/**
+ * Load catalog categories for a given door mode from the backend API.
+ * Falls back to the static catalog definitions on any network or server error.
+ *
+ * @param doorMode - The door mode to fetch categories for.
+ * @param opts     - Optional fetch options (e.g. AbortSignal).
+ * @returns A promise that always resolves to an array of ClosetCatalogCategory.
+ */
+export async function loadCatalogCategories(
+  doorMode: ClosetDoorMode,
+  opts?: { signal?: AbortSignal },
+): Promise<ClosetCatalogCategory[]> {
+  try {
+    const { fetchClosetCatalogCategories } = await import('../api/closetApi');
+    const categories = await fetchClosetCatalogCategories(doorMode, opts);
+
+    // Basic shape guard: ensure we got a non-empty array before trusting it.
+    if (Array.isArray(categories) && categories.length > 0) {
+      return categories;
+    }
+
+    console.warn(
+      `[closetCatalogs] API returned empty catalog list for ${doorMode}; falling back to static data.`,
+    );
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw err; // Re-throw abort signals so callers can handle them.
+    }
+    console.warn(
+      `[closetCatalogs] Failed to fetch catalog categories from API; using static fallback.`,
+      err,
+    );
+  }
+
+  // Static fallback — always available, no network required.
+  return CLOSET_CATALOG_CATEGORIES.filter((c) => c.doorMode === doorMode);
+}

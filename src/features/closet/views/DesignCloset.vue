@@ -27,6 +27,7 @@ import { AUTO_CREATE_PRESETS } from "../domain/closetTypes";
 import { Plus, Trash2 } from "lucide-vue-next";
 import type { Accessory } from "../domain/types/tower";
 import DesignSlotsDialog from "../../../components/DesignSlotsDialog.vue";
+import type { ClosetDoorMode } from "../domain/closetCatalogs";
 
 const closet = useClosetStore();
 const appStore = useAppStore();
@@ -48,7 +49,7 @@ function swatchStyle(colorHex: string, textureUrl?: string) {
   return { backgroundColor: colorHex };
 }
 
-onMounted(() => {
+onMounted(async () => {
   appStore.setStep("design");
 
   // Keep design viewport focused on room context and wall openings.
@@ -56,7 +57,25 @@ onMounted(() => {
     closet.setTowers([]);
   }
   selection.selectTower(null);
+
+  // Load live catalog data from the backend.
+  // loadCatalogs() falls back to static data on error, so this is always safe.
+  await closet.loadCatalogs();
 });
+
+// ── Catalog sidebar state ─────────────────────────────────────────────────
+const selectedDoorMode = ref<ClosetDoorMode>("without_doors");
+
+const visibleCatalogCategories = computed(() =>
+  closet.catalogCategoriesForMode(selectedDoorMode.value),
+);
+
+function addCatalogTower(categoryCode: string) {
+  closet.addTowerFromCatalog(
+    selectedDoorMode.value,
+    categoryCode as import('../domain/closetCatalogs').ClosetCatalogCategoryCode,
+  );
+}
 
 // ── Tab state ─────────────────────────────────────────────────────────────
 const activeTab = ref<"auto" | "towers" | "edit">("towers");
@@ -298,6 +317,59 @@ const depthLabel = computed(() => {
 
         <!-- Towers Tab -->
         <div v-if="activeTab === 'towers'" class="tab-content">
+
+          <!-- Door Mode toggle -->
+          <div class="door-mode-toggle">
+            <button
+              class="door-mode-btn"
+              :class="{ active: selectedDoorMode === 'without_doors' }"
+              @click="selectedDoorMode = 'without_doors'"
+            >
+              Without Doors
+            </button>
+            <button
+              class="door-mode-btn"
+              :class="{ active: selectedDoorMode === 'with_doors' }"
+              @click="selectedDoorMode = 'with_doors'"
+            >
+              With Doors
+            </button>
+          </div>
+
+          <!-- Category list -->
+          <div class="category-label">CATEGORIES</div>
+          <div v-if="closet.catalogsLoading" class="catalog-loading">
+            Loading catalog…
+          </div>
+          <div v-else class="catalog-category-list">
+            <div
+              v-for="cat in visibleCatalogCategories"
+              :key="cat.categoryCode"
+              class="catalog-category-row"
+            >
+              <div class="catalog-category-info">
+                <span class="catalog-category-name">
+                  {{ cat.categoryName }} ({{ cat.categoryCode }})
+                </span>
+                <span class="catalog-category-depth">
+                  {{ fmt(cat.catalogs[0]?.minD ?? 0) }} – {{ fmt(cat.catalogs[cat.catalogs.length - 1]?.maxD ?? 0) }} depth
+                </span>
+              </div>
+              <button
+                class="catalog-add-btn"
+                :title="`Add ${cat.categoryName} tower`"
+                @click="addCatalogTower(cat.categoryCode)"
+              >
+                <Plus :size="16" />
+              </button>
+            </div>
+          </div>
+
+          <!-- Placed towers list -->
+          <div v-if="closet.towers.length > 0" class="tower-section-label">
+            Closet Towers
+            <span class="tower-count">{{ closet.towers.length }} tower{{ closet.towers.length !== 1 ? 's' : '' }} configured</span>
+          </div>
           <div class="tower-list">
             <button
               v-for="(tower, tIdx) in closet.towers"
@@ -334,68 +406,95 @@ const depthLabel = computed(() => {
                   </button>
                 </div>
               </div>
+              <div class="tower-catalog-badge" v-if="tower.categoryCode">
+                {{ tower.categoryName }} ({{ tower.categoryCode }}) · Catalog {{ tower.catalogId }}
+              </div>
               <div class="tower-dims">
                 {{ fmt(tower.width) }} × {{ fmt(tower.depth) }}
               </div>
             </button>
           </div>
 
-          <button
-            class="action-btn"
-            :disabled="!canAddTower"
-            :title="
-              canAddTower
-                ? 'Add a new tower'
-                : 'Cabinet is full — no room for another tower'
-            "
-            @click="closet.addTower()"
-          >
-            <Plus :size="16" />
-            Add Tower
-          </button>
-
           <!-- Selected tower dimensions -->
           <div v-if="selectedTower" class="tower-config">
             <div class="config-row">
+              <label>Tower Width</label>
+              <input
+                type="number"
+                class="config-input"
+                :value="selectedTower.width"
+                :min="selectedTower.categoryCode
+                  ? closet.catalogCategoriesForMode(selectedTower.doorMode ?? 'without_doors')
+                      .find(c => c.categoryCode === selectedTower!.categoryCode)
+                      ?.catalogs.reduce((min, c) => Math.min(min, c.minW), Infinity) ?? 20
+                  : 20"
+                :max="selectedTower.categoryCode
+                  ? closet.catalogCategoriesForMode(selectedTower.doorMode ?? 'without_doors')
+                      .find(c => c.categoryCode === selectedTower!.categoryCode)
+                      ?.catalogs.reduce((max, c) => Math.max(max, c.maxW), 0) ?? 200
+                  : 200"
+                step="0.1"
+                @change="
+                  closet.setTowerWidth(
+                    selectedTower!.id,
+                    Number(($event.target as HTMLInputElement).value),
+                  )
+                "
+              />
+            </div>
+            <div class="config-row">
               <label>Tower Depth</label>
-              <select
-                class="config-select"
+              <input
+                type="number"
+                class="config-input"
                 :value="selectedTower.depth"
+                :min="selectedTower.categoryCode
+                  ? closet.catalogCategoriesForMode(selectedTower.doorMode ?? 'without_doors')
+                      .find(c => c.categoryCode === selectedTower!.categoryCode)
+                      ?.catalogs.reduce((min, c) => Math.min(min, c.minD), Infinity) ?? 15
+                  : 15"
+                :max="selectedTower.categoryCode
+                  ? closet.catalogCategoriesForMode(selectedTower.doorMode ?? 'without_doors')
+                      .find(c => c.categoryCode === selectedTower!.categoryCode)
+                      ?.catalogs.reduce((max, c) => Math.max(max, c.maxD), 0) ?? 60
+                  : 60"
+                step="0.1"
                 @change="
                   closet.setTowerDepth(
                     selectedTower!.id,
-                    Number(($event.target as HTMLSelectElement).value),
+                    Number(($event.target as HTMLInputElement).value),
                   )
                 "
-              >
-                <option
-                  v-for="opt in [35.5, 40.6, 50.8, 61]"
-                  :key="opt"
-                  :value="opt"
-                >
-                  {{ fmt(opt) }}
-                </option>
-              </select>
+              />
             </div>
             <div class="config-row">
               <label>Tower Height</label>
-              <select
-                class="config-select"
+              <input
+                type="number"
+                class="config-input"
                 :value="selectedTower.height"
+                :min="selectedTower.categoryCode
+                  ? closet.catalogCategoriesForMode(selectedTower.doorMode ?? 'without_doors')
+                      .find(c => c.categoryCode === selectedTower!.categoryCode)
+                      ?.catalogs.reduce((min, c) => Math.min(min, c.minH), Infinity) ?? 84
+                  : 84"
+                :max="selectedTower.categoryCode
+                  ? closet.catalogCategoriesForMode(selectedTower.doorMode ?? 'without_doors')
+                      .find(c => c.categoryCode === selectedTower!.categoryCode)
+                      ?.catalogs.reduce((max, c) => Math.max(max, c.maxH), 0) ?? 250
+                  : 250"
+                step="0.1"
                 @change="
                   closet.setTowerHeight(
                     selectedTower!.id,
-                    Number(($event.target as HTMLSelectElement).value),
+                    Number(($event.target as HTMLInputElement).value),
                   )
                 "
-              >
-                <option v-for="opt in [213.4, 243.8]" :key="opt" :value="opt">
-                  {{ fmt(opt) }}
-                </option>
-              </select>
+              />
             </div>
           </div>
         </div>
+
 
         <!-- Edit Components Tab -->
         <div v-if="activeTab === 'edit'" class="tab-content">
@@ -1063,7 +1162,161 @@ const depthLabel = computed(() => {
   cursor: pointer;
 }
 
-/* Action buttons */
+.config-input {
+  width: 80px;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(30, 41, 59, 0.6);
+  color: #e2e8f0;
+  font-size: 12px;
+  text-align: right;
+}
+
+.config-input:focus {
+  outline: none;
+  border-color: rgba(251, 191, 36, 0.4);
+}
+
+/* Door mode toggle */
+.door-mode-toggle {
+  display: flex;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.door-mode-btn {
+  flex: 1;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.door-mode-btn:hover {
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.door-mode-btn.active {
+  background: rgba(251, 191, 36, 0.12);
+  color: #fbbf24;
+  font-weight: 700;
+}
+
+/* Category label */
+.category-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #475569;
+  text-transform: uppercase;
+  padding: 4px 0 0;
+}
+
+/* Catalog loading */
+.catalog-loading {
+  font-size: 12px;
+  color: #64748b;
+  padding: 8px 0;
+  font-style: italic;
+}
+
+/* Catalog category list */
+.catalog-category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.catalog-category-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.3);
+  transition: border-color 0.15s;
+}
+
+.catalog-category-row:hover {
+  border-color: rgba(251, 191, 36, 0.2);
+}
+
+.catalog-category-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.catalog-category-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.catalog-category-depth {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.catalog-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  border-radius: 6px;
+  background: rgba(251, 191, 36, 0.06);
+  color: #fbbf24;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.catalog-add-btn:hover {
+  background: rgba(251, 191, 36, 0.15);
+  border-color: rgba(251, 191, 36, 0.4);
+}
+
+/* Tower section label */
+.tower-section-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  padding: 6px 0 2px;
+}
+
+.tower-count {
+  font-size: 11px;
+  font-weight: 400;
+  color: #64748b;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Tower catalog badge */
+.tower-catalog-badge {
+  font-size: 10px;
+  color: #fbbf24;
+  margin-top: 2px;
+  opacity: 0.8;
+}
+
+
 .action-btn {
   display: flex;
   align-items: center;

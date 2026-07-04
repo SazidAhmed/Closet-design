@@ -17,7 +17,10 @@ import {
   clampTowerHeight,
   clampTowerWidth,
   createTowerFromCategory,
+  loadCatalogCategories,
   refreshTowerCatalog,
+  CLOSET_CATALOG_CATEGORIES,
+  type ClosetCatalogCategory,
   type ClosetCatalogCategoryCode,
   type ClosetDoorMode,
 } from '../features/closet/domain/closetCatalogs'
@@ -25,10 +28,19 @@ import type { ClosetMaterials, ArchitecturalDoorOptions } from '../features/clos
 import type { ClosetTypeName } from '../features/closet/domain/closetTypes'
 import { getClosetType } from '../features/closet/domain/closetTypes'
 
-type ClosetStoreState = ClosetStateV2
+type ClosetStoreState = ClosetStateV2 & {
+  /** Live catalog categories loaded from the backend (both door modes). */
+  catalogCategories: ClosetCatalogCategory[]
+  /** Whether catalog data is currently being fetched from the API. */
+  catalogsLoading: boolean
+}
 
 export const useClosetStore = defineStore('closet', {
-  state: (): ClosetStoreState => createDefaultClosetState(),
+  state: (): ClosetStoreState => ({
+    ...createDefaultClosetState(),
+    catalogCategories: CLOSET_CATALOG_CATEGORIES,
+    catalogsLoading: false,
+  }),
 
   getters: {
     exportForBackend: (state) => exportForBackend(state),
@@ -36,6 +48,9 @@ export const useClosetStore = defineStore('closet', {
     towerById: (state) => (id: string) => state.towers.find((t) => t.id === id),
     totalTowerWidth: (state) => state.towers.reduce((sum, t) => sum + (Number(t.width) || 0), 0),
     innerCabinetWidth: (state) => Math.max(0, state.cabinet.width - state.cabinet.thickness * 2),
+    /** Catalog categories filtered by door mode — from live API or static fallback. */
+    catalogCategoriesForMode: (state) => (doorMode: ClosetDoorMode) =>
+      state.catalogCategories.filter((c) => c.doorMode === doorMode),
     /** @deprecated Backward compat: shelf count from first tower's shelf_set accessory. */
     shelves: (state): number => {
       const firstTower = state.towers[0]
@@ -46,6 +61,30 @@ export const useClosetStore = defineStore('closet', {
   },
 
   actions: {
+    // ── Catalog loading ───────────────────────────────────────────────────
+    /**
+     * Fetch catalog categories from the backend API for both door modes.
+     * Falls back to static data if the API is unavailable.
+     * Safe to call multiple times; no-ops while already loading.
+     */
+    async loadCatalogs() {
+      if (this.catalogsLoading) return
+      this.catalogsLoading = true
+      try {
+        const [withoutDoors, withDoors] = await Promise.all([
+          loadCatalogCategories('without_doors'),
+          loadCatalogCategories('with_doors'),
+        ])
+        this.catalogCategories = [...withoutDoors, ...withDoors]
+      } catch (err) {
+        // loadCatalogCategories already handles errors and falls back to static
+        // data. This catch is only for unexpected rejections (e.g. AbortError).
+        console.warn('[useClosetStore] loadCatalogs: unexpected error', err)
+      } finally {
+        this.catalogsLoading = false
+      }
+    },
+
     // ── Closet type ───────────────────────────────────────────────────────
     setClosetType(name: ClosetTypeName) {
       const type = getClosetType(name)
