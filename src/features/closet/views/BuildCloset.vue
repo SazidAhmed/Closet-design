@@ -492,7 +492,11 @@ const clearances = computed(() => {
   const nominalUsable = nominalGlobalRight - nominalGlobalLeft;
 
   const totalPhysicalGap = Math.max(0, physicalUsable - totalTowerWidthCm);
-  const totalNominalGap = Math.max(0, nominalUsable - totalTowerWidthCm);
+  
+  const nominalTowerWidthCm = closet.towers
+    .filter((t) => t.wallId === wall.id && t.partType !== 'panel')
+    .reduce((sum, t) => sum + t.width, 0);
+  const totalNominalGap = Math.max(0, nominalUsable - nominalTowerWidthCm);
   const gapScale =
     totalPhysicalGap > 0.1 ? totalNominalGap / totalPhysicalGap : 1;
 
@@ -683,7 +687,8 @@ function onDimensionInput(
   const valueCm = toCm(value);
 
   if (dimension === "width") {
-    closet.setTowerWidth(tower.id, valueCm);
+    const wall = selectedTowerWall.value;
+    closet.setTowerWidth(tower.id, valueCm, wall?.length);
     return;
   }
 
@@ -825,9 +830,32 @@ function towerSubtitle(tower: {
   categoryName?: string;
   categoryCode?: ClosetCatalogCategoryCode;
   catalogId?: number;
+  partType?: "cabinet" | "panel" | "filler";
 }): string {
+  if (tower.partType === "panel") return "Panel";
+  if (tower.partType === "filler") return "Filler";
   if (!tower.categoryName || !tower.categoryCode) return "Legacy tower";
   return `${tower.categoryName} (${tower.categoryCode}) - Catalog ${tower.catalogId ?? "N/A"}`;
+}
+
+function addPanel() {
+  const attachedId = selection.selectedTowerId ?? undefined;
+  const newPart = closet.addCustomPart(
+    "panel",
+    attachedId,
+    selectedTowerWall.value?.length,
+  );
+  selection.selectTower(newPart.id);
+}
+
+function addFiller() {
+  const attachedId = selection.selectedTowerId ?? undefined;
+  const newPart = closet.addCustomPart(
+    "filler",
+    attachedId,
+    selectedTowerWall.value?.length,
+  );
+  selection.selectTower(newPart.id);
 }
 </script>
 
@@ -880,14 +908,14 @@ function towerSubtitle(tower: {
         <section class="panel-section">
           <h2 class="section-title">Custom Parts</h2>
           <div class="category-list">
-            <button class="category-card">
+            <button class="category-card" @click="addPanel">
               <div>
                 <strong>Panel</strong>
                 <span>W: 0.7500"</span>
               </div>
               <Plus :size="16" />
             </button>
-            <button class="category-card">
+            <button class="category-card" @click="addFiller">
               <div>
                 <strong>Filler</strong>
                 <span>D: 0.7500"</span>
@@ -953,7 +981,9 @@ function towerSubtitle(tower: {
 
       <aside class="builder-panel edit-panel">
         <section
-          v-if="selectedTower && selectedTowerLimits"
+          v-if="
+            selectedTower && (selectedTowerLimits || selectedTower.partType)
+          "
           class="panel-section"
         >
           <h2 class="section-title">Selected Tower</h2>
@@ -980,9 +1010,20 @@ function towerSubtitle(tower: {
               class="number-input"
               type="number"
               step="0.0001"
-              :min="fromCmDisplay(selectedTowerLimits.minW)"
-              :max="fromCmDisplay(selectedTowerLimits.maxW)"
+              :min="
+                selectedTower.partType === 'filler'
+                  ? fromCmDisplay(3.81)
+                  : selectedTowerLimits
+                    ? fromCmDisplay(selectedTowerLimits.minW)
+                    : 0
+              "
+              :max="
+                selectedTowerLimits
+                  ? fromCmDisplay(selectedTowerLimits.maxW)
+                  : undefined
+              "
               :value="fromCmDisplay(selectedTower.width)"
+              :disabled="selectedTower.partType === 'panel'"
               @change="onDimensionInput('width', $event)"
             />
           </div>
@@ -996,9 +1037,18 @@ function towerSubtitle(tower: {
               class="number-input"
               type="number"
               step="0.0001"
-              :min="fromCmDisplay(selectedTowerLimits.minD)"
-              :max="fromCmDisplay(selectedTowerLimits.maxD)"
+              :min="
+                selectedTowerLimits
+                  ? fromCmDisplay(selectedTowerLimits.minD)
+                  : 0
+              "
+              :max="
+                selectedTowerLimits
+                  ? fromCmDisplay(selectedTowerLimits.maxD)
+                  : undefined
+              "
               :value="fromCmDisplay(selectedTower.depth)"
+              :disabled="selectedTower.partType === 'filler'"
               @change="onDimensionInput('depth', $event)"
             />
           </div>
@@ -1012,11 +1062,18 @@ function towerSubtitle(tower: {
               class="number-input"
               type="number"
               step="0.0001"
-              :min="fromCmDisplay(selectedTowerLimits.minH)"
+              :min="
+                selectedTowerLimits
+                  ? fromCmDisplay(selectedTowerLimits.minH)
+                  : 0
+              "
               :max="
-                fromCmDisplay(Math.min(selectedTowerLimits.maxH, maxHeightCm))
+                fromCmDisplay(
+                  Math.min(selectedTowerLimits?.maxH ?? Infinity, maxHeightCm),
+                )
               "
               :value="fromCmDisplay(selectedTower.height)"
+              :disabled="selectedTower.partType === 'filler'"
               @change="onDimensionInput('height', $event)"
             />
           </div>

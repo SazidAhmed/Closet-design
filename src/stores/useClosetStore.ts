@@ -11,7 +11,7 @@ import {
 } from '../features/closet/domain/schema'
 import { validateCloset } from '../features/closet/domain/validateCloset'
 import type { Tower, Accessory } from '../features/closet/domain/types/tower'
-import { createDefaultTower } from '../features/closet/domain/types/tower'
+import { createDefaultTower, createTowerId } from '../features/closet/domain/types/tower'
 import {
   clampTowerDepth,
   clampTowerHeight,
@@ -118,6 +118,48 @@ export const useClosetStore = defineStore('closet', {
       this.towers.push(createTowerFromCategory(doorMode, categoryCode, idx))
     },
 
+    addCustomPart(partType: 'panel' | 'filler', attachedToTowerId?: string, wallLength?: number) {
+      const attachedTower = attachedToTowerId ? this.towers.find(t => t.id === attachedToTowerId) : null;
+      const idx = this.towers.length + 1;
+      
+      const CM_PER_INCH = 2.54;
+      const defaultWidth = partType === 'panel' ? 0.75 * CM_PER_INCH : 1.5 * CM_PER_INCH;
+      const defaultDepth = 0.75 * CM_PER_INCH; // Filler is 0.75" deep, Panel syncs but defaults to 0.75" if unattached.
+      
+      let initialPosition = attachedTower?.positionAlongWall;
+      if (attachedTower && initialPosition !== undefined && wallLength) {
+        const centerCm = initialPosition * wallLength;
+        if (partType === 'panel') {
+          // Default to placing Panel on the right edge of the attached cabinet
+          const rightEdgeCm = centerCm + (attachedTower.width / 2);
+          initialPosition = (rightEdgeCm + (defaultWidth / 2)) / wallLength;
+        } else {
+          // Default to placing Filler on the left edge of the attached cabinet
+          const leftEdgeCm = centerCm - (attachedTower.width / 2);
+          initialPosition = (leftEdgeCm - (defaultWidth / 2)) / wallLength;
+        }
+      }
+
+      const newPart: Tower = {
+        id: createTowerId(),
+        label: `${partType === 'panel' ? 'Panel' : 'Filler'} ${idx}`,
+        width: defaultWidth,
+        depth: attachedTower && partType === 'panel' ? attachedTower.depth : defaultDepth,
+        height: attachedTower ? attachedTower.height : this.cabinet.height,
+        partType,
+        attachedToTowerId: partType === 'panel' ? undefined : attachedTower?.id,
+        accessories: [],
+        wallId: attachedTower?.wallId, // Place on same wall by default
+        positionAlongWall: initialPosition,
+        elevation: attachedTower?.elevation,
+        outset: attachedTower && partType === 'filler'
+          ? (attachedTower.outset ?? 0) + attachedTower.depth - defaultDepth
+          : attachedTower?.outset,
+      };
+      this.towers.push(newPart);
+      return newPart;
+    },
+
     removeTower(towerId: string) {
       const idx = this.towers.findIndex((t) => t.id === towerId)
       if (idx !== -1) this.towers.splice(idx, 1)
@@ -157,17 +199,55 @@ export const useClosetStore = defineStore('closet', {
       const min = Math.max(0, halfRatio)
       const max = Math.min(1, 1 - halfRatio)
       const current = tower.positionAlongWall ?? 0.5
-      tower.positionAlongWall = Math.max(min, Math.min(max, current + delta))
+      const newPosition = Math.max(min, Math.min(max, current + delta))
+      const actualDelta = newPosition - current
+      tower.positionAlongWall = newPosition
+      
+      if (actualDelta !== 0) {
+        this.towers.filter(t => t.attachedToTowerId === towerId).forEach(part => {
+          const partCurrent = part.positionAlongWall ?? 0.5
+          const partHalfRatio = wallLengthCm > 0 ? (part.width / 2) / wallLengthCm : 0
+          part.positionAlongWall = Math.max(partHalfRatio, Math.min(1 - partHalfRatio, partCurrent + actualDelta))
+        })
+      }
     },
 
     updateTower(towerId: string, partial: Partial<Omit<Tower, 'id' | 'accessories'>>) {
       const tower = this.towers.find((t) => t.id === towerId)
-      if (tower) Object.assign(tower, partial)
+      if (tower) {
+        let deltaPos = 0;
+        if (partial.positionAlongWall !== undefined && tower.positionAlongWall !== undefined) {
+          deltaPos = partial.positionAlongWall - tower.positionAlongWall;
+        }
+        Object.assign(tower, partial)
+
+        if (deltaPos !== 0) {
+          this.towers.filter(t => t.attachedToTowerId === towerId).forEach(part => {
+            if (part.positionAlongWall !== undefined) {
+              part.positionAlongWall += deltaPos;
+            }
+          })
+        }
+      }
     },
 
-    setTowerWidth(towerId: string, width: number) {
+    setTowerWidth(towerId: string, width: number, wallLengthCm?: number) {
       const tower = this.towers.find((t) => t.id === towerId)
-      if (tower) tower.width = clampTowerWidth(tower, width)
+      if (tower) {
+        const oldWidth = tower.width
+        tower.width = clampTowerWidth(tower, width)
+        const deltaW = tower.width - oldWidth
+        
+        if (deltaW !== 0 && tower.attachedToTowerId && wallLengthCm && tower.positionAlongWall !== undefined) {
+          if (tower.partType === 'filler') {
+            // Anchored to the cabinet on its right side; expand to the left.
+            tower.positionAlongWall -= (deltaW / 2) / wallLengthCm
+          } else if (tower.partType === 'panel') {
+            // Anchored to the cabinet on its left side; expand to the right.
+            tower.positionAlongWall += (deltaW / 2) / wallLengthCm
+          }
+        }
+      }
     },
 
     setTowerDepth(towerId: string, depth: number) {
@@ -175,16 +255,43 @@ export const useClosetStore = defineStore('closet', {
       if (!tower) return
       tower.depth = clampTowerDepth(tower, depth)
       refreshTowerCatalog(tower)
+
+      // Sync attached parts
+      this.towers
+        .filter((t) => t.attachedToTowerId === towerId)
+        .forEach((part) => {
+          if (part.partType === 'panel') {
+            part.depth = tower.depth
+          } else if (part.partType === 'filler') {
+            part.outset = (tower.outset ?? 0) + tower.depth - part.depth
+          }
+        })
     },
 
     setTowerHeight(towerId: string, height: number) {
       const tower = this.towers.find((t) => t.id === towerId)
-      if (tower) tower.height = clampTowerHeight(tower, height)
+      if (tower) {
+        tower.height = clampTowerHeight(tower, height)
+        // Sync attached parts
+        this.towers
+          .filter((t) => t.attachedToTowerId === towerId)
+          .forEach((part) => {
+            part.height = tower.height
+          })
+      }
     },
 
     setTowerOutset(towerId: string, outset: number) {
       const tower = this.towers.find((t) => t.id === towerId)
-      if (tower) tower.outset = Math.max(0, outset)
+      if (tower) {
+        tower.outset = Math.max(0, outset)
+        // Sync attached filler parts so they remain flush with the front
+        this.towers
+          .filter((t) => t.attachedToTowerId === towerId && t.partType === 'filler')
+          .forEach((part) => {
+            part.outset = tower.outset! + tower.depth - part.depth
+          })
+      }
     },
 
     setTowerElevation(towerId: string, elevation: number) {

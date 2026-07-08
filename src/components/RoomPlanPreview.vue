@@ -274,6 +274,7 @@ const placedTowerPolygons = computed(() => {
       return {
         id: tower.id,
         label: tower.label,
+        partType: tower.partType,
         points: corners.map((c) => c.join(",")).join(" "),
         labelX: cx_inner + (px * d) / 2,
         labelY: cy_inner + (py * d) / 2,
@@ -969,6 +970,7 @@ function sanitizeAllTowerPositionsInPlan() {
         <g v-if="tower.selected" class="resize-edges-group">
           <!-- Width Start Edge Handle (Left) -->
           <line
+            v-if="tower.partType !== 'panel'"
             :x1="tower.corners[0][0]"
             :y1="tower.corners[0][1]"
             :x2="tower.corners[3][0]"
@@ -981,6 +983,7 @@ function sanitizeAllTowerPositionsInPlan() {
 
           <!-- Width End Edge Handle (Right) -->
           <line
+            v-if="tower.partType !== 'panel'"
             :x1="tower.corners[1][0]"
             :y1="tower.corners[1][1]"
             :x2="tower.corners[2][0]"

@@ -75,6 +75,10 @@ export type Tower = {
   catalogCode?: string
   /** Whether this tower is using a corner cabinet catalog/category. */
   isCorner?: boolean
+  /** The type of custom part, if any (defaults to cabinet implicitly). */
+  partType?: 'cabinet' | 'panel' | 'filler'
+  /** For panel/filler: the ID of the cabinet they are attached to. */
+  attachedToTowerId?: string
   /** Accessories placed inside this tower. */
   accessories: Accessory[]
   /**
