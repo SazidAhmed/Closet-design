@@ -123,7 +123,7 @@ export const useClosetStore = defineStore('closet', {
       const idx = this.towers.length + 1;
       
       const CM_PER_INCH = 2.54;
-      const defaultWidth = partType === 'panel' ? 0.75 * CM_PER_INCH : 1.5 * CM_PER_INCH;
+      const defaultWidth = partType === 'panel' ? 0.75 * CM_PER_INCH : 3 * CM_PER_INCH;
       const defaultDepth = 0.75 * CM_PER_INCH; // Filler is 0.75" deep, Panel syncs but defaults to 0.75" if unattached.
       
       let initialPosition = attachedTower?.positionAlongWall;
