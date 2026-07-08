@@ -494,7 +494,7 @@ const clearances = computed(() => {
   const totalPhysicalGap = Math.max(0, physicalUsable - totalTowerWidthCm);
   
   const nominalTowerWidthCm = closet.towers
-    .filter((t) => t.wallId === wall.id && t.partType !== 'panel')
+    .filter((t) => t.wallId === wall.id && t.partType !== 'panel' && t.partType !== 'filler')
     .reduce((sum, t) => sum + t.width, 0);
   const totalNominalGap = Math.max(0, nominalUsable - nominalTowerWidthCm);
   const gapScale =
@@ -1073,7 +1073,7 @@ function addFiller() {
                 )
               "
               :value="fromCmDisplay(selectedTower.height)"
-              :disabled="selectedTower.partType === 'filler'"
+              :disabled="false"
               @change="onDimensionInput('height', $event)"
             />
           </div>

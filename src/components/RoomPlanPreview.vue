@@ -994,6 +994,7 @@ function sanitizeAllTowerPositionsInPlan() {
 
           <!-- Depth Edge Handle (Front) -->
           <line
+            v-if="tower.partType !== 'filler'"
             :x1="tower.corners[3][0]"
             :y1="tower.corners[3][1]"
             :x2="tower.corners[2][0]"
