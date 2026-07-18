@@ -37,6 +37,7 @@ function truncTo4(value: number): string {
 
 const selectedDoorMode = ref<ClosetDoorMode>("without_doors");
 const showElevation = ref(false);
+const pendingCustomPart = ref<'panel' | 'filler' | null>(null);
 
 const visibleCategories = computed(() =>
   getCategoriesForDoorMode(selectedDoorMode.value),
@@ -838,24 +839,43 @@ function towerSubtitle(tower: {
   return `${tower.categoryName} (${tower.categoryCode}) - Catalog ${tower.catalogId ?? "N/A"}`;
 }
 
+function addCustomPartHandler(type: 'panel' | 'filler') {
+  const tower = selectedTower.value;
+  if (tower && (!tower.partType || tower.partType === 'cabinet')) {
+    pendingCustomPart.value = type;
+  } else {
+    const wallId = selection.selectedWallId ?? room.closetWall?.id ?? null;
+    const newPart = closet.addCustomPart(type);
+    selection.selectTower(newPart.id);
+    if (wallId) {
+      closet.setTowerWall(newPart.id, wallId, 0.5);
+    }
+  }
+}
+
 function addPanel() {
-  const attachedId = selection.selectedTowerId ?? undefined;
-  const newPart = closet.addCustomPart(
-    "panel",
-    attachedId,
-    selectedTowerWall.value?.length,
-  );
-  selection.selectTower(newPart.id);
+  addCustomPartHandler('panel');
 }
 
 function addFiller() {
+  addCustomPartHandler('filler');
+}
+
+function confirmCustomPartSide(side: 'left' | 'right') {
+  if (!pendingCustomPart.value) return;
   const attachedId = selection.selectedTowerId ?? undefined;
   const newPart = closet.addCustomPart(
-    "filler",
+    pendingCustomPart.value,
     attachedId,
     selectedTowerWall.value?.length,
+    side
   );
   selection.selectTower(newPart.id);
+  pendingCustomPart.value = null;
+}
+
+function cancelCustomPartSide() {
+  pendingCustomPart.value = null;
 }
 </script>
 
@@ -1182,6 +1202,17 @@ function addFiller() {
       forward-route="/closet/review"
       :show-view-toggle="false"
     />
+
+    <div v-if="pendingCustomPart" class="modal-overlay">
+      <div class="modal-dialog">
+        <h3 class="modal-title">Select position of the part</h3>
+        <div class="modal-actions">
+          <button class="modal-btn" @click="confirmCustomPartSide('left')">Left</button>
+          <button class="modal-btn" @click="confirmCustomPartSide('right')">Right</button>
+          <button class="modal-btn secondary" @click="cancelCustomPartSide()">Cancel</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -1652,5 +1683,64 @@ function addFiller() {
   box-shadow: 0 0 6px rgba(251, 191, 36, 0.5);
   pointer-events: none;
   transition: left 0.1s;
+}
+
+/* ── Modal overlay ──────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(2, 6, 23, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-dialog {
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 320px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+}
+
+.modal-title {
+  margin: 0 0 20px;
+  color: #f1f5f9;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.modal-btn {
+  padding: 10px 24px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.modal-btn:hover {
+  background: #2563eb;
+}
+
+.modal-btn.secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+}
+
+.modal-btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
 }
 </style>

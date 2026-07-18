@@ -118,22 +118,44 @@ export const useClosetStore = defineStore('closet', {
       this.towers.push(createTowerFromCategory(doorMode, categoryCode, idx))
     },
 
-    addCustomPart(partType: 'panel' | 'filler', attachedToTowerId?: string, wallLength?: number) {
+    addCustomPart(partType: 'panel' | 'filler', attachedToTowerId?: string, wallLength?: number, side?: 'left' | 'right') {
       const attachedTower = attachedToTowerId ? this.towers.find(t => t.id === attachedToTowerId) : null;
       const idx = this.towers.length + 1;
       
       const CM_PER_INCH = 2.54;
       const defaultWidth = partType === 'panel' ? 0.75 * CM_PER_INCH : 3 * CM_PER_INCH;
-      const defaultDepth = 0.75 * CM_PER_INCH; // Filler is 0.75" deep, Panel syncs but defaults to 0.75" if unattached.
+      
+      let initialDepth = 0.75 * CM_PER_INCH;
+      let initialHeight = 84 * CM_PER_INCH;
+      let initialOutset = 0;
+
+      if (!attachedTower) {
+        if (partType === 'panel') {
+          initialDepth = 15 * CM_PER_INCH;
+        } else if (partType === 'filler') {
+          initialDepth = 0.75 * CM_PER_INCH;
+          initialOutset = 14.25 * CM_PER_INCH;
+        }
+      } else {
+        if (partType === 'panel') {
+          initialDepth = attachedTower.depth;
+          initialHeight = attachedTower.height;
+          initialOutset = attachedTower.outset ?? 0;
+        } else if (partType === 'filler') {
+          initialDepth = 0.75 * CM_PER_INCH;
+          initialHeight = attachedTower.height;
+          initialOutset = (attachedTower.outset ?? 0) + attachedTower.depth - initialDepth;
+        }
+      }
       
       let initialPosition = attachedTower?.positionAlongWall;
       if (attachedTower && initialPosition !== undefined && wallLength) {
         const centerCm = initialPosition * wallLength;
-        if (partType === 'panel') {
+        if (side === 'right' || (!side && partType === 'panel')) {
           // Default to placing Panel on the right edge of the attached cabinet
           const rightEdgeCm = centerCm + (attachedTower.width / 2);
           initialPosition = (rightEdgeCm + (defaultWidth / 2)) / wallLength;
-        } else {
+        } else if (side === 'left' || (!side && partType === 'filler')) {
           // Default to placing Filler on the left edge of the attached cabinet
           const leftEdgeCm = centerCm - (attachedTower.width / 2);
           initialPosition = (leftEdgeCm - (defaultWidth / 2)) / wallLength;
@@ -144,17 +166,15 @@ export const useClosetStore = defineStore('closet', {
         id: createTowerId(),
         label: `${partType === 'panel' ? 'Panel' : 'Filler'} ${idx}`,
         width: defaultWidth,
-        depth: attachedTower && partType === 'panel' ? attachedTower.depth : defaultDepth,
-        height: attachedTower ? attachedTower.height : this.cabinet.height,
+        depth: initialDepth,
+        height: initialHeight,
         partType,
         attachedToTowerId: (partType === 'panel' || partType === 'filler') ? undefined : attachedTower?.id,
         accessories: [],
         wallId: attachedTower?.wallId, // Place on same wall by default
         positionAlongWall: initialPosition,
         elevation: attachedTower?.elevation,
-        outset: attachedTower && partType === 'filler'
-          ? (attachedTower.outset ?? 0) + attachedTower.depth - defaultDepth
-          : attachedTower?.outset,
+        outset: initialOutset || undefined,
       };
       this.towers.push(newPart);
       return newPart;
@@ -263,7 +283,7 @@ export const useClosetStore = defineStore('closet', {
           if (part.partType === 'panel') {
             part.depth = tower.depth
           } else if (part.partType === 'filler') {
-            part.outset = (tower.outset ?? 0) + tower.depth - part.depth
+            part.outset = (tower.outset ?? 0) + tower.depth
           }
         })
     },
@@ -289,7 +309,7 @@ export const useClosetStore = defineStore('closet', {
         this.towers
           .filter((t) => t.attachedToTowerId === towerId && t.partType === 'filler')
           .forEach((part) => {
-            part.outset = tower.outset! + tower.depth - part.depth
+            part.outset = tower.outset! + tower.depth
           })
       }
     },
