@@ -836,7 +836,7 @@ function towerSubtitle(tower: {
   if (tower.partType === "panel") return "Panel";
   if (tower.partType === "filler") return "Filler";
   if (!tower.categoryName || !tower.categoryCode) return "Legacy tower";
-  return `${tower.categoryName} (${tower.categoryCode}) - Catalog ${tower.catalogId ?? "N/A"}`;
+  return `${tower.categoryName} (${tower.categoryCode})`;
 }
 
 function addCustomPartHandler(type: 'panel' | 'filler') {
@@ -1050,31 +1050,6 @@ function cancelCustomPartSide() {
 
           <div class="dimension-control">
             <div class="dimension-head">
-              <label>Depth</label>
-              <span>{{ fmt(selectedTower.depth) }}</span>
-            </div>
-            <input
-              class="number-input"
-              type="number"
-              step="0.0001"
-              :min="
-                selectedTowerLimits
-                  ? fromCmDisplay(selectedTowerLimits.minD)
-                  : 0
-              "
-              :max="
-                selectedTowerLimits
-                  ? fromCmDisplay(selectedTowerLimits.maxD)
-                  : undefined
-              "
-              :value="fromCmDisplay(selectedTower.depth)"
-              :disabled="selectedTower.partType === 'filler'"
-              @change="onDimensionInput('depth', $event)"
-            />
-          </div>
-
-          <div class="dimension-control">
-            <div class="dimension-head">
               <label>Height</label>
               <span>{{ fmt(selectedTower.height) }}</span>
             </div>
@@ -1095,6 +1070,31 @@ function cancelCustomPartSide() {
               :value="fromCmDisplay(selectedTower.height)"
               :disabled="false"
               @change="onDimensionInput('height', $event)"
+            />
+          </div>
+
+          <div class="dimension-control">
+            <div class="dimension-head">
+              <label>Depth</label>
+              <span>{{ fmt(selectedTower.depth) }}</span>
+            </div>
+            <input
+              class="number-input"
+              type="number"
+              step="0.0001"
+              :min="
+                selectedTowerLimits
+                  ? fromCmDisplay(selectedTowerLimits.minD)
+                  : 0
+              "
+              :max="
+                selectedTowerLimits
+                  ? fromCmDisplay(selectedTowerLimits.maxD)
+                  : undefined
+              "
+              :value="fromCmDisplay(selectedTower.depth)"
+              :disabled="selectedTower.partType === 'filler'"
+              @change="onDimensionInput('depth', $event)"
             />
           </div>
 
