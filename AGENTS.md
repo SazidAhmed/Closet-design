@@ -100,20 +100,20 @@ Schema versioning:
 ## 5. Units And Coordinate Rules
 
 Storage baseline:
-- Internal geometry and dimensions are treated as centimeters.
+- Internal geometry, bounds, and dimensions are strictly treated as **inches**.
 
 Display units:
-- UI can display cm or inches using useUnit composable.
-- Convert only at input/output boundaries.
+- UI displays inches via the `useUnit` composable (which now acts as a formatting pass-through).
+- Metric (cm) conversion is fully removed from internal states.
 
 Floor-plan geometry:
-- 2D editor runs in SVG plan coordinates.
-- Wall segments are represented by start position + angle + length.
+- 2D editor runs in SVG plan coordinates scaled for inches.
+- Wall segments are represented by start position + angle + length (in inches).
 
 3D scene:
-- Room3D derives walls directly from roomStore wall segments.
+- Room3D derives walls directly from roomStore wall segments (in inches).
 
-Never mix unit conversion ad hoc in random components.
+Never introduce cm conversions into internal coordinates.
 
 ## 6. Floor Plan Contract (High Priority)
 
@@ -353,7 +353,7 @@ Template variant (store/domain refactor):
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **Closet-design** (1650 symbols, 2991 relationships, 139 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **Closet-design** (1661 symbols, 2999 relationships, 138 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 

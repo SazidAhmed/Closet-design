@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
-import type { QuoteRequest, QuoteResponse } from '../api/quote'
-import { fetchQuote } from '../api/quote'
+import type { QuoteRequest, QuoteResponse } from '../../../services/QuoteService'
+import QuoteService from '../../../services/QuoteService'
 
 function stableHash(obj: unknown) {
   // Good enough for caching/debouncing in Phase 1.
@@ -43,7 +43,7 @@ export const useQuoteStore = defineStore('closetQuote', {
       this._abort = new AbortController()
 
       try {
-        const result = await fetchQuote(payload, { signal: this._abort.signal })
+        const result = await QuoteService.fetchQuote(payload, { signal: this._abort.signal })
         // Guard against late responses.
         if (this.lastPayloadHash !== hash) return
         this.result = result

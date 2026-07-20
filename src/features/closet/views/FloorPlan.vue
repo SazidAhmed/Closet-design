@@ -168,28 +168,18 @@ onMounted(() => {
 });
 
 // ───── Change Room Height dialog ───────────────────────────────────────────
-const CM_PER_INCH = 2.54;
-
-function cmToInches(cm: number): number {
-  return Math.round(cm / CM_PER_INCH);
-}
-
-function inchesToCm(inches: number): number {
-  return inches * CM_PER_INCH;
-}
-
-function formatInches(cm: number): string {
-  return `${formatTo4DecimalsNoRound(cm / CM_PER_INCH)}"`;
+function formatInches(valIn: number): string {
+  return `${formatTo4DecimalsNoRound(valIn)}"`;
 }
 
 function formatTo4DecimalsNoRound(val: number | null | undefined): string {
-  if (val === undefined || val === null || isNaN(val)) return "0.0000";
+  if (val === undefined || val === null || isNaN(val)) return "0";
   const str = val.toFixed(10);
   const dotIdx = str.indexOf(".");
   if (dotIdx === -1) {
-    return val.toFixed(4);
+    return val.toString();
   }
-  return str.substring(0, dotIdx + 5);
+  return Number(str.substring(0, dotIdx + 5)).toString();
 }
 
 // ───── Architecture item catalog ───────────────────────────────────────────
@@ -206,30 +196,30 @@ const DOOR_ITEMS: ItemDef[] = [
   {
     type: "wall_opening",
     category: "door",
-    width: inchesToCm(27),
-    height: inchesToCm(72),
+    width: 27,
+    height: 72,
     icon: "🚪",
   },
   {
     type: "double_door",
     category: "door",
-    width: 152,
-    height: 213,
+    width: 60,
+    height: 84,
     icon: "🚪",
   },
-  { type: "single_door", category: "door", width: 91, height: 213, icon: "🚪" },
+  { type: "single_door", category: "door", width: 36, height: 84, icon: "🚪" },
   {
     type: "sliding_door",
     category: "door",
-    width: 152,
-    height: 213,
+    width: 60,
+    height: 84,
     icon: "🚪",
   },
   {
     type: "bifold_door",
     category: "door",
-    width: 122,
-    height: 213,
+    width: 48,
+    height: 84,
     icon: "🚪",
   },
 ];
@@ -238,15 +228,15 @@ const DECO_ITEMS: ItemDef[] = [
   {
     type: "window",
     category: "wall_decorator",
-    width: inchesToCm(36),
-    height: inchesToCm(42),
+    width: 36,
+    height: 42,
     icon: "🪟",
   },
   {
     type: "vent",
     category: "wall_decorator",
-    width: 30,
-    height: 30,
+    width: 12,
+    height: 12,
     icon: "🪟",
   },
   {
@@ -386,17 +376,17 @@ function onSelectedItemSizeInput(dimension: "width" | "height", e: Event) {
   if (!selectedDoorWindowItem.value) return;
   const valueIn = Number((e.target as HTMLInputElement).value);
   if (!Number.isFinite(valueIn)) return;
-  const nextCm = inchesToCm(Math.max(1, valueIn));
+  const nextValue = Math.max(1, valueIn);
 
   if (dimension === "width") {
     roomStore.updateItemProps(selectedDoorWindowItem.value.id, {
-      width: nextCm,
+      width: nextValue,
     });
     return;
   }
 
   roomStore.updateItemProps(selectedDoorWindowItem.value.id, {
-    height: nextCm,
+    height: nextValue,
   });
 }
 
@@ -425,10 +415,10 @@ function onSelectedItemSideInput(
   const wall = roomStore.walls.find((entry) => entry.id === item.wallId);
   if (!wall) return;
 
-  const wallLengthIn = wall.length / CM_PER_INCH;
+  const wallLengthIn = wall.length;
   if (wallLengthIn <= 0) return;
 
-  const itemWidthIn = item.width / CM_PER_INCH;
+  const itemWidthIn = item.width;
   const halfWidthIn = itemWidthIn / 2;
   const requested = Math.max(0, valueIn);
 
@@ -1544,7 +1534,7 @@ function elevationItemGeometryCm(
   const heightCm = Math.max(1, itemHeight);
 
   const leftCm = clampElevationLeftCm(
-    Math.max(0, itemLeftPosition) * CM_PER_INCH,
+    Math.max(0, itemLeftPosition),
     widthCm,
     horizontalBounds,
   );
@@ -1552,7 +1542,7 @@ function elevationItemGeometryCm(
   const maxElevationCm = Math.max(0, layout.roomHeightCm - heightCm);
   const elevationCm = Math.max(
     0,
-    Math.min(maxElevationCm, Math.max(0, itemElevation) * CM_PER_INCH),
+    Math.min(maxElevationCm, Math.max(0, itemElevation)),
   );
 
   return {
@@ -1620,7 +1610,7 @@ function elevationOpeningRectCm(
   const widthCm = Math.max(1, itemWidth);
   const heightCm = Math.max(1, itemHeight);
   const leftCm = clampElevationLeftCm(
-    Math.max(0, itemLeftPosition) * CM_PER_INCH,
+    Math.max(0, itemLeftPosition),
     widthCm,
     bounds,
   );
@@ -1628,7 +1618,7 @@ function elevationOpeningRectCm(
     0,
     Math.min(
       Math.max(0, roomHeightCm - heightCm),
-      Math.max(0, itemElevation) * CM_PER_INCH,
+      Math.max(0, itemElevation),
     ),
   );
 
@@ -2402,7 +2392,7 @@ function onElevationPointerMove(e: PointerEvent) {
       layout.roomHeightCm - (topCm + itemHeightCm),
     );
     roomStore.updateItemProps(item.id, {
-      elevation: nextElevationCm / CM_PER_INCH,
+      elevation: nextElevationCm,
     });
     return;
   }
@@ -2592,7 +2582,7 @@ function itemMeasurementLabel(
   item: Pick<PlacedItem, "category" | "type" | "width" | "height">,
 ): string {
   if (!isDoorOrWindowItem(item)) return "";
-  return `${formatTo4DecimalsNoRound(item.width / CM_PER_INCH)}\"`;
+  return `${formatTo4DecimalsNoRound(item.width)}\"`;
 }
 
 // ───── Draw Walls mode ─────────────────────────────────────────────────────
@@ -2607,8 +2597,8 @@ const selectedWallAnchor = ref<[number, number] | null>(null);
 const selectedWallAnchorType = ref<"start" | "end">("start");
 const pendingStartVertex = ref<[number, number] | null>(null);
 const CLOSE_THRESHOLD = 15; // SVG units — snap distance to first vertex
-const GRID_SIZE = 10; // SVG grid snap size
-const drawWallThicknessInput = ref(6);
+const GRID_SIZE = 4; // SVG grid snap size
+const drawWallThicknessInput = ref(1);
 const showInsideSideIndicator = ref(true);
 
 function clampDrawHeight(v: number): number {
@@ -2919,9 +2909,9 @@ function drawViewBoxFromPoints(verts: [number, number][]): string {
     maxX = Math.max(maxX, x);
     maxY = Math.max(maxY, y);
   }
-  const pad = 80;
-  const w = Math.max(maxX - minX + pad * 2, 220);
-  const h = Math.max(maxY - minY + pad * 2, 220);
+  const pad = 32;
+  const w = Math.max(maxX - minX + pad * 2, 88);
+  const h = Math.max(maxY - minY + pad * 2, 88);
   return `${minX - pad} ${minY - pad} ${w} ${h}`;
 }
 
@@ -3324,7 +3314,7 @@ function dimLinePoints(wall: {
   tx: number;
   ty: number;
 } {
-  const offset = 20;
+  const offset = 8;
   const perpAngle = wall.angle - Math.PI / 2;
   const cos = Math.cos(perpAngle) * offset;
   const sin = Math.sin(perpAngle) * offset;
@@ -3334,8 +3324,8 @@ function dimLinePoints(wall: {
     y1: wall.position[1] + sin,
     x2: end[0] + cos,
     y2: end[1] + sin,
-    tx: (wall.position[0] + end[0]) / 2 + cos * 1.6,
-    ty: (wall.position[1] + end[1]) / 2 + sin * 1.6,
+    tx: (wall.position[0] + end[0]) / 2 + cos * 0.64,
+    ty: (wall.position[1] + end[1]) / 2 + sin * 0.64,
   };
 }
 </script>
@@ -3457,7 +3447,7 @@ function dimLinePoints(wall: {
                 <circle
                   :cx="GRID_SIZE / 2"
                   :cy="GRID_SIZE / 2"
-                  r="0.5"
+                  r="0.2"
                   fill="rgba(148,163,184,0.15)"
                 />
               </pattern>
@@ -3525,8 +3515,8 @@ function dimLinePoints(wall: {
               <polygon
                 v-if="wall.visible"
                 :points="wallPolygonPoints(wall)"
-                :fill="selectedWallId === wall.id ? '#e8c88a' : '#d4c9b8'"
-                :stroke="selectedWallId === wall.id ? '#f59e0b' : '#8b7355'"
+                :fill="selectedWallId === wall.id ? '#e8c88a' : '#e2e8f0'"
+                :stroke="selectedWallId === wall.id ? '#f59e0b' : '#cbd5e1'"
                 :stroke-width="selectedWallId === wall.id ? 2 : 1"
                 stroke-linejoin="round"
                 stroke-linecap="round"
@@ -3541,7 +3531,7 @@ function dimLinePoints(wall: {
                 :y1="wall.position[1]"
                 :x2="wallEndPoint(wall)[0]"
                 :y2="wallEndPoint(wall)[1]"
-                stroke="#6b5c45"
+                stroke="#94a3b8"
                 stroke-width="0.5"
                 stroke-dasharray="3,3"
                 pointer-events="none"
@@ -3552,16 +3542,16 @@ function dimLinePoints(wall: {
                 :transform="`translate(${wallMidpoint(wall)[0]}, ${wallMidpoint(wall)[1]})`"
               >
                 <circle
-                  r="10"
+                  r="4.5"
                   fill="#f59e0b"
                   stroke="#0f172a"
-                  stroke-width="1.5"
+                  stroke-width="0.6"
                 />
                 <text
                   text-anchor="middle"
                   dominant-baseline="central"
                   fill="#0f172a"
-                  font-size="9"
+                  font-size="4"
                   font-weight="700"
                 >
                   {{ wall.label }}
@@ -3569,23 +3559,12 @@ function dimLinePoints(wall: {
               </g>
 
               <!-- Dimension annotation -->
-              <line
-                :x1="dimLinePoints(wall).x1"
-                :y1="dimLinePoints(wall).y1"
-                :x2="dimLinePoints(wall).x2"
-                :y2="dimLinePoints(wall).y2"
-                stroke="#94a3b8"
-                stroke-width="0.8"
-                marker-start="url(#dimArrowL)"
-                marker-end="url(#dimArrowR)"
-                pointer-events="none"
-              />
               <text
                 :x="dimLinePoints(wall).tx"
                 :y="dimLinePoints(wall).ty"
                 text-anchor="middle"
                 fill="#e2e8f0"
-                font-size="9"
+                font-size="4"
                 font-weight="600"
               >
                 {{ formatLength(wall.length) }}
@@ -3599,10 +3578,10 @@ function dimLinePoints(wall: {
               class="vertex-dot"
               :cx="v[0]"
               :cy="v[1]"
-              :r="i === 0 && isNearFirstVertex ? 8 : 4"
+              :r="i === 0 && isNearFirstVertex ? 4 : 2"
               :fill="isConnectedVertex(v) ? '#fbbf24' : '#22c55e'"
               stroke="#0f172a"
-              stroke-width="1.5"
+              stroke-width="0.6"
               :class="{ 'close-snap': i === 0 && isNearFirstVertex }"
             />
 
@@ -3638,7 +3617,7 @@ function dimLinePoints(wall: {
               :y="dimLinePoints(previewWall).ty"
               text-anchor="middle"
               fill="#93c5fd"
-              font-size="9"
+              font-size="8"
               font-weight="700"
               pointer-events="none"
             >
@@ -4636,10 +4615,10 @@ function dimLinePoints(wall: {
                 type="number"
                 step="0.0001"
                 :value="
-                  formatTo4DecimalsNoRound(roomStore.height / CM_PER_INCH)
+                  formatTo4DecimalsNoRound(roomStore.height)
                 "
-                :min="ROOM_CONSTRAINTS.height.min / CM_PER_INCH"
-                :max="ROOM_CONSTRAINTS.height.max / CM_PER_INCH"
+                :min="ROOM_CONSTRAINTS.height.min"
+                :max="ROOM_CONSTRAINTS.height.max"
                 @change="onDrawHeightInput"
               />
             </div>
@@ -4696,7 +4675,7 @@ function dimLinePoints(wall: {
                 type="number"
                 step="0.0001"
                 :value="
-                  formatTo4DecimalsNoRound(selectedWall.length / CM_PER_INCH)
+                  formatTo4DecimalsNoRound(selectedWall.length)
                 "
                 @change="onSelectedWallLengthInput"
               />
@@ -4709,7 +4688,7 @@ function dimLinePoints(wall: {
                 type="number"
                 step="0.0001"
                 :value="
-                  formatTo4DecimalsNoRound(roomStore.height / CM_PER_INCH)
+                  formatTo4DecimalsNoRound(roomStore.height)
                 "
                 @change="
                   (e: Event) =>
@@ -4857,7 +4836,7 @@ function dimLinePoints(wall: {
                 step="0.0001"
                 :value="
                   formatTo4DecimalsNoRound(
-                    selectedDoorWindowItem.width / CM_PER_INCH,
+                    selectedDoorWindowItem.width,
                   )
                 "
                 @change="onSelectedItemSizeInput('width', $event)"
@@ -4873,7 +4852,7 @@ function dimLinePoints(wall: {
                 step="0.0001"
                 :value="
                   formatTo4DecimalsNoRound(
-                    selectedDoorWindowItem.height / CM_PER_INCH,
+                    selectedDoorWindowItem.height,
                   )
                 "
                 @change="onSelectedItemSizeInput('height', $event)"

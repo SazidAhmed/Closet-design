@@ -19,7 +19,6 @@ import {
   createTowerFromCategory,
   loadCatalogCategories,
   refreshTowerCatalog,
-  CLOSET_CATALOG_CATEGORIES,
   type ClosetCatalogCategory,
   type ClosetCatalogCategoryCode,
   type ClosetDoorMode,
@@ -38,7 +37,7 @@ type ClosetStoreState = ClosetStateV2 & {
 export const useClosetStore = defineStore('closet', {
   state: (): ClosetStoreState => ({
     ...createDefaultClosetState(),
-    catalogCategories: CLOSET_CATALOG_CATEGORIES,
+    catalogCategories: [],
     catalogsLoading: false,
   }),
 
@@ -122,19 +121,18 @@ export const useClosetStore = defineStore('closet', {
       const attachedTower = attachedToTowerId ? this.towers.find(t => t.id === attachedToTowerId) : null;
       const idx = this.towers.length + 1;
       
-      const CM_PER_INCH = 2.54;
-      const defaultWidth = partType === 'panel' ? 0.75 * CM_PER_INCH : 3 * CM_PER_INCH;
+      const defaultWidth = partType === 'panel' ? 0.75 : 3;
       
-      let initialDepth = 0.75 * CM_PER_INCH;
-      let initialHeight = 84 * CM_PER_INCH;
+      let initialDepth = 0.75;
+      let initialHeight = 84;
       let initialOutset = 0;
 
       if (!attachedTower) {
         if (partType === 'panel') {
-          initialDepth = 15 * CM_PER_INCH;
+          initialDepth = 15;
         } else if (partType === 'filler') {
-          initialDepth = 0.75 * CM_PER_INCH;
-          initialOutset = 14.25 * CM_PER_INCH;
+          initialDepth = 0.75;
+          initialOutset = 14.25;
         }
       } else {
         if (partType === 'panel') {
@@ -142,7 +140,7 @@ export const useClosetStore = defineStore('closet', {
           initialHeight = attachedTower.height;
           initialOutset = attachedTower.outset ?? 0;
         } else if (partType === 'filler') {
-          initialDepth = 0.75 * CM_PER_INCH;
+          initialDepth = 0.75;
           initialHeight = attachedTower.height;
           initialOutset = (attachedTower.outset ?? 0) + attachedTower.depth - initialDepth;
         }

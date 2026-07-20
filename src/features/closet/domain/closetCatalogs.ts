@@ -1,11 +1,8 @@
 import type { Accessory, Tower } from "./types/tower";
 import { createTowerId } from "./types/tower";
 
-const CM_PER_INCH = 2.54;
-
-function inch(value: number): number {
-  return Math.round(value * CM_PER_INCH * 10) / 10;
-}
+// No longer converting to cm, internal units are now inches.
+// The entry function directly assigns the inch values.
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -40,6 +37,7 @@ export type ClosetCatalogCategory = {
   categoryName: string;
   catalogs: ClosetCatalogEntry[];
   cornerCatalogIds?: number[];
+  category_id?: number; // added to match api
 };
 
 export type ClosetCatalogLimits = {
@@ -64,16 +62,17 @@ function entry(
   return {
     catalogId,
     code,
-    minW: inch(minWIn),
-    maxW: inch(maxWIn),
-    minD: inch(minDIn),
-    maxD: inch(maxDIn),
-    minH: inch(minHIn),
-    maxH: inch(maxHIn),
+    minW: minWIn,
+    maxW: maxWIn,
+    minD: minDIn,
+    maxD: maxDIn,
+    minH: minHIn,
+    maxH: maxHIn,
   };
 }
 
-export const CLOSET_CATALOG_CATEGORIES: ClosetCatalogCategory[] = [
+// Keep the hardcoded array strictly as a fallback mechanism for when API dimensions are 0
+const CLOSET_CATALOG_CATEGORIES: ClosetCatalogCategory[] = [
   {
     doorMode: "without_doors",
     categoryCode: "CAS",
@@ -177,10 +176,15 @@ export const CLOSET_CATALOG_CATEGORIES: ClosetCatalogCategory[] = [
   },
 ];
 
+// This holds the currently active categories (from API or static fallback).
+// It defaults to the static list so the UI can render before the API loads,
+// but gets updated dynamically when loadCatalogCategories is called.
+let activeCategories: ClosetCatalogCategory[] = [...CLOSET_CATALOG_CATEGORIES];
+
 export function getCategoriesForDoorMode(
   doorMode: ClosetDoorMode,
 ): ClosetCatalogCategory[] {
-  return CLOSET_CATALOG_CATEGORIES.filter(
+  return activeCategories.filter(
     (category) => category.doorMode === doorMode,
   );
 }
@@ -189,7 +193,7 @@ export function getCategoryByCode(
   doorMode: ClosetDoorMode,
   categoryCode: ClosetCatalogCategoryCode,
 ): ClosetCatalogCategory {
-  const category = CLOSET_CATALOG_CATEGORIES.find(
+  const category = activeCategories.find(
     (entry) =>
       entry.doorMode === doorMode && entry.categoryCode === categoryCode,
   );
@@ -274,7 +278,7 @@ function accessoriesForCategory(
     case "CCL":
       return [{ type: "rod", position: "high", count: 1 }];
     case "CRD":
-      return [{ type: "drawer", count: 4, drawerHeight: inch(8) }];
+      return [{ type: "drawer", count: 4, drawerHeight: 8 }];
     case "CSS":
       return [{ type: "shoe_shelf", count: 5 }];
     case "CAS":
@@ -308,30 +312,45 @@ export function createTowerFromCategory(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Async loading — fetches live catalog data from the backend and falls back
-// to the static CLOSET_CATALOG_CATEGORIES array if the API is unavailable.
-// ---------------------------------------------------------------------------
-
-/**
- * Load catalog categories for a given door mode from the backend API.
- * Falls back to the static catalog definitions on any network or server error.
- *
- * @param doorMode - The door mode to fetch categories for.
- * @param opts     - Optional fetch options (e.g. AbortSignal).
- * @returns A promise that always resolves to an array of ClosetCatalogCategory.
- */
 export async function loadCatalogCategories(
   doorMode: ClosetDoorMode,
   opts?: { signal?: AbortSignal },
 ): Promise<ClosetCatalogCategory[]> {
   try {
-    const { fetchClosetCatalogCategories } = await import('../api/closetApi');
-    const categories = await fetchClosetCatalogCategories(doorMode, opts);
+    const ClosetService = (await import('../../../services/ClosetService')).default;
+    const apiCategories = await ClosetService.getCatalogCategories(doorMode);
 
-    // Basic shape guard: ensure we got a non-empty array before trusting it.
-    if (Array.isArray(categories) && categories.length > 0) {
-      return categories;
+    if (Array.isArray(apiCategories) && apiCategories.length > 0) {
+      // Map API data to the hardcoded list to retain limits
+      const mapped = apiCategories.map(apiCat => {
+        const staticCat = CLOSET_CATALOG_CATEGORIES.find(c => c.categoryCode === apiCat.categoryCode && c.doorMode === apiCat.doorMode);
+        if (staticCat) {
+          return {
+            ...apiCat,
+            catalogs: apiCat.catalogs.map(catalog => {
+              const staticCatalog = staticCat.catalogs.find(c => c.code === catalog.code);
+              return {
+                ...catalog,
+                minW: catalog.minW > 0 ? catalog.minW : (staticCatalog ? staticCatalog.minW : 0),
+                maxW: catalog.maxW > 0 ? catalog.maxW : (staticCatalog ? staticCatalog.maxW : 0),
+                minD: catalog.minD > 0 ? catalog.minD : (staticCatalog ? staticCatalog.minD : 0),
+                maxD: catalog.maxD > 0 ? catalog.maxD : (staticCatalog ? staticCatalog.maxD : 0),
+                minH: catalog.minH > 0 ? catalog.minH : (staticCatalog ? staticCatalog.minH : 0),
+                maxH: catalog.maxH > 0 ? catalog.maxH : (staticCatalog ? staticCatalog.maxH : 0),
+              };
+            })
+          };
+        }
+        return apiCat;
+      });
+
+      // Update the active categories for this door mode
+      activeCategories = [
+        ...activeCategories.filter(c => c.doorMode !== doorMode),
+        ...mapped
+      ];
+
+      return mapped;
     }
 
     console.warn(

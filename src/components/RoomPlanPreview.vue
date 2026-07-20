@@ -19,7 +19,7 @@ onMounted(() => {
   sanitizeAllTowerPositionsInPlan();
 });
 
-const GRID_SIZE = 10;
+const GRID_SIZE = 4;
 
 /** Compute all wall vertices */
 const wallVertices = computed((): [number, number][] => {
@@ -47,9 +47,9 @@ const viewBox = computed(() => {
     maxX = Math.max(maxX, x);
     maxY = Math.max(maxY, y);
   }
-  const pad = 80;
-  const w = Math.max(maxX - minX + pad * 2, 220);
-  const h = Math.max(maxY - minY + pad * 2, 220);
+  const pad = 32;
+  const w = Math.max(maxX - minX + pad * 2, 88);
+  const h = Math.max(maxY - minY + pad * 2, 88);
   return `${minX - pad} ${minY - pad} ${w} ${h}`;
 });
 
@@ -93,8 +93,10 @@ function wallPolygonPoints(wall: {
   return `${p1[0]},${p1[1]} ${p2[0]},${p2[1]} ${p3[0]},${p3[1]} ${p4[0]},${p4[1]}`;
 }
 
-function formatLength(cm: number): string {
-  return `${Math.round(cm / 2.54)}"`;
+function formatLength(val: number): string {
+  // Use unit-aware formatting, trim trailing decimals for integers
+  const rounded = Math.round(val * 100) / 100;
+  return `${rounded}"`;
 }
 
 function dimLinePoints(wall: {
@@ -102,7 +104,7 @@ function dimLinePoints(wall: {
   angle: number;
   length: number;
 }) {
-  const offset = 20;
+  const offset = 8;
   const perpAngle = wall.angle - Math.PI / 2;
   const cos = Math.cos(perpAngle) * offset;
   const sin = Math.sin(perpAngle) * offset;
@@ -112,8 +114,8 @@ function dimLinePoints(wall: {
     y1: wall.position[1] + sin,
     x2: end[0] + cos,
     y2: end[1] + sin,
-    tx: (wall.position[0] + end[0]) / 2 + cos * 1.6,
-    ty: (wall.position[1] + end[1]) / 2 + sin * 1.6,
+    tx: (wall.position[0] + end[0]) / 2 + cos * 0.64,
+    ty: (wall.position[1] + end[1]) / 2 + sin * 0.64,
   };
 }
 
@@ -752,8 +754,8 @@ function sanitizeAllTowerPositionsInPlan() {
           <circle
             :cx="GRID_SIZE / 2"
             :cy="GRID_SIZE / 2"
-            r="0.5"
-            fill="rgba(148,163,184,0.15)"
+            r="0.2"
+            fill="rgba(255,255,255,0.05)"
           />
         </pattern>
         <!-- Arrow markers for dimensions -->
@@ -813,10 +815,10 @@ function sanitizeAllTowerPositionsInPlan() {
         <polygon
           :points="wallPolygonPoints(wall)"
           :fill="
-            selectionStore.selectedWallId === wall.id ? '#e8c88a' : '#d4c9b8'
+            selectionStore.selectedWallId === wall.id ? '#e8c88a' : '#e2e8f0'
           "
           :stroke="
-            selectionStore.selectedWallId === wall.id ? '#f59e0b' : '#8b7355'
+            selectionStore.selectedWallId === wall.id ? '#f59e0b' : '#cbd5e1'
           "
           :stroke-width="selectionStore.selectedWallId === wall.id ? 2 : 1"
           stroke-linejoin="round"
@@ -829,12 +831,12 @@ function sanitizeAllTowerPositionsInPlan() {
         <g
           :transform="`translate(${wallMidpoint(wall)[0]}, ${wallMidpoint(wall)[1]})`"
         >
-          <circle r="10" fill="#f59e0b" stroke="#0f172a" stroke-width="1.5" />
+          <circle r="4.5" fill="#f59e0b" stroke="#0f172a" stroke-width="0.6" />
           <text
             text-anchor="middle"
             dominant-baseline="central"
             fill="#0f172a"
-            font-size="9"
+            font-size="4"
             font-weight="700"
           >
             {{ wall.label }}
@@ -842,23 +844,12 @@ function sanitizeAllTowerPositionsInPlan() {
         </g>
 
         <!-- Dimension annotation -->
-        <line
-          :x1="dimLinePoints(wall).x1"
-          :y1="dimLinePoints(wall).y1"
-          :x2="dimLinePoints(wall).x2"
-          :y2="dimLinePoints(wall).y2"
-          stroke="#94a3b8"
-          stroke-width="0.8"
-          marker-start="url(#dimArrowL)"
-          marker-end="url(#dimArrowR)"
-          pointer-events="none"
-        />
         <text
           :x="dimLinePoints(wall).tx"
           :y="dimLinePoints(wall).ty"
           text-anchor="middle"
           fill="#e2e8f0"
-          font-size="9"
+          font-size="4"
           font-weight="600"
         >
           {{ formatLength(wall.length) }}

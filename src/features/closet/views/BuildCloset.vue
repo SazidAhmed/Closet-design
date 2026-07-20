@@ -23,11 +23,7 @@ const appStore = useAppStore();
 const closet = useClosetStore();
 const room = useRoomStore();
 const selection = useSelectionStore();
-const { fmt, fromCm, toCm } = useUnit();
-
-function fromCmDisplay(cm: number): number {
-  return Math.round(fromCm(cm) * 10000) / 10000;
-}
+const { fmt, fromCm } = useUnit();
 
 /** Format a number to 4 decimal places (using rounding for precision). */
 function truncTo4(value: number): string {
@@ -59,67 +55,51 @@ const selectedTowerLimits = computed<ClosetCatalogLimits | null>(() => {
  * Maximum elevation (in display units) — the tower must stay fully inside
  * the room height, so max = roomHeight - towerHeight (min 0).
  */
-const maxElevationCm = computed(() => {
+const maxElevationIn = computed(() => {
   const tower = selectedTower.value;
   if (!tower) return 0;
   return Math.max(0, room.height - tower.height);
 });
 
-/**
- * Maximum height (cm) for the selected tower.
- *
- * The tower height is limited by:
- *  1. The catalog's maxH limit.
- *  2. The room height minus the tower's elevation.
- *  3. For any window on the same wall that horizontally overlaps the tower,
- *     the window's bottom edge — so the tower cannot grow into the window.
- *
- * Window elevation is stored in inches; tower dimensions are in cm.
- */
-const CM_PER_INCH = 2.54;
-
-const maxHeightCm = computed(() => {
+const maxHeightIn = computed(() => {
   const tower = selectedTower.value;
   const wall = selectedTowerWall.value;
   if (!tower) return Infinity;
 
   // 1. Room-height ceiling (tower bottom + height ≤ room height)
-  const towerElevationCm =
+  const towerElevationIn =
     typeof tower.elevation === "number" && !isNaN(tower.elevation)
       ? Math.max(0, tower.elevation)
       : 0;
-  let maxH = Math.max(0, room.height - towerElevationCm);
+  let maxH = Math.max(0, room.height - towerElevationIn);
 
   // 2. Window constraint — only when the tower is placed on a wall
   if (wall) {
     const pos = tower.positionAlongWall ?? 0.5;
-    const centerCm = pos * wall.length;
+    const centerIn = pos * wall.length;
     const halfW = tower.width / 2;
-    const towerLeft = centerCm - halfW;
-    const towerRight = centerCm + halfW;
+    const towerLeft = centerIn - halfW;
+    const towerRight = centerIn + halfW;
 
     for (const item of room.items) {
       if (item.wallId !== wall.id) continue;
       if (item.type !== "window") continue;
 
-      // Window horizontal extent (leftPosition stored in inches)
-      const itemLeft = (item.leftPosition ?? 0) * CM_PER_INCH;
+      const itemLeft = item.leftPosition ?? 0;
       const itemRight = itemLeft + item.width;
 
       // Does the window horizontally overlap the tower?
       const hOverlap = itemLeft < towerRight && itemRight > towerLeft;
       if (!hOverlap) continue;
 
-      // Window bottom elevation in cm (elevation stored in inches; default 42 in for windows)
       const defaultElevationIn = 42;
-      const itemElevationIn =
+      const windowBottomIn =
         typeof item.elevation === "number" && !isNaN(item.elevation)
-          ? item.elevation
+          ? Math.max(0, item.elevation)
           : defaultElevationIn;
-      const windowBottomCm = Math.max(0, itemElevationIn) * CM_PER_INCH;
 
       // Tower height must not cause the tower top to exceed the window bottom
-      const allowedHeight = Math.max(0, windowBottomCm - towerElevationCm);
+      const allowedHeight = Math.max(0, windowBottomIn - towerElevationIn);
       maxH = Math.min(maxH, allowedHeight);
     }
   }
@@ -144,12 +124,12 @@ const clearances = computed(() => {
   const wall = selectedTowerWall.value;
   if (!tower || !wall) return null;
 
-  // Tower left/right edges in wall-axis cm
+  // Tower left/right edges in wall-axis
   const pos = tower.positionAlongWall ?? 0.5;
-  const centerCm = pos * wall.length;
+  const centerIn = pos * wall.length;
   const halfW = tower.width / 2;
-  const towerLeft = centerCm - halfW;
-  const towerRight = centerCm + halfW;
+  const towerLeft = centerIn - halfW;
+  const towerRight = centerIn + halfW;
 
   // ── 1. Corner margins — wall thickness consumed by perpendicular connected walls.
   //    Walls are drawn on centerlines, so the perpendicular wall's inner face is
@@ -203,14 +183,13 @@ const clearances = computed(() => {
   let effectiveLeft = startMargin;
   let effectiveRight = Math.max(startMargin, wall.length - endMargin);
 
-  const towerElevationCm =
+  const towerElevationIn =
     typeof tower.elevation === "number" && !isNaN(tower.elevation)
       ? Math.max(0, tower.elevation)
       : 0;
-  const towerTopCm = towerElevationCm + tower.height;
+  const towerTopIn = towerElevationIn + tower.height;
 
   // ── 2. Door / window obstructions ───────────────────────────────────────
-  const CM_PER_INCH = 2.54;
   const epsilon = 0.0001; // tolerance to handle floating point rounding when flush
 
   for (const item of room.items) {
@@ -218,20 +197,19 @@ const clearances = computed(() => {
     if (item.category !== "door" && item.type !== "window") continue;
 
     const defaultElevation = item.type === "window" ? 42 : 0;
-    const itemElevation =
+    const itemBottomIn = Math.max(
+      0,
       typeof item.elevation === "number" && !isNaN(item.elevation)
         ? item.elevation
-        : defaultElevation;
-    const itemBottomCm = Math.max(0, itemElevation * CM_PER_INCH);
-    const itemTopCm = itemBottomCm + item.height;
+        : defaultElevation,
+    );
+    const itemTopIn = itemBottomIn + item.height;
 
     const verticalOverlap =
-      itemBottomCm < towerTopCm && itemTopCm > towerElevationCm;
+      itemBottomIn < towerTopIn && itemTopIn > towerElevationIn;
     if (!verticalOverlap) continue;
 
-    // Use leftPosition * CM_PER_INCH to exactly match elevation view's geometry,
-    // rather than positionAlongWall which can suffer from round-trip precision loss.
-    const itemLeft = item.leftPosition * CM_PER_INCH;
+    const itemLeft = item.leftPosition;
     const itemRight = itemLeft + item.width;
 
     // Item is entirely to the LEFT of the tower (or flush against it) → left boundary
@@ -259,21 +237,21 @@ const clearances = computed(() => {
     const otherWall = room.walls.find((w) => w.id === otherTower.wallId);
     if (!otherWall) continue;
 
-    const otherElevationCm =
+    const otherElevationIn =
       typeof otherTower.elevation === "number" && !isNaN(otherTower.elevation)
         ? Math.max(0, otherTower.elevation)
         : 0;
-    const otherTopCm = otherElevationCm + otherTower.height;
+    const otherTopIn = otherElevationIn + otherTower.height;
 
     const verticalOverlap =
-      otherElevationCm < towerTopCm && otherTopCm > towerElevationCm;
+      otherElevationIn < towerTopIn && otherTopIn > towerElevationIn;
     if (!verticalOverlap) continue;
 
     const otherPos = otherTower.positionAlongWall ?? 0.5;
-    const otherCenterCm = otherPos * otherWall.length;
+    const otherCenterIn = otherPos * otherWall.length;
     const otherHalfW = otherTower.width / 2;
-    const otherLeft = otherCenterCm - otherHalfW;
-    const otherRight = otherCenterCm + otherHalfW;
+    const otherLeft = otherCenterIn - otherHalfW;
+    const otherRight = otherCenterIn + otherHalfW;
 
     if (isAtStart) {
       const oStart: [number, number] = [
@@ -433,21 +411,21 @@ const clearances = computed(() => {
     if (otherTower.id === tower.id) continue;
     if (otherTower.wallId !== wall.id) continue;
 
-    const otherElevationCm =
+    const otherElevationIn =
       typeof otherTower.elevation === "number" && !isNaN(otherTower.elevation)
         ? Math.max(0, otherTower.elevation)
         : 0;
-    const otherTopCm = otherElevationCm + otherTower.height;
+    const otherTopIn = otherElevationIn + otherTower.height;
 
     const verticalOverlap =
-      otherElevationCm < towerTopCm && otherTopCm > towerElevationCm;
+      otherElevationIn < towerTopIn && otherTopIn > towerElevationIn;
     if (!verticalOverlap) continue;
 
     const otherPos = otherTower.positionAlongWall ?? 0.5;
-    const otherCenterCm = otherPos * wall.length;
+    const otherCenterIn = otherPos * wall.length;
     const otherHalfW = otherTower.width / 2;
-    const otherLeft = otherCenterCm - otherHalfW;
-    const otherRight = otherCenterCm + otherHalfW;
+    const otherLeft = otherCenterIn - otherHalfW;
+    const otherRight = otherCenterIn + otherHalfW;
 
     // Other tower is to the left of our tower
     if (otherRight <= towerLeft + epsilon) {
@@ -465,16 +443,10 @@ const clearances = computed(() => {
   // ── 5. Consistent gap scale (global, not per-tower) ───────────────────────
   // The physical usable range considers corner margins and corner blockages.
   // We satisfy the user invariant: LeftClearance + TowerWidth + RightClearance = WallDisplayWidth
-  const totalTowerWidthCm = closet.towers
+  const totalTowerWidthIn = closet.towers
     .filter((t) => t.wallId === wall.id)
     .reduce((sum, t) => sum + t.width, 0);
 
-  // Nominal display boundaries:
-  //  - Corner margin (wall thickness) alone → maps to 0 / wall.length (absorbed into display)
-  //  - Adjacent tower depth → counts as real space; left boundary = depth, right = wall.length - depth
-  //
-  // This satisfies the user invariant:
-  //   leftClearance + towerWidth + rightClearance = wall.length - startAdjacentDepth - endAdjacentDepth
   const isLeftWallOnly =
     Math.abs(globalEffectiveLeft - startMargin) < 0.1 &&
     startAdjacentDepth === 0;
@@ -482,8 +454,6 @@ const clearances = computed(() => {
     Math.abs(globalEffectiveRight - (wall.length - endMargin)) < 0.1 &&
     endAdjacentDepth === 0;
 
-  // When the corner is blocked by an adjacent tower, the nominal left/right boundary
-  // is the depth of that tower (the usable display space starts/ends at depth).
   const nominalGlobalLeft = isLeftWallOnly ? 0 : startAdjacentDepth;
   const nominalGlobalRight = isRightWallOnly
     ? wall.length
@@ -492,12 +462,12 @@ const clearances = computed(() => {
   const physicalUsable = globalEffectiveRight - globalEffectiveLeft;
   const nominalUsable = nominalGlobalRight - nominalGlobalLeft;
 
-  const totalPhysicalGap = Math.max(0, physicalUsable - totalTowerWidthCm);
+  const totalPhysicalGap = Math.max(0, physicalUsable - totalTowerWidthIn);
   
-  const nominalTowerWidthCm = closet.towers
+  const nominalTowerWidthIn = closet.towers
     .filter((t) => t.wallId === wall.id && t.partType !== 'panel' && t.partType !== 'filler')
     .reduce((sum, t) => sum + t.width, 0);
-  const totalNominalGap = Math.max(0, nominalUsable - nominalTowerWidthCm);
+  const totalNominalGap = Math.max(0, nominalUsable - nominalTowerWidthIn);
   const gapScale =
     totalPhysicalGap > 0.1 ? totalNominalGap / totalPhysicalGap : 1;
 
@@ -520,8 +490,11 @@ const selectedTowerWall = computed(() => {
   return room.walls.find((w) => w.id === tower.wallId) ?? null;
 });
 
-onMounted(() => {
+onMounted(async () => {
   appStore.setStep("design");
+  
+  await closet.loadCatalogs();
+
   if (
     closet.towers.length > 0 &&
     closet.towers.every((tower) => !tower.catalogId)
@@ -593,18 +566,18 @@ function sanitizeAllTowerPositions() {
     const usableRight = Math.max(startMargin, wall.length - endMargin);
 
     const halfW = tower.width / 2;
-    const minCenterCm = usableLeft + halfW;
-    const maxCenterCm = Math.max(minCenterCm, usableRight - halfW);
+    const minCenterIn = usableLeft + halfW;
+    const maxCenterIn = Math.max(minCenterIn, usableRight - halfW);
 
-    const currentCenterCm = (tower.positionAlongWall ?? 0.5) * wall.length;
-    const clampedCenterCm = Math.max(
-      minCenterCm,
-      Math.min(maxCenterCm, currentCenterCm),
+    const currentCenterIn = (tower.positionAlongWall ?? 0.5) * wall.length;
+    const clampedCenterIn = Math.max(
+      minCenterIn,
+      Math.min(maxCenterIn, currentCenterIn),
     );
 
-    if (Math.abs(clampedCenterCm - currentCenterCm) > 0.001) {
+    if (Math.abs(clampedCenterIn - currentCenterIn) > 0.001) {
       closet.updateTower(tower.id, {
-        positionAlongWall: clampedCenterCm / wall.length,
+        positionAlongWall: clampedCenterIn / wall.length,
       });
     }
   }
@@ -656,18 +629,18 @@ function clampSelectedTowerToUsableBounds() {
   if (!tower || !wall || !c) return;
 
   const halfW = tower.width / 2;
-  const minCenterCm = c.effectiveLeft + halfW;
-  const maxCenterCm = Math.max(minCenterCm, c.effectiveRight - halfW);
+  const minCenterIn = c.effectiveLeft + halfW;
+  const maxCenterIn = Math.max(minCenterIn, c.effectiveRight - halfW);
 
-  const currentCenterCm = (tower.positionAlongWall ?? 0.5) * wall.length;
-  const clampedCenterCm = Math.max(
-    minCenterCm,
-    Math.min(maxCenterCm, currentCenterCm),
+  const currentCenterIn = (tower.positionAlongWall ?? 0.5) * wall.length;
+  const clampedCenterIn = Math.max(
+    minCenterIn,
+    Math.min(maxCenterIn, currentCenterIn),
   );
 
-  if (Math.abs(clampedCenterCm - currentCenterCm) > 0.001) {
+  if (Math.abs(clampedCenterIn - currentCenterIn) > 0.001) {
     closet.updateTower(tower.id, {
-      positionAlongWall: clampedCenterCm / wall.length,
+      positionAlongWall: clampedCenterIn / wall.length,
     });
   }
 }
@@ -685,31 +658,29 @@ function onDimensionInput(
   const value = Number((event.target as HTMLInputElement).value);
   if (!Number.isFinite(value)) return;
 
-  const valueCm = toCm(value);
-
   if (dimension === "width") {
     const wall = selectedTowerWall.value;
-    closet.setTowerWidth(tower.id, valueCm, wall?.length);
+    closet.setTowerWidth(tower.id, value, wall?.length);
     return;
   }
 
   if (dimension === "depth") {
-    closet.setTowerDepth(tower.id, valueCm);
+    closet.setTowerDepth(tower.id, value);
     return;
   }
 
   if (dimension === "outset") {
-    closet.setTowerOutset(tower.id, valueCm);
+    closet.setTowerOutset(tower.id, value);
     return;
   }
 
   if (dimension === "elevation") {
-    const maxCm = maxElevationCm.value;
-    closet.setTowerElevation(tower.id, Math.min(valueCm, maxCm));
+    const maxIn = maxElevationIn.value;
+    closet.setTowerElevation(tower.id, Math.min(value, maxIn));
     return;
   }
 
-  closet.setTowerHeight(tower.id, Math.min(valueCm, maxHeightCm.value));
+  closet.setTowerHeight(tower.id, Math.min(value, maxHeightIn.value));
   return;
 }
 
@@ -719,28 +690,27 @@ function onClearanceInput(side: "left" | "right", event: Event) {
   const c = clearances.value;
   if (!tower || !wall || !c) return;
 
-  const value = Number((event.target as HTMLInputElement).value);
-  if (!Number.isFinite(value)) return;
+  const valueIn = Number((event.target as HTMLInputElement).value);
+  if (!Number.isFinite(valueIn)) return;
 
-  const valueCm = toCm(value);
   const halfW = tower.width / 2;
 
-  let newCenterCm = 0;
+  let newCenterIn = 0;
 
   // Reverse the same global gap scale used for display.
   const gapScale = c.gapScale;
-  const rawValueCm = gapScale > 0.01 ? valueCm / gapScale : valueCm;
+  const rawValueIn = gapScale > 0.01 ? valueIn / gapScale : valueIn;
 
   if (side === "left") {
-    newCenterCm = c.effectiveLeft + rawValueCm + halfW;
+    newCenterIn = c.effectiveLeft + rawValueIn + halfW;
   } else {
-    newCenterCm = c.effectiveRight - rawValueCm - halfW;
+    newCenterIn = c.effectiveRight - rawValueIn - halfW;
   }
 
   // Ensure center stays within raw wall bounds
-  newCenterCm = Math.max(halfW, Math.min(wall.length - halfW, newCenterCm));
+  newCenterIn = Math.max(halfW, Math.min(wall.length - halfW, newCenterIn));
 
-  const positionAlongWall = newCenterCm / wall.length;
+  const positionAlongWall = newCenterIn / wall.length;
   closet.updateTower(tower.id, { positionAlongWall });
 }
 
@@ -1032,17 +1002,17 @@ function cancelCustomPartSide() {
               step="0.0001"
               :min="
                 selectedTower.partType === 'filler'
-                  ? fromCmDisplay(3.81)
+                  ? 1.5
                   : selectedTowerLimits
-                    ? fromCmDisplay(selectedTowerLimits.minW)
+                    ? selectedTowerLimits.minW
                     : 0
               "
               :max="
                 selectedTowerLimits
-                  ? fromCmDisplay(selectedTowerLimits.maxW)
+                  ? selectedTowerLimits.maxW
                   : undefined
               "
-              :value="fromCmDisplay(selectedTower.width)"
+              :value="truncTo4(selectedTower.width)"
               :disabled="selectedTower.partType === 'panel'"
               @change="onDimensionInput('width', $event)"
             />
@@ -1059,15 +1029,13 @@ function cancelCustomPartSide() {
               step="0.0001"
               :min="
                 selectedTowerLimits
-                  ? fromCmDisplay(selectedTowerLimits.minH)
+                  ? selectedTowerLimits.minH
                   : 0
               "
               :max="
-                fromCmDisplay(
-                  Math.min(selectedTowerLimits?.maxH ?? Infinity, maxHeightCm),
-                )
+                Math.min(selectedTowerLimits?.maxH ?? Infinity, maxHeightIn)
               "
-              :value="fromCmDisplay(selectedTower.height)"
+              :value="truncTo4(selectedTower.height)"
               :disabled="false"
               @change="onDimensionInput('height', $event)"
             />
@@ -1084,15 +1052,15 @@ function cancelCustomPartSide() {
               step="0.0001"
               :min="
                 selectedTowerLimits
-                  ? fromCmDisplay(selectedTowerLimits.minD)
+                  ? selectedTowerLimits.minD
                   : 0
               "
               :max="
                 selectedTowerLimits
-                  ? fromCmDisplay(selectedTowerLimits.maxD)
+                  ? selectedTowerLimits.maxD
                   : undefined
               "
-              :value="fromCmDisplay(selectedTower.depth)"
+              :value="truncTo4(selectedTower.depth)"
               :disabled="selectedTower.partType === 'filler'"
               @change="onDimensionInput('depth', $event)"
             />
@@ -1109,7 +1077,7 @@ function cancelCustomPartSide() {
               type="number"
               step="0.0001"
               min="0"
-              :value="fromCmDisplay(selectedTower.outset ?? 0)"
+              :value="truncTo4(selectedTower.outset ?? 0)"
               @change="onDimensionInput('outset', $event)"
             />
           </div>
@@ -1125,8 +1093,8 @@ function cancelCustomPartSide() {
               type="number"
               step="0.0001"
               min="0"
-              :max="fromCmDisplay(maxElevationCm)"
-              :value="fromCmDisplay(selectedTower.elevation ?? 0)"
+              :max="maxElevationIn"
+              :value="truncTo4(selectedTower.elevation ?? 0)"
               @change="onDimensionInput('elevation', $event)"
             />
           </div>

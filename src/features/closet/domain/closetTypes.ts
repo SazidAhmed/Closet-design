@@ -5,7 +5,7 @@
 import type { Room } from './types/room'
 import type { Tower } from './types/tower'
 import type { CabinetDimensions } from './schema'
-import { createDefaultRoom, DEFAULT_WALL_HEIGHT_CM } from './types/room'
+import { createDefaultRoom, DEFAULT_WALL_HEIGHT_IN } from './types/room'
 import { createDefaultTower } from './types/tower'
 
 export type ClosetTypeName = 'reach_in' | 'walk_in' | 'custom'
@@ -31,43 +31,43 @@ export const CLOSET_TYPES: ClosetTypeOption[] = [
     name: 'reach_in',
     label: 'Reach-In Closet',
     description: 'A standard closet accessed from the front, typically 2-8 feet wide. Great for bedrooms, hallways, and entryways.',
-    roomWidth: 183,    // ~6 ft
-    roomDepth: 61,     // ~2 ft
-    roomHeight: DEFAULT_WALL_HEIGHT_CM,   // 96 in
-    createRoom: () => createDefaultRoom(183, 61, DEFAULT_WALL_HEIGHT_CM),
-    createCabinet: () => ({ width: 183, height: 213, depth: 61, thickness: 2 }),
+    roomWidth: 72,    // 6 ft
+    roomDepth: 24,    // 2 ft
+    roomHeight: DEFAULT_WALL_HEIGHT_IN,   // 96 in
+    createRoom: () => createDefaultRoom(72, 24, DEFAULT_WALL_HEIGHT_IN),
+    createCabinet: () => ({ width: 72, height: 84, depth: 24, thickness: 0.75 }),
     createTowers: () => [
-      createDefaultTower(91.5, 61, 213, 1),
-      createDefaultTower(91.5, 61, 213, 2),
+      createDefaultTower(36, 24, 84, 1),
+      createDefaultTower(36, 24, 84, 2),
     ],
   },
   {
     name: 'walk_in',
     label: 'Walk-In Closet',
     description: 'A spacious room-sized closet you can walk into. Configure towers on multiple walls with full customization.',
-    roomWidth: 244,    // ~8 ft
-    roomDepth: 244,    // ~8 ft
-    roomHeight: DEFAULT_WALL_HEIGHT_CM,   // 96 in
-    createRoom: () => createDefaultRoom(244, 244, DEFAULT_WALL_HEIGHT_CM),
-    createCabinet: () => ({ width: 244, height: 213, depth: 61, thickness: 2 }),
+    roomWidth: 96,    // 8 ft
+    roomDepth: 96,    // 8 ft
+    roomHeight: DEFAULT_WALL_HEIGHT_IN,   // 96 in
+    createRoom: () => createDefaultRoom(96, 96, DEFAULT_WALL_HEIGHT_IN),
+    createCabinet: () => ({ width: 96, height: 84, depth: 24, thickness: 0.75 }),
     createTowers: () => [
-      createDefaultTower(61, 61, 213, 1),
-      createDefaultTower(61, 61, 213, 2),
-      createDefaultTower(61, 61, 213, 3),
-      createDefaultTower(61, 61, 213, 4),
+      createDefaultTower(24, 24, 84, 1),
+      createDefaultTower(24, 24, 84, 2),
+      createDefaultTower(24, 24, 84, 3),
+      createDefaultTower(24, 24, 84, 4),
     ],
   },
   {
     name: 'custom',
     label: 'Custom Layout',
     description: 'Start with a blank room and design everything from scratch. Full control over room shape, walls, and closet placement.',
-    roomWidth: 244,
-    roomDepth: 244,
-    roomHeight: DEFAULT_WALL_HEIGHT_CM,
-    createRoom: () => createDefaultRoom(244, 244, DEFAULT_WALL_HEIGHT_CM),
-    createCabinet: () => ({ width: 120, height: 213, depth: 61, thickness: 2 }),
+    roomWidth: 96,
+    roomDepth: 96,
+    roomHeight: DEFAULT_WALL_HEIGHT_IN,
+    createRoom: () => createDefaultRoom(96, 96, DEFAULT_WALL_HEIGHT_IN),
+    createCabinet: () => ({ width: 48, height: 84, depth: 24, thickness: 0.75 }),
     createTowers: () => [
-      createDefaultTower(120, 61, 213, 1),
+      createDefaultTower(48, 24, 84, 1),
     ],
   },
 ]

@@ -4,7 +4,7 @@
 
 import { defineStore } from 'pinia'
 import type { Room, PlacedItem, RoomColors, Vec2 } from '../features/closet/domain/types/room'
-import { CM_PER_INCH, createDefaultRoom, createItemId, createWallId } from '../features/closet/domain/types/room'
+import { createDefaultRoom, createItemId, createWallId } from '../features/closet/domain/types/room'
 import { ROOM_CONSTRAINTS } from '../features/closet/domain/constraints'
 
 function clampWall(v: number): number {
@@ -59,8 +59,8 @@ function recalculateDoorWindowSidePositions(item: PlacedItem, walls: Room['walls
 
   item.positionAlongWall = clampItemPositionAlongWall(item, walls, item.positionAlongWall)
 
-  const wallLengthIn = wall.length / CM_PER_INCH
-  const itemWidthIn = item.width / CM_PER_INCH
+  const wallLengthIn = wall.length
+  const itemWidthIn = item.width
   const centerOffsetIn = Math.max(0, Math.min(1, item.positionAlongWall)) * wallLengthIn
 
   const leftPosition = Math.max(0, centerOffsetIn - itemWidthIn / 2)
@@ -112,14 +112,14 @@ function roomPlanBounds(walls: Room['walls']): {
   centerY: number
 } {
   if (walls.length === 0) {
-    const half = 244 / 2
+    const half = 96 / 2
     return {
       minX: -half,
       maxX: half,
       minY: -half,
       maxY: half,
-      width: 244,
-      depth: 244,
+      width: 96,
+      depth: 96,
       centerX: 0,
       centerY: 0,
     }

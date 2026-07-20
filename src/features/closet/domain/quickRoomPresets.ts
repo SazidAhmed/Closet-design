@@ -1,7 +1,6 @@
 import type { Room, RoomShape, Vec2, Wall } from './types/room'
 import {
-  CM_PER_INCH,
-  DEFAULT_WALL_HEIGHT_CM,
+  DEFAULT_WALL_HEIGHT_IN,
   createDefaultRoomColors,
   createWallId,
 } from './types/room'
@@ -20,10 +19,11 @@ export type QuickRoomPreset = {
   label: string
   description: string
   shape: RoomShape
-  createRoom: (heightCm?: number) => Room
+  createRoom: (heightIn?: number) => Room
 }
 
-const IN = CM_PER_INCH
+// Internal units are now inches, so we just use the raw values
+const IN = 1
 
 const QUICK_PRESET_DEFS: QuickPresetDef[] = [
   {
@@ -101,7 +101,7 @@ function wallsFromPoints(points: Vec2[], closetWallIndex: number): Wall[] {
       position: [start[0], start[1]],
       angle: Math.atan2(dy, dx),
       hasCloset: i === closetWallIndex,
-      thickness: 6,
+      thickness: 1.0,
       label: String(walls.length + 1),
       visible: true,
     })
@@ -114,11 +114,11 @@ function wallsFromPoints(points: Vec2[], closetWallIndex: number): Wall[] {
   return walls
 }
 
-function roomFromDef(def: QuickPresetDef, heightCm = DEFAULT_WALL_HEIGHT_CM): Room {
+function roomFromDef(def: QuickPresetDef, heightIn = DEFAULT_WALL_HEIGHT_IN): Room {
   return {
     shape: def.shape,
     walls: wallsFromPoints(def.points, def.closetWallIndex),
-    height: heightCm,
+    height: heightIn,
     items: [],
     colors: createDefaultRoomColors(),
   }
@@ -131,13 +131,13 @@ export const QUICK_ROOM_PRESETS: QuickRoomPreset[] = QUICK_PRESET_DEFS.map((def)
   label: def.label,
   description: def.description,
   shape: def.shape,
-  createRoom: (heightCm = DEFAULT_WALL_HEIGHT_CM) => roomFromDef(def, heightCm),
+  createRoom: (heightIn = DEFAULT_WALL_HEIGHT_IN) => roomFromDef(def, heightIn),
 }))
 
 export function createQuickRoomFromPreset(
   presetId: string,
-  heightCm = DEFAULT_WALL_HEIGHT_CM,
+  heightIn = DEFAULT_WALL_HEIGHT_IN,
 ): Room {
   const preset = QUICK_ROOM_PRESETS.find((entry) => entry.id === presetId) ?? QUICK_ROOM_PRESETS[0]!
-  return preset.createRoom(heightCm)
+  return preset.createRoom(heightIn)
 }

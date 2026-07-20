@@ -4,9 +4,7 @@
 
 export type Vec2 = [number, number]
 
-export const CM_PER_INCH = 2.54
 export const DEFAULT_WALL_HEIGHT_IN = 96
-export const DEFAULT_WALL_HEIGHT_CM = Math.round(DEFAULT_WALL_HEIGHT_IN * CM_PER_INCH)
 
 /** A single wall segment in the room. */
 export type Wall = {
@@ -120,25 +118,25 @@ export function createDefaultRoomColors(): RoomColors {
 
 /**
  * Create a default rectangular room (4 walls).
- * Default wall height is 96" (≈244cm).
+ * Default wall height is 96".
  */
 export function createDefaultRoom(
-  widthCm = 244,
-  depthCm = 244,
-  heightCm = DEFAULT_WALL_HEIGHT_CM,
+  widthIn = 96,
+  depthIn = 96,
+  heightIn = DEFAULT_WALL_HEIGHT_IN,
 ): Room {
-  const hw = widthCm / 2
-  const hd = depthCm / 2
+  const hw = widthIn / 2
+  const hd = depthIn / 2
 
   return {
     shape: 'rectangular',
     walls: [
-      { id: createWallId(), length: widthCm, position: [-hw, -hd], angle: 0, hasCloset: false, thickness: 6, label: '1', visible: true },            // bottom
-      { id: createWallId(), length: depthCm, position: [hw, -hd], angle: Math.PI / 2, hasCloset: false, thickness: 6, label: '2', visible: true },   // right
-      { id: createWallId(), length: widthCm, position: [hw, hd], angle: Math.PI, hasCloset: true, thickness: 6, label: '3', visible: true },         // top (closet wall)
-      { id: createWallId(), length: depthCm, position: [-hw, hd], angle: (3 * Math.PI) / 2, hasCloset: false, thickness: 6, label: '4', visible: true }, // left
+      { id: createWallId(), length: widthIn, position: [-hw, -hd], angle: 0, hasCloset: false, thickness: 1.0, label: '1', visible: true },            // bottom
+      { id: createWallId(), length: depthIn, position: [hw, -hd], angle: Math.PI / 2, hasCloset: false, thickness: 1.0, label: '2', visible: true },   // right
+      { id: createWallId(), length: widthIn, position: [hw, hd], angle: Math.PI, hasCloset: true, thickness: 1.0, label: '3', visible: true },         // top (closet wall)
+      { id: createWallId(), length: depthIn, position: [-hw, hd], angle: (3 * Math.PI) / 2, hasCloset: false, thickness: 1.0, label: '4', visible: true }, // left
     ],
-    height: heightCm,
+    height: heightIn,
     items: [],
     colors: createDefaultRoomColors(),
   }
