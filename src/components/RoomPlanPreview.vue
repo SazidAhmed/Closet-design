@@ -939,7 +939,7 @@ function sanitizeAllTowerPositionsInPlan() {
             tower.selected ? 'rgba(251,191,36,0.35)' : 'rgba(251,191,36,0.15)'
           "
           :stroke="tower.selected ? '#fbbf24' : '#f59e0b'"
-          :stroke-width="tower.selected ? 2 : 1"
+          :stroke-width="1"
           stroke-linejoin="round"
           class="tower-footprint"
         />
@@ -950,7 +950,7 @@ function sanitizeAllTowerPositionsInPlan() {
           text-anchor="middle"
           dominant-baseline="central"
           fill="#fbbf24"
-          font-size="7"
+          font-size="2"
           font-weight="700"
           pointer-events="none"
         >
@@ -1084,7 +1084,7 @@ function sanitizeAllTowerPositionsInPlan() {
 .resize-edge {
   fill: none;
   stroke: transparent;
-  stroke-width: 8;
+  stroke-width: 0.75;
   transition: stroke 0.15s ease;
 }
 
