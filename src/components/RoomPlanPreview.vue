@@ -939,7 +939,7 @@ function sanitizeAllTowerPositionsInPlan() {
             tower.selected ? 'rgba(251,191,36,0.35)' : 'rgba(251,191,36,0.15)'
           "
           :stroke="tower.selected ? '#fbbf24' : '#f59e0b'"
-          :stroke-width="1"
+          :stroke-width="0.5"
           stroke-linejoin="round"
           class="tower-footprint"
         />
