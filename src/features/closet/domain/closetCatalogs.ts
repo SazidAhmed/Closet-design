@@ -320,12 +320,37 @@ export function selectCabinet(
   console.log("selectCabinet called with", { cabinetsCount: cabinets?.length, width, height, boxCount });
   if (!cabinets || cabinets.length === 0) return null;
 
+  // Normalize cabinet bounds so minW, maxW, minH, maxH are guaranteed valid numbers
+  const normalizedCabinets: ClosetCabinetEntry[] = cabinets.map((raw: any) => {
+    const minW = Number(raw.minW ?? raw.min_w ?? raw.width ?? 0);
+    const maxW = Number(raw.maxW ?? raw.max_w ?? raw.width ?? 0);
+    const minH = Number(raw.minH ?? raw.min_h ?? raw.height ?? 0);
+    const maxH = Number(raw.maxH ?? raw.max_h ?? raw.height ?? 0);
+    const minD = Number(raw.minD ?? raw.min_d ?? raw.depth ?? 0);
+    const maxD = Number(raw.maxD ?? raw.max_d ?? raw.depth ?? 0);
+    return {
+      ...raw,
+      id: Number(raw.id ?? 0),
+      code: String(raw.code ?? raw.cabinet_code ?? ''),
+      width: Number(raw.width ?? 0),
+      height: Number(raw.height ?? 0),
+      depth: Number(raw.depth ?? 0),
+      minW,
+      maxW,
+      minH,
+      maxH,
+      minD,
+      maxD,
+      boxOptions: Array.isArray(raw.boxOptions) ? raw.boxOptions : [1, 2],
+    };
+  });
+
   // Step 1: filter by box-count preference
-  let candidates = cabinets.filter((c) =>
+  let candidates = normalizedCabinets.filter((c) =>
     c.boxOptions.includes(boxCount),
   );
   if (candidates.length === 0) {
-    candidates = cabinets;
+    candidates = normalizedCabinets;
   }
   
   console.log("selectCabinet candidates", candidates.map(c => ({ code: c.code, minW: c.minW, maxW: c.maxW, minH: c.minH, maxH: c.maxH })));
