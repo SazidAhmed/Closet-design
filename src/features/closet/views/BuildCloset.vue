@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import TopToolbar from "../../../components/TopToolbar.vue";
 import FooterBar from "../../../components/FooterBar.vue";
 import RoomPlanPreview from "../../../components/RoomPlanPreview.vue";
@@ -36,8 +36,23 @@ const selectedDoorMode = ref<ClosetDoorMode>("without_doors");
 const showElevation = ref(false);
 const pendingCustomPart = ref<'panel' | 'filler' | null>(null);
 
-const visibleCategories = computed(() =>
-  getCategoriesForDoorMode(selectedDoorMode.value),
+const visibleCategories = computed(() => {
+  const storeCategories = closet.catalogCategoriesForMode(selectedDoorMode.value);
+  if (storeCategories && storeCategories.length > 0) {
+    return storeCategories;
+  }
+  return getCategoriesForDoorMode(selectedDoorMode.value);
+});
+
+watch(
+  visibleCategories,
+  (categories) => {
+    console.log(
+      `[BuildCloset] Visible Categories loaded for door mode "${selectedDoorMode.value}":`,
+      JSON.parse(JSON.stringify(categories))
+    );
+  },
+  { immediate: true, deep: true }
 );
 
 const selectedTower = computed(
@@ -825,11 +840,13 @@ function towerSubtitle(tower: {
   categoryCode?: ClosetCatalogCategoryCode;
   catalogId?: number;
   partType?: "cabinet" | "panel" | "filler";
+  cabinetCode?: string;
 }): string {
   if (tower.partType === "panel") return "Panel";
   if (tower.partType === "filler") return "Filler";
   if (!tower.categoryName || !tower.categoryCode) return "Legacy tower";
-  return `${tower.categoryName} (${tower.categoryCode})`;
+  const base = `${tower.categoryName} (${tower.categoryCode})`;
+  return tower.cabinetCode ? `${base} - ${tower.cabinetCode}` : `${base} - NULL_CAB`;
 }
 
 function addCustomPartHandler(type: 'panel' | 'filler') {

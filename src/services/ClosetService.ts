@@ -8,9 +8,13 @@ export default {
    * @throws if the network request fails or the server returns a non-OK status.
    */
   async getCatalogCategories(doorMode: ClosetDoorMode): Promise<ClosetCatalogCategory[]> {
-    // We send doorMode as a query param
-    const response = await http.get(`/closet/catalog-categories?doorMode=${doorMode}`);
-    console.log(`Catalog Categories API Response (${doorMode}):`, response.data);
-    return response.data as ClosetCatalogCategory[];
+    try {
+      const response = await http.get(`/closet/catalog-categories?doorMode=${doorMode}`);
+      console.log(`Catalog Categories API Response (${doorMode}):`, response.data);
+      return response.data as ClosetCatalogCategory[];
+    } catch (error: any) {
+      console.error(`Catalog Categories API Error (${doorMode}):`, error.response?.data || error.message);
+      throw error;
+    }
   }
 };

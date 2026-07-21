@@ -102,16 +102,16 @@ describe('box configuration & cabinet resolution', () => {
       .catalogs.find(c => c.catalogId === 205)!
     
     cas15.cabinets = [
-      { id: 10, code: 'CAB-2B-30', width: 30, height: 84, depth: 15, boxOptions: [2], numberOfShelves: 0, numOfDrawers: 0, numOfRollouts: 0, basePrice: '0' },
-      { id: 11, code: 'CAB-1B-30', width: 30, height: 84, depth: 15, boxOptions: [1, 2], numberOfShelves: 0, numOfDrawers: 0, numOfRollouts: 0, basePrice: '0' },
-      { id: 12, code: 'CAB-2B-45', width: 45, height: 84, depth: 15, boxOptions: [2], numberOfShelves: 0, numOfDrawers: 0, numOfRollouts: 0, basePrice: '0' }
+      { id: 10, code: 'CAB-2B-30', width: 30, height: 84, depth: 15, minW: 25, maxW: 35, minH: 80, maxH: 85, minD: 6, maxD: 16, boxOptions: [2], numberOfShelves: 0, numOfDrawers: 0, numOfRollouts: 0, basePrice: '0' },
+      { id: 11, code: 'CAB-1B-30', width: 30, height: 84, depth: 15, minW: 25, maxW: 35, minH: 80, maxH: 85, minD: 6, maxD: 16, boxOptions: [1, 2], numberOfShelves: 0, numOfDrawers: 0, numOfRollouts: 0, basePrice: '0' },
+      { id: 12, code: 'CAB-2B-45', width: 45, height: 84, depth: 15, minW: 35.1, maxW: 45, minH: 80, maxH: 85, minD: 6, maxD: 16, boxOptions: [2], numberOfShelves: 0, numOfDrawers: 0, numOfRollouts: 0, basePrice: '0' }
     ]
 
-    // Width 32, ask for 1-box -> should pick the 1B-30 cabinet
+    // Width 32, ask for 1-box -> within [25, 35] range, should pick 1B-30 (supports boxOption 1)
     let cab = resolveCabinetForTower('without_doors', 'CAS', 32, 84, 15, 1)
     expect(cab?.id).toBe(11)
 
-    // Width 45, ask for 2-box -> should pick the 2B-45 cabinet
+    // Width 45, ask for 2-box -> within [35.1, 45] range, should pick 2B-45
     cab = resolveCabinetForTower('without_doors', 'CAS', 45, 84, 15, 2)
     expect(cab?.id).toBe(12)
 

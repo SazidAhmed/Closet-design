@@ -21,6 +21,7 @@ import {
   loadCatalogCategories,
   refreshTowerCabinet,
   refreshTowerCatalog,
+  setActiveCategories,
   type ClosetCatalogCategory,
   type ClosetCatalogCategoryCode,
   type ClosetDoorMode,
@@ -65,10 +66,41 @@ export const useClosetStore = defineStore('closet', {
     // ── Catalog loading ───────────────────────────────────────────────────
     /**
      * Fetch catalog categories from the backend API for both door modes.
-     * Falls back to static data if the API is unavailable.
-     * Safe to call multiple times; no-ops while already loading.
+     * Persists categories in Pinia memory state and localStorage so the API is called ONCE.
+     * Subsequent calls load from memory/localStorage and make 0 network requests.
      */
-    async loadCatalogs() {
+    async loadCatalogs(forceRefresh = false) {
+      const CACHE_KEY = 'closet-catalog-categories-cache'
+
+      // 1. If already in Pinia memory state and not forcing refresh -> skip network request completely
+      if (this.catalogCategories.length > 0 && !forceRefresh) {
+        setActiveCategories(this.catalogCategories)
+        return
+      }
+
+      // 2. Check localStorage cache if not forcing refresh
+      if (!forceRefresh) {
+        try {
+          const cachedRaw = localStorage.getItem(CACHE_KEY)
+          if (cachedRaw) {
+            const parsed = JSON.parse(cachedRaw) as ClosetCatalogCategory[]
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              console.log('[useClosetStore] Loaded catalog categories from localStorage cache (0 network requests).')
+              this.catalogCategories = parsed
+              setActiveCategories(parsed)
+              this.towers.forEach((tower) => {
+                refreshTowerCatalog(tower)
+                refreshTowerCabinet(tower)
+              })
+              return
+            }
+          }
+        } catch (e) {
+          console.warn('[useClosetStore] Failed to read catalog cache from localStorage:', e)
+        }
+      }
+
+      // 3. Fetch from API if memory state & localStorage cache are empty or forceRefresh is true
       if (this.catalogsLoading) return
       this.catalogsLoading = true
       try {
@@ -76,10 +108,23 @@ export const useClosetStore = defineStore('closet', {
           loadCatalogCategories('without_doors'),
           loadCatalogCategories('with_doors'),
         ])
-        this.catalogCategories = [...withoutDoors, ...withDoors]
+        const allCategories = [...withoutDoors, ...withDoors]
+        this.catalogCategories = allCategories
+        setActiveCategories(allCategories)
+
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify(allCategories))
+          console.log('[useClosetStore] Saved catalog categories & cabinets to localStorage cache.')
+        } catch (e) {
+          console.warn('[useClosetStore] Failed to save catalog cache to localStorage:', e)
+        }
+        
+        // Refresh all existing towers with newly loaded API categories & cabinets
+        this.towers.forEach((tower) => {
+          refreshTowerCatalog(tower)
+          refreshTowerCabinet(tower)
+        })
       } catch (err) {
-        // loadCatalogCategories already handles errors and falls back to static
-        // data. This catch is only for unexpected rejections (e.g. AbortError).
         console.warn('[useClosetStore] loadCatalogs: unexpected error', err)
       } finally {
         this.catalogsLoading = false

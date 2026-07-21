@@ -26,6 +26,18 @@ export type ClosetCabinetEntry = {
   width: number;
   height: number;
   depth: number;
+  /** Min width this cabinet covers (from API). */
+  minW: number;
+  /** Max width this cabinet covers (from API). */
+  maxW: number;
+  /** Min height this cabinet covers (from API). */
+  minH: number;
+  /** Max height this cabinet covers (from API). */
+  maxH: number;
+  /** Min depth this cabinet covers (from API). */
+  minD: number;
+  /** Max depth this cabinet covers (from API). */
+  maxD: number;
   boxOptions: number[]; // [1, 2] or [2]
   numberOfShelves: number;
   numOfDrawers: number;
@@ -196,6 +208,12 @@ const CLOSET_CATALOG_CATEGORIES: ClosetCatalogCategory[] = [
 // but gets updated dynamically when loadCatalogCategories is called.
 let activeCategories: ClosetCatalogCategory[] = [...CLOSET_CATALOG_CATEGORIES];
 
+export function setActiveCategories(categories: ClosetCatalogCategory[]): void {
+  if (Array.isArray(categories) && categories.length > 0) {
+    activeCategories = [...categories];
+  }
+}
+
 export function getCategoriesForDoorMode(
   doorMode: ClosetDoorMode,
 ): ClosetCatalogCategory[] {
@@ -210,7 +228,8 @@ export function getCategoryByCode(
 ): ClosetCatalogCategory {
   const category = activeCategories.find(
     (entry) =>
-      entry.doorMode === doorMode && entry.categoryCode === categoryCode,
+      (entry.doorMode === doorMode || (entry as any).door_mode === doorMode) &&
+      (entry.categoryCode === categoryCode || (entry as any).category_code === categoryCode || (entry as any).code === categoryCode),
   );
   if (!category) {
     throw new Error(`Unknown closet category ${doorMode}:${categoryCode}`);
@@ -280,13 +299,95 @@ export function refreshTowerCatalog(tower: Tower): void {
 }
 
 /**
- * Resolve the best-matching cabinet record for a tower's exact dimensions
- * and box-count preference.
+ * Select the best-matching cabinet from a cabinet array based on the
+ * user-entered width and height using range matching.
  *
- * Strategy: find the cabinet within the resolved catalog whose base
- * (width, height, depth) is <= the tower's dimensions, picking the
- * largest base dimensions that don't exceed the tower.  If boxCount is
- * specified, only consider cabinets whose boxOptions include that value.
+ * Selection logic:
+ *  1. Filter cabinets by boxCount preference.
+ *  2. Find cabinets whose minW ≤ width ≤ maxW AND minH ≤ height ≤ maxH.
+ *  3. If multiple match, prefer the one with the tightest width range.
+ *  4. If none match exactly, pick the cabinet whose range boundary is
+ *     closest (preferring the next wider/taller cabinet when in a gap).
+ *
+ * Kept isolated so more selection rules can be layered in later.
+ */
+export function selectCabinet(
+  cabinets: ClosetCabinetEntry[],
+  width: number,
+  height: number,
+  boxCount: 1 | 2 = 2,
+): ClosetCabinetEntry | null {
+  console.log("selectCabinet called with", { cabinetsCount: cabinets?.length, width, height, boxCount });
+  if (!cabinets || cabinets.length === 0) return null;
+
+  // Step 1: filter by box-count preference
+  let candidates = cabinets.filter((c) =>
+    c.boxOptions.includes(boxCount),
+  );
+  if (candidates.length === 0) {
+    candidates = cabinets;
+  }
+  
+  console.log("selectCabinet candidates", candidates.map(c => ({ code: c.code, minW: c.minW, maxW: c.maxW, minH: c.minH, maxH: c.maxH })));
+
+  // Step 2: find cabinets whose range covers the entered width AND height
+  const inRange = candidates.filter(
+    (c) =>
+      width >= c.minW &&
+      width <= c.maxW &&
+      height >= c.minH &&
+      height <= c.maxH,
+  );
+
+  if (inRange.length === 1) return inRange[0];
+
+  if (inRange.length > 1) {
+    // Step 3: multiple matches — prefer tightest width range
+    return inRange.reduce((best, c) => {
+      const bestSpan = best.maxW - best.minW;
+      const cSpan = c.maxW - c.minW;
+      return cSpan < bestSpan ? c : best;
+    });
+  }
+
+  // Step 4: no exact range match — find the nearest cabinet.
+  // Prefer the next wider/taller cabinet when the value falls in a gap.
+  let nearest: ClosetCabinetEntry | null = null;
+  let nearestDist = Infinity;
+
+  for (const c of candidates) {
+    // Distance from the entered width to this cabinet's width range
+    let wDist = 0;
+    if (width < c.minW) wDist = c.minW - width;
+    else if (width > c.maxW) wDist = width - c.maxW;
+
+    // Distance from the entered height to this cabinet's height range
+    let hDist = 0;
+    if (height < c.minH) hDist = c.minH - height;
+    else if (height > c.maxH) hDist = height - c.maxH;
+
+    const dist = wDist + hDist;
+
+    if (
+      dist < nearestDist ||
+      // Tie-break: prefer the cabinet whose range starts above the entered
+      // value (the "next" cabinet when in a gap between two ranges)
+      (dist === nearestDist &&
+        nearest &&
+        c.minW >= width &&
+        nearest.minW < width)
+    ) {
+      nearest = c;
+      nearestDist = dist;
+    }
+  }
+
+  return nearest;
+}
+
+/**
+ * Resolve the best-matching cabinet record for a tower's dimensions
+ * and box-count preference by delegating to the range-based selectCabinet.
  */
 export function resolveCabinetForTower(
   doorMode: ClosetDoorMode,
@@ -297,38 +398,9 @@ export function resolveCabinetForTower(
   boxCount: 1 | 2 = 2,
 ): ClosetCabinetEntry | null {
   const catalog = resolveCatalogForTower(doorMode, categoryCode, depth);
+  console.log("resolveCabinetForTower catalog found:", catalog?.code, "cabinets count:", catalog?.cabinets?.length);
   if (!catalog.cabinets || catalog.cabinets.length === 0) return null;
-
-  // Filter by box options first
-  let candidates = catalog.cabinets.filter((c) =>
-    c.boxOptions.includes(boxCount),
-  );
-  if (candidates.length === 0) {
-    // Fall back to any cabinet if no box-filtered match
-    candidates = catalog.cabinets;
-  }
-
-  // Find the best match: cabinet with largest base dims that don't exceed tower dims
-  let best: ClosetCabinetEntry | null = null;
-  for (const cab of candidates) {
-    if (cab.width > width || cab.height > height || cab.depth > depth) continue;
-    if (
-      !best ||
-      cab.width > best.width ||
-      (cab.width === best.width && cab.height > best.height)
-    ) {
-      best = cab;
-    }
-  }
-
-  // If no cabinet fits under the tower dims, just pick the smallest one
-  if (!best) {
-    best = candidates.reduce((a, b) =>
-      a.width <= b.width && a.height <= b.height ? a : b,
-    );
-  }
-
-  return best;
+  return selectCabinet(catalog.cabinets, width, height, boxCount);
 }
 
 /**
@@ -454,28 +526,85 @@ export async function loadCatalogCategories(
     const apiCategories = await ClosetService.getCatalogCategories(doorMode);
 
     if (Array.isArray(apiCategories) && apiCategories.length > 0) {
+      console.log(`[API Response] Catalog Categories for door mode "${doorMode}":`, apiCategories);
+      console.log(`[closetCatalogs] Successfully fetched ${apiCategories.length} categories for ${doorMode}`);
       // Map API data to the hardcoded list to retain limits
       const mapped = apiCategories.map(apiCat => {
-        const staticCat = CLOSET_CATALOG_CATEGORIES.find(c => c.categoryCode === apiCat.categoryCode && c.doorMode === apiCat.doorMode);
-        if (staticCat) {
-          return {
-            ...apiCat,
-            catalogs: apiCat.catalogs.map(catalog => {
-              const staticCatalog = staticCat.catalogs.find(c => c.code === catalog.code);
-              return {
-                ...catalog,
-                minW: catalog.minW > 0 ? catalog.minW : (staticCatalog ? staticCatalog.minW : 0),
-                maxW: catalog.maxW > 0 ? catalog.maxW : (staticCatalog ? staticCatalog.maxW : 0),
-                minD: catalog.minD > 0 ? catalog.minD : (staticCatalog ? staticCatalog.minD : 0),
-                maxD: catalog.maxD > 0 ? catalog.maxD : (staticCatalog ? staticCatalog.maxD : 0),
-                minH: catalog.minH > 0 ? catalog.minH : (staticCatalog ? staticCatalog.minH : 0),
-                maxH: catalog.maxH > 0 ? catalog.maxH : (staticCatalog ? staticCatalog.maxH : 0),
-                cabinets: catalog.cabinets ?? [],
-              };
-            })
-          };
+        const catDoorMode = (apiCat.doorMode ?? (apiCat as any).door_mode ?? doorMode) as ClosetDoorMode;
+        const catCode = (apiCat.categoryCode ?? (apiCat as any).category_code ?? (apiCat as any).code ?? '') as ClosetCatalogCategoryCode;
+        const catName = (apiCat.categoryName ?? (apiCat as any).category_name ?? (apiCat as any).name ?? catCode);
+
+        const staticCat = CLOSET_CATALOG_CATEGORIES.find(c => c.categoryCode === catCode && c.doorMode === catDoorMode);
+        
+        const parseBoxOptions = (options: string | null | undefined): number[] => {
+          if (!options) return [2]
+          const lower = options.toLowerCase()
+          if (lower.includes('single box')) return [1, 2]
+          return [2]
         }
-        return apiCat;
+
+        const rawCatalogs: any[] = apiCat.catalogs ?? (apiCat as any).catalog_list ?? [];
+
+        return {
+          ...apiCat,
+          doorMode: catDoorMode,
+          categoryCode: catCode,
+          categoryName: catName,
+          catalogs: rawCatalogs.map(catalog => {
+            const staticCatalog = staticCat?.catalogs.find(c => c.code === catalog.code);
+            const rawCabinetList: any[] = catalog.cabinets ?? (catalog as any).cabinet_list ?? (catalog as any).items ?? (catalog as any).closet_cabinets ?? [];
+            const mappedCabinets = rawCabinetList.map((raw: any) => ({
+              ...raw,
+              id: Number(raw.id ?? 0),
+              code: String(raw.code ?? ''),
+              width: Number(raw.width ?? 0),
+              height: Number(raw.height ?? 0),
+              depth: Number(raw.depth ?? 0),
+              minW: Number(raw.min_w ?? raw.minW ?? 0),
+              maxW: Number(raw.max_w ?? raw.maxW ?? 0),
+              minH: Number(raw.min_h ?? raw.minH ?? 0),
+              maxH: Number(raw.max_h ?? raw.maxH ?? 0),
+              minD: Number(raw.min_d ?? raw.minD ?? 0),
+              maxD: Number(raw.max_d ?? raw.maxD ?? 0),
+              boxOptions: Array.isArray(raw.boxOptions)
+                ? raw.boxOptions
+                : parseBoxOptions(raw.options),
+              numberOfShelves: Number(raw.number_of_shelves ?? raw.numberOfShelves ?? 0),
+              numOfDrawers: Number(raw.num_of_drawers ?? raw.numOfDrawers ?? 0),
+              numOfRollouts: Number(raw.num_of_rollouts ?? raw.numOfRollouts ?? 0),
+              basePrice: String(raw.base_price ?? raw.basePrice ?? '0'),
+            }));
+            
+            const catMinW = Number((catalog as any).min_w ?? (catalog as any).minW ?? 0);
+            const catMaxW = Number((catalog as any).max_w ?? (catalog as any).maxW ?? 0);
+            const catMinD = Number((catalog as any).min_d ?? (catalog as any).minD ?? 0);
+            const catMaxD = Number((catalog as any).max_d ?? (catalog as any).maxD ?? 0);
+            const catMinH = Number((catalog as any).min_h ?? (catalog as any).minH ?? 0);
+            const catMaxH = Number((catalog as any).max_h ?? (catalog as any).maxH ?? 0);
+            const catalogId = Number((catalog as any).catalog_id ?? (catalog as any).catalogId ?? (catalog as any).id ?? catalog.catalogId ?? 0);
+
+            const cabMinW = mappedCabinets.length > 0 ? Math.min(...mappedCabinets.map(c => c.minW)) : 0;
+            const cabMaxW = mappedCabinets.length > 0 ? Math.max(...mappedCabinets.map(c => c.maxW)) : 0;
+            const cabMinD = mappedCabinets.length > 0 ? Math.min(...mappedCabinets.map(c => c.depth || c.minD)) : 0;
+            const cabMaxD = mappedCabinets.length > 0 ? Math.max(...mappedCabinets.map(c => c.depth || c.maxD)) : 0;
+            const cabMinH = mappedCabinets.length > 0 ? Math.min(...mappedCabinets.map(c => c.minH)) : 0;
+            const cabMaxH = mappedCabinets.length > 0 ? Math.max(...mappedCabinets.map(c => c.maxH)) : 0;
+
+            console.log(`[closetCatalogs] Mapped ${mappedCabinets.length} cabinets for catalog ${catalog.code || catalogId}`);
+            
+            return {
+              ...catalog,
+              catalogId: catalogId > 0 ? catalogId : (catalog.catalogId ?? 0),
+              minW: catMinW > 0 ? catMinW : (cabMinW > 0 ? cabMinW : (staticCatalog ? staticCatalog.minW : 0)),
+              maxW: catMaxW > 0 ? catMaxW : (cabMaxW > 0 ? cabMaxW : (staticCatalog ? staticCatalog.maxW : 0)),
+              minD: catMinD > 0 ? catMinD : (cabMinD > 0 ? cabMinD : (staticCatalog ? staticCatalog.minD : 0)),
+              maxD: catMaxD > 0 ? catMaxD : (cabMaxD > 0 ? cabMaxD : (staticCatalog ? staticCatalog.maxD : 0)),
+              minH: catMinH > 0 ? catMinH : (cabMinH > 0 ? cabMinH : (staticCatalog ? staticCatalog.minH : 0)),
+              maxH: catMaxH > 0 ? catMaxH : (cabMaxH > 0 ? cabMaxH : (staticCatalog ? staticCatalog.maxH : 0)),
+              cabinets: mappedCabinets,
+            };
+          })
+        };
       });
 
       // Update the active categories for this door mode
@@ -494,10 +623,7 @@ export async function loadCatalogCategories(
     if (err instanceof Error && err.name === 'AbortError') {
       throw err; // Re-throw abort signals so callers can handle them.
     }
-    console.warn(
-      `[closetCatalogs] Failed to fetch catalog categories from API; using static fallback.`,
-      err,
-    );
+    console.error(`[closetCatalogs] Failed to fetch catalog categories for ${doorMode}:`, err);
   }
 
   // Static fallback — always available, no network required.
