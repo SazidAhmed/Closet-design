@@ -12,6 +12,7 @@ import { useUnit } from "../../../composables/useUnit";
 import {
   getCategoriesForDoorMode,
   getCategoryLimits,
+  isOneBoxAvailable,
   type ClosetCatalogCategory,
   type ClosetCatalogCategoryCode,
   type ClosetCatalogLimits,
@@ -649,6 +650,28 @@ function setDoorMode(mode: ClosetDoorMode) {
   selectedDoorMode.value = mode;
 }
 
+/** Whether the selected tower can use 1-box configuration at current W/D. */
+const oneBoxAvailable = computed(() => {
+  const tower = selectedTower.value;
+  if (!tower?.doorMode || !tower.categoryCode) return false;
+  if (tower.doorMode !== 'without_doors') return false;
+  return isOneBoxAvailable(tower.doorMode, tower.categoryCode, tower.width, tower.depth);
+});
+
+/** Whether the box-count toggle should be shown (only for without-doors catalog towers). */
+const showBoxToggle = computed(() => {
+  const tower = selectedTower.value;
+  if (!tower?.doorMode || !tower.categoryCode) return false;
+  if (tower.partType === 'panel' || tower.partType === 'filler') return false;
+  return tower.doorMode === 'without_doors';
+});
+
+function toggleBoxCount(boxCount: 1 | 2) {
+  const tower = selectedTower.value;
+  if (!tower) return;
+  closet.setTowerBoxCount(tower.id, boxCount);
+}
+
 function onDimensionInput(
   dimension: "width" | "depth" | "height" | "outset" | "elevation",
   event: Event,
@@ -1097,6 +1120,36 @@ function cancelCustomPartSide() {
               :value="truncTo4(selectedTower.elevation ?? 0)"
               @change="onDimensionInput('elevation', $event)"
             />
+          </div>
+
+          <!-- Box Count Toggle (Without Doors only) -->
+          <div v-if="showBoxToggle" class="box-toggle-section">
+            <div class="dimension-head">
+              <label>Box Configuration</label>
+            </div>
+            <div class="segmented-control box-toggle">
+              <button
+                class="segment-btn"
+                :class="{ active: (selectedTower.boxCount ?? 2) === 2 }"
+                @click="toggleBoxCount(2)"
+              >
+                2 Boxes
+              </button>
+              <button
+                class="segment-btn"
+                :class="{ active: selectedTower.boxCount === 1, disabled: !oneBoxAvailable }"
+                :disabled="!oneBoxAvailable"
+                :title="!oneBoxAvailable ? 'Width exceeds 1-box limit for this depth' : ''"
+                @click="toggleBoxCount(1)"
+              >
+                1 Box
+              </button>
+            </div>
+          </div>
+
+          <!-- Cabinet Info (debug/tracing) -->
+          <div v-if="selectedTower.cabinetId" class="cabinet-info">
+            <span>Cabinet: {{ selectedTower.cabinetCode || '—' }} #{{ selectedTower.cabinetId }}</span>
           </div>
 
           <!-- Clearance display -->
@@ -1710,5 +1763,25 @@ function cancelCustomPartSide() {
 
 .modal-btn.secondary:hover {
   background: rgba(255, 255, 255, 0.15);
+}
+
+.box-toggle-section {
+  margin-top: 24px;
+}
+
+.box-toggle {
+  margin-top: 12px;
+}
+
+.segment-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cabinet-info {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #94a3b8; /* Slate-400 */
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 </style>

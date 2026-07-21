@@ -17,7 +17,9 @@ import {
   clampTowerHeight,
   clampTowerWidth,
   createTowerFromCategory,
+  isOneBoxAvailable,
   loadCatalogCategories,
+  refreshTowerCabinet,
   refreshTowerCatalog,
   type ClosetCatalogCategory,
   type ClosetCatalogCategoryCode,
@@ -265,6 +267,9 @@ export const useClosetStore = defineStore('closet', {
             tower.positionAlongWall += (deltaW / 2) / wallLengthCm
           }
         }
+
+        // Refresh cabinet after width change (also auto-forces 2-box if needed)
+        refreshTowerCabinet(tower)
       }
     },
 
@@ -273,6 +278,7 @@ export const useClosetStore = defineStore('closet', {
       if (!tower) return
       tower.depth = clampTowerDepth(tower, depth)
       refreshTowerCatalog(tower)
+      refreshTowerCabinet(tower)
 
       // Sync attached parts
       this.towers
@@ -290,6 +296,7 @@ export const useClosetStore = defineStore('closet', {
       const tower = this.towers.find((t) => t.id === towerId)
       if (tower) {
         tower.height = clampTowerHeight(tower, height)
+        refreshTowerCabinet(tower)
         // Sync attached parts
         this.towers
           .filter((t) => t.attachedToTowerId === towerId)
@@ -297,6 +304,20 @@ export const useClosetStore = defineStore('closet', {
             part.height = tower.height
           })
       }
+    },
+
+    setTowerBoxCount(towerId: string, boxCount: 1 | 2) {
+      const tower = this.towers.find((t) => t.id === towerId)
+      if (!tower || !tower.doorMode || !tower.categoryCode) return
+
+      // Validate 1-box availability
+      if (boxCount === 1 && !isOneBoxAvailable(tower.doorMode, tower.categoryCode, tower.width, tower.depth)) {
+        tower.boxCount = 2
+      } else {
+        tower.boxCount = boxCount
+      }
+
+      refreshTowerCabinet(tower)
     },
 
     setTowerOutset(towerId: string, outset: number) {

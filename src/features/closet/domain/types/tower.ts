@@ -79,6 +79,12 @@ export type Tower = {
   partType?: 'cabinet' | 'panel' | 'filler'
   /** For panel/filler: the ID of the cabinet they are attached to. */
   attachedToTowerId?: string
+  /** 1-box or 2-box configuration (Without Doors only). Defaults to 2. */
+  boxCount?: 1 | 2
+  /** Active cabinet ID resolved for this tower's exact dimensions. */
+  cabinetId?: number
+  /** Active cabinet code for debugging/tracing. */
+  cabinetCode?: string
   /** Accessories placed inside this tower. */
   accessories: Accessory[]
   /**

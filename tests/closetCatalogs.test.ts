@@ -1,8 +1,11 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 import {
+  CLOSET_CATALOG_CATEGORIES,
   createTowerFromCategory,
   getCategoryLimits,
+  isOneBoxAvailable,
+  resolveCabinetForTower,
   resolveCatalogForTower,
 } from '../src/features/closet/domain/closetCatalogs'
 import { exportForBackend } from '../src/features/closet/domain/schema'
@@ -33,6 +36,7 @@ describe('closet catalog selection', () => {
     expect(tower.doorMode).toBe('without_doors')
     expect(tower.categoryCode).toBe('CDH')
     expect(tower.catalogId).toBe(207)
+    expect(tower.boxCount).toBe(2)
     expect(tower.width).toBeCloseTo(limits.minW, 1)
     expect(tower.depth).toBeCloseTo(limits.minD, 1)
     expect(tower.height).toBeCloseTo(limits.minH, 1)
@@ -53,5 +57,65 @@ describe('closet catalog selection', () => {
 
     const payload = exportForBackend(closet.$state)
     expect(payload.towers[0]?.catalogId).toBe(199)
+  })
+})
+
+describe('box configuration & cabinet resolution', () => {
+  it('isOneBoxAvailable enforces width thresholds by depth', () => {
+    // 15D -> max 40"
+    expect(isOneBoxAvailable('without_doors', 'CAS', 30, 15)).toBe(true)
+    expect(isOneBoxAvailable('without_doors', 'CAS', 40, 15)).toBe(true)
+    expect(isOneBoxAvailable('without_doors', 'CAS', 41, 15)).toBe(false)
+    
+    // 21D -> max 37"
+    expect(isOneBoxAvailable('without_doors', 'CAS', 37, 21)).toBe(true)
+    expect(isOneBoxAvailable('without_doors', 'CAS', 38, 21)).toBe(false)
+
+    // with_doors -> never available
+    expect(isOneBoxAvailable('with_doors', 'CAS', 30, 23)).toBe(false)
+  })
+
+  it('store width edits force 2-box when exceeding threshold', () => {
+    setActivePinia(createPinia())
+    const closet = useClosetStore()
+
+    closet.setTowers([])
+    closet.addTowerFromCatalog('without_doors', 'CAS')
+    const tower = closet.towers[0]!
+    
+    // Set to 30W, 15D, 1-box
+    closet.setTowerWidth(tower.id, 30)
+    closet.setTowerBoxCount(tower.id, 1)
+    expect(tower.boxCount).toBe(1)
+
+    // Exceed threshold (40" for 15D)
+    closet.setTowerWidth(tower.id, 41)
+    
+    // Should auto-force back to 2-box
+    expect(tower.boxCount).toBe(2)
+  })
+
+  it('resolves cabinet based on box count and dimensions', () => {
+    // Inject mock cabinets into the first CAS catalog for testing
+    const cas15 = CLOSET_CATALOG_CATEGORIES
+      .find(c => c.doorMode === 'without_doors' && c.categoryCode === 'CAS')!
+      .catalogs.find(c => c.catalogId === 205)!
+    
+    cas15.cabinets = [
+      { id: 10, code: 'CAB-2B-30', width: 30, height: 84, depth: 15, boxOptions: [2], numberOfShelves: 0, numOfDrawers: 0, numOfRollouts: 0, basePrice: '0' },
+      { id: 11, code: 'CAB-1B-30', width: 30, height: 84, depth: 15, boxOptions: [1, 2], numberOfShelves: 0, numOfDrawers: 0, numOfRollouts: 0, basePrice: '0' },
+      { id: 12, code: 'CAB-2B-45', width: 45, height: 84, depth: 15, boxOptions: [2], numberOfShelves: 0, numOfDrawers: 0, numOfRollouts: 0, basePrice: '0' }
+    ]
+
+    // Width 32, ask for 1-box -> should pick the 1B-30 cabinet
+    let cab = resolveCabinetForTower('without_doors', 'CAS', 32, 84, 15, 1)
+    expect(cab?.id).toBe(11)
+
+    // Width 45, ask for 2-box -> should pick the 2B-45 cabinet
+    cab = resolveCabinetForTower('without_doors', 'CAS', 45, 84, 15, 2)
+    expect(cab?.id).toBe(12)
+
+    // Cleanup
+    cas15.cabinets = []
   })
 })

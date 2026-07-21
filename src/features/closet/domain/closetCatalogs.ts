@@ -20,6 +20,19 @@ export type ClosetCatalogCategoryCode =
   | "CCH"
   | "CCL";
 
+export type ClosetCabinetEntry = {
+  id: number;
+  code: string;
+  width: number;
+  height: number;
+  depth: number;
+  boxOptions: number[]; // [1, 2] or [2]
+  numberOfShelves: number;
+  numOfDrawers: number;
+  numOfRollouts: number;
+  basePrice: string;
+};
+
 export type ClosetCatalogEntry = {
   catalogId: number;
   code: string;
@@ -29,6 +42,7 @@ export type ClosetCatalogEntry = {
   maxD: number;
   minH: number;
   maxH: number;
+  cabinets: ClosetCabinetEntry[];
 };
 
 export type ClosetCatalogCategory = {
@@ -68,6 +82,7 @@ function entry(
     maxD: maxDIn,
     minH: minHIn,
     maxH: maxHIn,
+    cabinets: [],
   };
 }
 
@@ -264,6 +279,111 @@ export function refreshTowerCatalog(tower: Tower): void {
   tower.catalogCode = catalog.code;
 }
 
+/**
+ * Resolve the best-matching cabinet record for a tower's exact dimensions
+ * and box-count preference.
+ *
+ * Strategy: find the cabinet within the resolved catalog whose base
+ * (width, height, depth) is <= the tower's dimensions, picking the
+ * largest base dimensions that don't exceed the tower.  If boxCount is
+ * specified, only consider cabinets whose boxOptions include that value.
+ */
+export function resolveCabinetForTower(
+  doorMode: ClosetDoorMode,
+  categoryCode: ClosetCatalogCategoryCode,
+  width: number,
+  height: number,
+  depth: number,
+  boxCount: 1 | 2 = 2,
+): ClosetCabinetEntry | null {
+  const catalog = resolveCatalogForTower(doorMode, categoryCode, depth);
+  if (!catalog.cabinets || catalog.cabinets.length === 0) return null;
+
+  // Filter by box options first
+  let candidates = catalog.cabinets.filter((c) =>
+    c.boxOptions.includes(boxCount),
+  );
+  if (candidates.length === 0) {
+    // Fall back to any cabinet if no box-filtered match
+    candidates = catalog.cabinets;
+  }
+
+  // Find the best match: cabinet with largest base dims that don't exceed tower dims
+  let best: ClosetCabinetEntry | null = null;
+  for (const cab of candidates) {
+    if (cab.width > width || cab.height > height || cab.depth > depth) continue;
+    if (
+      !best ||
+      cab.width > best.width ||
+      (cab.width === best.width && cab.height > best.height)
+    ) {
+      best = cab;
+    }
+  }
+
+  // If no cabinet fits under the tower dims, just pick the smallest one
+  if (!best) {
+    best = candidates.reduce((a, b) =>
+      a.width <= b.width && a.height <= b.height ? a : b,
+    );
+  }
+
+  return best;
+}
+
+/**
+ * Check whether 1-box configuration is available for a without-doors tower
+ * at the given width and depth.
+ *
+ * Rules:
+ * - with_doors → always false (no box concept)
+ * - 15D and 18D closets → 1-box available up to 40" width
+ * - 21D+ closets → 1-box available up to 37" width
+ */
+export function isOneBoxAvailable(
+  doorMode: ClosetDoorMode,
+  _categoryCode: ClosetCatalogCategoryCode,
+  width: number,
+  depth: number,
+): boolean {
+  if (doorMode === 'with_doors') return false;
+  const maxW = depth >= 21 ? 37 : 40;
+  return width <= maxW;
+}
+
+/**
+ * Refresh the tower's cabinetId and cabinetCode after any dimension or
+ * box-count change.  Also enforces box-count availability rules.
+ */
+export function refreshTowerCabinet(tower: Tower): void {
+  if (!tower.doorMode || !tower.categoryCode) return;
+
+  // Auto-force 2-box if 1-box is no longer available at current dimensions
+  if (
+    tower.boxCount === 1 &&
+    !isOneBoxAvailable(tower.doorMode, tower.categoryCode, tower.width, tower.depth)
+  ) {
+    tower.boxCount = 2;
+  }
+
+  const cabinet = resolveCabinetForTower(
+    tower.doorMode,
+    tower.categoryCode,
+    tower.width,
+    tower.height,
+    tower.depth,
+    tower.boxCount ?? 2,
+  );
+  tower.cabinetId = cabinet?.id;
+  tower.cabinetCode = cabinet?.code;
+
+  if (cabinet) {
+    tower.width = cabinet.width;
+    tower.height = cabinet.height;
+    tower.depth = cabinet.depth;
+  }
+}
+
 function accessoriesForCategory(
   categoryCode: ClosetCatalogCategoryCode,
 ): Accessory[] {
@@ -296,18 +416,31 @@ export function createTowerFromCategory(
   const limits = getCategoryLimits(doorMode, categoryCode);
   const catalog = resolveCatalogForTower(doorMode, categoryCode, limits.minD);
 
+  const boxCount: 1 | 2 = 2; // default to 2-box
+  const cabinet = resolveCabinetForTower(
+    doorMode,
+    categoryCode,
+    limits.minW,
+    limits.minH,
+    limits.minD,
+    boxCount,
+  );
+
   return {
     id: createTowerId(),
     label: `${category.categoryName} ${index}`,
-    width: limits.minW,
-    depth: limits.minD,
-    height: limits.minH,
+    width: cabinet ? cabinet.width : limits.minW,
+    depth: cabinet ? cabinet.depth : limits.minD,
+    height: cabinet ? cabinet.height : limits.minH,
     doorMode,
     categoryCode,
     categoryName: category.categoryName,
     catalogId: catalog.catalogId,
     catalogCode: catalog.code,
     isCorner: categoryCode === "CCS" || categoryCode === "CCH" || categoryCode === "CCL",
+    boxCount,
+    cabinetId: cabinet?.id,
+    cabinetCode: cabinet?.code,
     accessories: accessoriesForCategory(categoryCode),
   };
 }
@@ -337,6 +470,7 @@ export async function loadCatalogCategories(
                 maxD: catalog.maxD > 0 ? catalog.maxD : (staticCatalog ? staticCatalog.maxD : 0),
                 minH: catalog.minH > 0 ? catalog.minH : (staticCatalog ? staticCatalog.minH : 0),
                 maxH: catalog.maxH > 0 ? catalog.maxH : (staticCatalog ? staticCatalog.maxH : 0),
+                cabinets: catalog.cabinets ?? [],
               };
             })
           };
