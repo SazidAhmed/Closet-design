@@ -462,12 +462,21 @@ const depthLabel = computed(() => {
                         ) ?? 200)
                     : 200
                 "
-                step="0.1"
+                step="0.0625"
                 @change="
-                  closet.setTowerWidth(
-                    selectedTower!.id,
-                    Number(($event.target as HTMLInputElement).value),
-                  )
+                  const target = $event.target as HTMLInputElement;
+                  closet.setTowerWidth(selectedTower!.id, Number(target.value));
+                  target.value = String(selectedTower!.width);
+                "
+                @blur="
+                  const target = $event.target as HTMLInputElement;
+                  closet.setTowerWidth(selectedTower!.id, Number(target.value));
+                  target.value = String(selectedTower!.width);
+                "
+                @keyup.enter="
+                  const target = $event.target as HTMLInputElement;
+                  closet.setTowerWidth(selectedTower!.id, Number(target.value));
+                  target.value = String(selectedTower!.width);
                 "
               />
             </div>
@@ -507,12 +516,21 @@ const depthLabel = computed(() => {
                         ) ?? 60)
                     : 60
                 "
-                step="0.1"
+                step="0.0625"
                 @change="
-                  closet.setTowerDepth(
-                    selectedTower!.id,
-                    Number(($event.target as HTMLInputElement).value),
-                  )
+                  const target = $event.target as HTMLInputElement;
+                  closet.setTowerDepth(selectedTower!.id, Number(target.value));
+                  target.value = String(selectedTower!.depth);
+                "
+                @blur="
+                  const target = $event.target as HTMLInputElement;
+                  closet.setTowerDepth(selectedTower!.id, Number(target.value));
+                  target.value = String(selectedTower!.depth);
+                "
+                @keyup.enter="
+                  const target = $event.target as HTMLInputElement;
+                  closet.setTowerDepth(selectedTower!.id, Number(target.value));
+                  target.value = String(selectedTower!.depth);
                 "
               />
             </div>
@@ -552,12 +570,21 @@ const depthLabel = computed(() => {
                         ) ?? 250)
                     : 250
                 "
-                step="0.1"
+                step="0.0625"
                 @change="
-                  closet.setTowerHeight(
-                    selectedTower!.id,
-                    Number(($event.target as HTMLInputElement).value),
-                  )
+                  const target = $event.target as HTMLInputElement;
+                  closet.setTowerHeight(selectedTower!.id, Number(target.value));
+                  target.value = String(selectedTower!.height);
+                "
+                @blur="
+                  const target = $event.target as HTMLInputElement;
+                  closet.setTowerHeight(selectedTower!.id, Number(target.value));
+                  target.value = String(selectedTower!.height);
+                "
+                @keyup.enter="
+                  const target = $event.target as HTMLInputElement;
+                  closet.setTowerHeight(selectedTower!.id, Number(target.value));
+                  target.value = String(selectedTower!.height);
                 "
               />
             </div>

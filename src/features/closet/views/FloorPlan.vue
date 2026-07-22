@@ -167,6 +167,8 @@ onMounted(() => {
   }
 });
 
+import { snapTo16th } from "../domain/snapUtils";
+
 // ───── Change Room Height dialog ───────────────────────────────────────────
 function formatInches(valIn: number): string {
   return `${formatTo4DecimalsNoRound(valIn)}"`;
@@ -174,12 +176,8 @@ function formatInches(valIn: number): string {
 
 function formatTo4DecimalsNoRound(val: number | null | undefined): string {
   if (val === undefined || val === null || isNaN(val)) return "0";
-  const str = val.toFixed(10);
-  const dotIdx = str.indexOf(".");
-  if (dotIdx === -1) {
-    return val.toString();
-  }
-  return Number(str.substring(0, dotIdx + 5)).toString();
+  const snapped = snapTo16th(val);
+  return snapped.toFixed(4);
 }
 
 // ───── Architecture item catalog ───────────────────────────────────────────
@@ -374,31 +372,42 @@ const selectedDoorWindowItem = computed<PlacedItem | null>(() => {
 
 function onSelectedItemSizeInput(dimension: "width" | "height", e: Event) {
   if (!selectedDoorWindowItem.value) return;
-  const valueIn = Number((e.target as HTMLInputElement).value);
+  const target = e.target as HTMLInputElement;
+  const valueIn = Number(target.value);
   if (!Number.isFinite(valueIn)) return;
-  const nextValue = Math.max(1, valueIn);
+  const nextValue = Math.max(1, snapTo16th(valueIn));
 
   if (dimension === "width") {
     roomStore.updateItemProps(selectedDoorWindowItem.value.id, {
       width: nextValue,
     });
-    return;
+  } else {
+    roomStore.updateItemProps(selectedDoorWindowItem.value.id, {
+      height: nextValue,
+    });
   }
 
-  roomStore.updateItemProps(selectedDoorWindowItem.value.id, {
-    height: nextValue,
-  });
+  const updatedItem = selectedDoorWindowItem.value;
+  if (updatedItem) {
+    target.value = formatTo4DecimalsNoRound(updatedItem[dimension]);
+  }
 }
 
 function onSelectedItemElevationInput(e: Event) {
   if (!selectedDoorWindowItem.value) return;
-  const valueIn = Number((e.target as HTMLInputElement).value);
+  const target = e.target as HTMLInputElement;
+  const valueIn = Number(target.value);
   if (!Number.isFinite(valueIn)) return;
-  const nextValue = Math.max(0, valueIn);
+  const nextValue = Math.max(0, snapTo16th(valueIn));
 
   roomStore.updateItemProps(selectedDoorWindowItem.value.id, {
     elevation: nextValue,
   });
+
+  const updatedItem = selectedDoorWindowItem.value;
+  if (updatedItem) {
+    target.value = formatTo4DecimalsNoRound(Number(updatedItem.elevation));
+  }
 }
 
 function onSelectedItemSideInput(
@@ -406,7 +415,8 @@ function onSelectedItemSideInput(
   e: Event,
 ) {
   if (!selectedDoorWindowItem.value) return;
-  const valueIn = Number((e.target as HTMLInputElement).value);
+  const target = e.target as HTMLInputElement;
+  const valueIn = Number(target.value);
   if (!Number.isFinite(valueIn)) return;
 
   const item = selectedDoorWindowItem.value;
@@ -420,7 +430,7 @@ function onSelectedItemSideInput(
 
   const itemWidthIn = item.width;
   const halfWidthIn = itemWidthIn / 2;
-  const requested = Math.max(0, valueIn);
+  const requested = Math.max(0, snapTo16th(valueIn));
 
   let centerOffsetIn =
     side === "leftPosition"
@@ -440,6 +450,13 @@ function onSelectedItemSideInput(
   const nextPos = Math.max(0, Math.min(1, centerOffsetIn / wallLengthIn));
 
   roomStore.moveItem(item.id, nextPos);
+
+  const updatedItem = selectedDoorWindowItem.value;
+  if (updatedItem) {
+    target.value = formatTo4DecimalsNoRound(
+      Number(side === "leftPosition" ? updatedItem.leftPosition : updatedItem.rightPosition),
+    );
+  }
 }
 
 const showElevationOverlay = ref(false);
@@ -2621,21 +2638,26 @@ function degToRad(deg: number): number {
 }
 
 function onDrawHeightInput(e: Event) {
-  const valueIn = Number((e.target as HTMLInputElement).value);
+  const target = e.target as HTMLInputElement;
+  const valueIn = Number(target.value);
   if (!Number.isFinite(valueIn)) return;
-  roomStore.setHeight(clampDrawHeight(valueIn));
+  const height = snapTo16th(clampDrawHeight(valueIn));
+  roomStore.setHeight(height);
+  target.value = formatTo4DecimalsNoRound(roomStore.height);
 }
 
 function onDrawThicknessInput(e: Event) {
-  const value = Number((e.target as HTMLInputElement).value);
+  const target = e.target as HTMLInputElement;
+  const value = Number(target.value);
   if (!Number.isFinite(value)) return;
-  const thickness = clampDrawThickness(value);
+  const thickness = snapTo16th(clampDrawThickness(value));
   drawWallThicknessInput.value = thickness;
 
   // Keep already drawn walls consistent with the selected thickness.
   for (const wall of drawWalls.value) {
     roomStore.updateWallProps(wall.id, { thickness });
   }
+  target.value = formatTo4DecimalsNoRound(thickness);
 }
 
 /** Snap value to nearest grid */
@@ -3244,9 +3266,14 @@ function setSelectedWallLengthInches(lengthIn: number) {
 }
 
 function onSelectedWallLengthInput(e: Event) {
-  const next = Number((e.target as HTMLInputElement).value);
+  const target = e.target as HTMLInputElement;
+  const next = Number(target.value);
   if (!Number.isFinite(next)) return;
-  setSelectedWallLengthInches(next);
+  const snapped = snapTo16th(next);
+  setSelectedWallLengthInches(snapped);
+  if (selectedWall.value) {
+    target.value = formatTo4DecimalsNoRound(selectedWall.value.length);
+  }
 }
 
 /** Wall midpoint for label placement */
@@ -4613,13 +4640,15 @@ function dimLinePoints(wall: {
               <input
                 class="prop-input"
                 type="number"
-                step="0.0001"
+                step="0.0625"
                 :value="
                   formatTo4DecimalsNoRound(roomStore.height)
                 "
                 :min="ROOM_CONSTRAINTS.height.min"
                 :max="ROOM_CONSTRAINTS.height.max"
                 @change="onDrawHeightInput"
+                @blur="onDrawHeightInput"
+                @keyup.enter="onDrawHeightInput"
               />
             </div>
 
@@ -4628,11 +4657,13 @@ function dimLinePoints(wall: {
               <input
                 class="prop-input"
                 type="number"
-                step="0.0001"
+                step="0.0625"
                 :value="formatTo4DecimalsNoRound(drawWallThicknessInput)"
                 min="1"
                 max="30"
                 @change="onDrawThicknessInput"
+                @blur="onDrawThicknessInput"
+                @keyup.enter="onDrawThicknessInput"
               />
             </div>
           </div>
@@ -4673,11 +4704,13 @@ function dimLinePoints(wall: {
               <input
                 class="prop-input"
                 type="number"
-                step="0.0001"
+                step="0.0625"
                 :value="
                   formatTo4DecimalsNoRound(selectedWall.length)
                 "
                 @change="onSelectedWallLengthInput"
+                @blur="onSelectedWallLengthInput"
+                @keyup.enter="onSelectedWallLengthInput"
               />
             </div>
 
@@ -4686,16 +4719,13 @@ function dimLinePoints(wall: {
               <input
                 class="prop-input"
                 type="number"
-                step="0.0001"
+                step="0.0625"
                 :value="
                   formatTo4DecimalsNoRound(roomStore.height)
                 "
-                @change="
-                  (e: Event) =>
-                    roomStore.setHeight(
-                      clampDrawHeight(Number((e.target as HTMLInputElement).value)),
-                    )
-                "
+                @change="onDrawHeightInput"
+                @blur="onDrawHeightInput"
+                @keyup.enter="onDrawHeightInput"
               />
             </div>
 
@@ -4704,13 +4734,31 @@ function dimLinePoints(wall: {
               <input
                 class="prop-input"
                 type="number"
-                step="0.0001"
+                step="0.0625"
                 :value="formatTo4DecimalsNoRound(selectedWall.thickness)"
                 @change="
-                  (e: Event) =>
-                    roomStore.updateWallProps(selectedWall!.id, {
-                      thickness: Number((e.target as HTMLInputElement).value),
-                    })
+                  (e: Event) => {
+                    const target = e.target as HTMLInputElement;
+                    const val = snapTo16th(Number(target.value));
+                    roomStore.updateWallProps(selectedWall!.id, { thickness: val });
+                    target.value = formatTo4DecimalsNoRound(selectedWall!.thickness);
+                  }
+                "
+                @blur="
+                  (e: Event) => {
+                    const target = e.target as HTMLInputElement;
+                    const val = snapTo16th(Number(target.value));
+                    roomStore.updateWallProps(selectedWall!.id, { thickness: val });
+                    target.value = formatTo4DecimalsNoRound(selectedWall!.thickness);
+                  }
+                "
+                @keyup.enter="
+                  (e: Event) => {
+                    const target = e.target as HTMLInputElement;
+                    const val = snapTo16th(Number(target.value));
+                    roomStore.updateWallProps(selectedWall!.id, { thickness: val });
+                    target.value = formatTo4DecimalsNoRound(selectedWall!.thickness);
+                  }
                 "
               />
             </div>
@@ -4833,13 +4881,15 @@ function dimLinePoints(wall: {
                 class="prop-input"
                 type="number"
                 min="1"
-                step="0.0001"
+                step="0.0625"
                 :value="
                   formatTo4DecimalsNoRound(
                     selectedDoorWindowItem.width,
                   )
                 "
                 @change="onSelectedItemSizeInput('width', $event)"
+                @blur="onSelectedItemSizeInput('width', $event)"
+                @keyup.enter="onSelectedItemSizeInput('width', $event)"
               />
             </div>
 
@@ -4849,13 +4899,15 @@ function dimLinePoints(wall: {
                 class="prop-input"
                 type="number"
                 min="1"
-                step="0.0001"
+                step="0.0625"
                 :value="
                   formatTo4DecimalsNoRound(
                     selectedDoorWindowItem.height,
                   )
                 "
                 @change="onSelectedItemSizeInput('height', $event)"
+                @blur="onSelectedItemSizeInput('height', $event)"
+                @keyup.enter="onSelectedItemSizeInput('height', $event)"
               />
             </div>
 
@@ -4865,7 +4917,7 @@ function dimLinePoints(wall: {
                 class="prop-input"
                 type="number"
                 min="0"
-                step="0.0001"
+                step="0.0625"
                 data-testid="left-position-input"
                 :value="
                   formatTo4DecimalsNoRound(
@@ -4873,6 +4925,8 @@ function dimLinePoints(wall: {
                   )
                 "
                 @change="onSelectedItemSideInput('leftPosition', $event)"
+                @blur="onSelectedItemSideInput('leftPosition', $event)"
+                @keyup.enter="onSelectedItemSideInput('leftPosition', $event)"
               />
             </div>
 
@@ -4882,7 +4936,7 @@ function dimLinePoints(wall: {
                 class="prop-input"
                 type="number"
                 min="0"
-                step="0.0001"
+                step="0.0625"
                 data-testid="right-position-input"
                 :value="
                   formatTo4DecimalsNoRound(
@@ -4890,6 +4944,8 @@ function dimLinePoints(wall: {
                   )
                 "
                 @change="onSelectedItemSideInput('rightPosition', $event)"
+                @blur="onSelectedItemSideInput('rightPosition', $event)"
+                @keyup.enter="onSelectedItemSideInput('rightPosition', $event)"
               />
             </div>
 
@@ -4899,13 +4955,15 @@ function dimLinePoints(wall: {
                 class="prop-input"
                 type="number"
                 min="0"
-                step="0.0001"
+                step="0.0625"
                 :value="
                   formatTo4DecimalsNoRound(
                     Number(selectedDoorWindowItem.elevation),
                   )
                 "
                 @change="onSelectedItemElevationInput($event)"
+                @blur="onSelectedItemElevationInput($event)"
+                @keyup.enter="onSelectedItemElevationInput($event)"
               />
             </div>
           </div>

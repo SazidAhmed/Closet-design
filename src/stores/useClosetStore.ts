@@ -10,6 +10,7 @@ import {
   type CabinetDimensions,
 } from '../features/closet/domain/schema'
 import { validateCloset } from '../features/closet/domain/validateCloset'
+import { snapTo16th } from '../features/closet/domain/snapUtils'
 import type { Tower, Accessory } from '../features/closet/domain/types/tower'
 import { createDefaultTower, createTowerId } from '../features/closet/domain/types/tower'
 import {
@@ -300,7 +301,7 @@ export const useClosetStore = defineStore('closet', {
       const tower = this.towers.find((t) => t.id === towerId)
       if (tower) {
         const oldWidth = tower.width
-        tower.width = clampTowerWidth(tower, width)
+        tower.width = snapTo16th(clampTowerWidth(tower, snapTo16th(width)))
         const deltaW = tower.width - oldWidth
         
         if (deltaW !== 0 && tower.attachedToTowerId && wallLengthCm && tower.positionAlongWall !== undefined) {
@@ -321,7 +322,7 @@ export const useClosetStore = defineStore('closet', {
     setTowerDepth(towerId: string, depth: number) {
       const tower = this.towers.find((t) => t.id === towerId)
       if (!tower) return
-      tower.depth = clampTowerDepth(tower, depth)
+      tower.depth = snapTo16th(clampTowerDepth(tower, snapTo16th(depth)))
       refreshTowerCatalog(tower)
       refreshTowerCabinet(tower)
 
@@ -332,7 +333,7 @@ export const useClosetStore = defineStore('closet', {
           if (part.partType === 'panel') {
             part.depth = tower.depth
           } else if (part.partType === 'filler') {
-            part.outset = (tower.outset ?? 0) + tower.depth
+            part.outset = snapTo16th((tower.outset ?? 0) + tower.depth)
           }
         })
     },
@@ -340,7 +341,7 @@ export const useClosetStore = defineStore('closet', {
     setTowerHeight(towerId: string, height: number) {
       const tower = this.towers.find((t) => t.id === towerId)
       if (tower) {
-        tower.height = clampTowerHeight(tower, height)
+        tower.height = snapTo16th(clampTowerHeight(tower, snapTo16th(height)))
         refreshTowerCabinet(tower)
         // Sync attached parts
         this.towers
@@ -368,19 +369,19 @@ export const useClosetStore = defineStore('closet', {
     setTowerOutset(towerId: string, outset: number) {
       const tower = this.towers.find((t) => t.id === towerId)
       if (tower) {
-        tower.outset = Math.max(0, outset)
+        tower.outset = snapTo16th(Math.max(0, outset))
         // Sync attached filler parts so they remain flush with the front
         this.towers
           .filter((t) => t.attachedToTowerId === towerId && t.partType === 'filler')
           .forEach((part) => {
-            part.outset = tower.outset! + tower.depth
+            part.outset = snapTo16th(tower.outset! + tower.depth)
           })
       }
     },
 
     setTowerElevation(towerId: string, elevation: number) {
       const tower = this.towers.find((t) => t.id === towerId)
-      if (tower) tower.elevation = Math.max(0, elevation)
+      if (tower) tower.elevation = snapTo16th(Math.max(0, elevation))
     },
 
     // ── Accessories ───────────────────────────────────────────────────────

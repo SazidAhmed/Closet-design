@@ -30,23 +30,20 @@ function clamp01(v: number): number {
 }
 
 function clampItemPositionAlongWall(
-  item: Pick<PlacedItem, 'wallId' | 'width'>,
+  item: PlacedItem,
   walls: Room['walls'],
-  requestedPositionAlongWall: number,
+  positionAlongWall: number,
 ): number {
-  const clamped = clamp01(requestedPositionAlongWall)
-  if (!item.wallId) return clamped
+  if (!item.wallId) return Math.max(0, Math.min(1, positionAlongWall))
+  const wall = walls.find((w) => w.id === item.wallId)
+  if (!wall) return Math.max(0, Math.min(1, positionAlongWall))
 
-  const wall = walls.find((entry) => entry.id === item.wallId)
-  if (!wall || wall.length <= 0) return clamped
+  const wallLengthIn = wall.length
+  const itemWidthIn = item.width
+  if (wallLengthIn <= 0) return 0.5
 
-  const halfItemWidthRatio = Math.max(0, item.width) / (2 * wall.length)
-  if (!Number.isFinite(halfItemWidthRatio)) return clamped
-
-  if (halfItemWidthRatio >= 0.5) {
-    // If item width is larger than wall length, keep centered on the wall.
-    return 0.5
-  }
+  const halfItemWidthRatio = (itemWidthIn / 2) / wallLengthIn
+  const clamped = Math.max(0, Math.min(1, positionAlongWall))
 
   return Math.max(halfItemWidthRatio, Math.min(1 - halfItemWidthRatio, clamped))
 }
@@ -66,8 +63,8 @@ function recalculateDoorWindowSidePositions(item: PlacedItem, walls: Room['walls
   const leftPosition = Math.max(0, centerOffsetIn - itemWidthIn / 2)
   const rightPosition = Math.max(0, wallLengthIn - (centerOffsetIn + itemWidthIn / 2))
 
-  item.leftPosition = leftPosition
-  item.rightPosition = rightPosition
+  item.leftPosition = snapTo16th(leftPosition)
+  item.rightPosition = snapTo16th(rightPosition)
 }
 
 function snapped45Segment(start: Vec2, target: Vec2): { angle: number; length: number; end: Vec2 } | null {
@@ -481,7 +478,7 @@ export const useRoomStore = defineStore('room', {
 
     /** Set room ceiling height. */
     setHeight(h: number) {
-      const sanitizedHeight = (h === 244 || h > 180) ? 96 : Math.max(ROOM_CONSTRAINTS.height.min, Math.min(ROOM_CONSTRAINTS.height.max, h))
+      const sanitizedHeight = (h === 244 || h > 180) ? 96 : snapTo16th(Math.max(ROOM_CONSTRAINTS.height.min, Math.min(ROOM_CONSTRAINTS.height.max, h)))
       this.height = sanitizedHeight
     },
 
@@ -497,7 +494,7 @@ export const useRoomStore = defineStore('room', {
       if (selectedIdx < 0 || !Number.isFinite(length)) return
 
       const wall = walls[selectedIdx]!
-      const nextLength = clampWall(length)
+      const nextLength = snapTo16th(clampWall(length))
       const delta = nextLength - wall.length
       if (Math.abs(delta) < 1e-9) return
 
@@ -996,9 +993,9 @@ export const useRoomStore = defineStore('room', {
     updateItemProps(itemId: string, props: Partial<Pick<PlacedItem, 'width' | 'height' | 'leftPosition' | 'rightPosition' | 'elevation'>>) {
       const item = this.items.find((i) => i.id === itemId)
       if (!item) return
-      if (props.width !== undefined) item.width = clampItemSize(props.width)
-      if (props.height !== undefined) item.height = clampItemSize(props.height)
-      if (props.elevation !== undefined) item.elevation = Math.max(0, props.elevation)
+      if (props.width !== undefined) item.width = snapTo16th(clampItemSize(props.width))
+      if (props.height !== undefined) item.height = snapTo16th(clampItemSize(props.height))
+      if (props.elevation !== undefined) item.elevation = snapTo16th(Math.max(0, props.elevation))
       item.positionAlongWall = clampItemPositionAlongWall(item, this.walls, item.positionAlongWall)
       recalculateDoorWindowSidePositions(item, this.walls)
     },
@@ -1217,8 +1214,8 @@ export const useRoomStore = defineStore('room', {
     updateWallProps(wallId: string, props: Partial<{ length: number; thickness: number; label: string; visible: boolean }>) {
       const wall = this.walls.find((w) => w.id === wallId)
       if (!wall) return
-      if (props.length !== undefined) wall.length = clampWall(props.length)
-      if (props.thickness !== undefined) wall.thickness = Math.max(1, Math.min(30, props.thickness))
+      if (props.length !== undefined) wall.length = snapTo16th(clampWall(props.length))
+      if (props.thickness !== undefined) wall.thickness = snapTo16th(Math.max(1, Math.min(30, props.thickness)))
       if (props.label !== undefined) wall.label = props.label
       if (props.visible !== undefined) wall.visible = props.visible
     },

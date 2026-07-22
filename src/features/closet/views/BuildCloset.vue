@@ -18,6 +18,7 @@ import {
   type ClosetCatalogLimits,
   type ClosetDoorMode,
 } from "../domain/closetCatalogs";
+import { snapTo16th } from "../domain/snapUtils";
 import { Plus, Trash2 } from "lucide-vue-next";
 
 const appStore = useAppStore();
@@ -26,10 +27,10 @@ const room = useRoomStore();
 const selection = useSelectionStore();
 const { fmt, fromCm } = useUnit();
 
-/** Format a number to 4 decimal places (using rounding for precision). */
+/** Format a number to 4 decimal places (snapped to 1/16th inch). */
 function truncTo4(value: number): string {
-  const truncated = Math.round(value * 10000) / 10000;
-  return truncated.toFixed(4);
+  const snapped = snapTo16th(value);
+  return snapped.toFixed(4);
 }
 
 const selectedDoorMode = ref<ClosetDoorMode>("without_doors");
@@ -693,43 +694,40 @@ function onDimensionInput(
 ) {
   const tower = selectedTower.value;
   if (!tower) return;
-  const value = Number((event.target as HTMLInputElement).value);
-  if (!Number.isFinite(value)) return;
+  const target = event.target as HTMLInputElement;
+  const rawValue = Number(target.value);
+  if (!Number.isFinite(rawValue)) return;
+  const value = snapTo16th(rawValue);
 
   if (dimension === "width") {
     const wall = selectedTowerWall.value;
     closet.setTowerWidth(tower.id, value, wall?.length);
-    return;
-  }
-
-  if (dimension === "depth") {
+  } else if (dimension === "depth") {
     closet.setTowerDepth(tower.id, value);
-    return;
-  }
-
-  if (dimension === "outset") {
+  } else if (dimension === "outset") {
     closet.setTowerOutset(tower.id, value);
-    return;
-  }
-
-  if (dimension === "elevation") {
+  } else if (dimension === "elevation") {
     const maxIn = maxElevationIn.value;
     closet.setTowerElevation(tower.id, Math.min(value, maxIn));
-    return;
+  } else {
+    closet.setTowerHeight(tower.id, Math.min(value, maxHeightIn.value));
   }
 
-  closet.setTowerHeight(tower.id, Math.min(value, maxHeightIn.value));
-  return;
+  const currentTower = selectedTower.value;
+  const updatedValue = currentTower ? (currentTower[dimension] ?? value) : value;
+  target.value = truncTo4(updatedValue);
 }
 
 function onClearanceInput(side: "left" | "right", event: Event) {
   const tower = selectedTower.value;
   const wall = selectedTowerWall.value;
   const c = clearances.value;
+  const target = event.target as HTMLInputElement;
   if (!tower || !wall || !c) return;
 
-  const valueIn = Number((event.target as HTMLInputElement).value);
-  if (!Number.isFinite(valueIn)) return;
+  const rawValueIn = Number(target.value);
+  if (!Number.isFinite(rawValueIn)) return;
+  const valueIn = snapTo16th(rawValueIn);
 
   const halfW = tower.width / 2;
 
@@ -737,12 +735,12 @@ function onClearanceInput(side: "left" | "right", event: Event) {
 
   // Reverse the same global gap scale used for display.
   const gapScale = c.gapScale;
-  const rawValueIn = gapScale > 0.01 ? valueIn / gapScale : valueIn;
+  const scaledValueIn = gapScale > 0.01 ? valueIn / gapScale : valueIn;
 
   if (side === "left") {
-    newCenterIn = c.effectiveLeft + rawValueIn + halfW;
+    newCenterIn = c.effectiveLeft + scaledValueIn + halfW;
   } else {
-    newCenterIn = c.effectiveRight - rawValueIn - halfW;
+    newCenterIn = c.effectiveRight - scaledValueIn - halfW;
   }
 
   // Ensure center stays within raw wall bounds
@@ -750,6 +748,11 @@ function onClearanceInput(side: "left" | "right", event: Event) {
 
   const positionAlongWall = newCenterIn / wall.length;
   closet.updateTower(tower.id, { positionAlongWall });
+
+  const nextClearances = clearances.value;
+  if (nextClearances) {
+    target.value = truncTo4(fromCm(nextClearances[side]));
+  }
 }
 
 function removeTower(towerId: string) {
@@ -1039,7 +1042,7 @@ function cancelCustomPartSide() {
             <input
               class="number-input"
               type="number"
-              step="0.0001"
+              step="0.0625"
               :min="
                 selectedTower.partType === 'filler'
                   ? 1.5
@@ -1055,6 +1058,8 @@ function cancelCustomPartSide() {
               :value="truncTo4(selectedTower.width)"
               :disabled="selectedTower.partType === 'panel'"
               @change="onDimensionInput('width', $event)"
+              @blur="onDimensionInput('width', $event)"
+              @keyup.enter="onDimensionInput('width', $event)"
             />
           </div>
 
@@ -1066,7 +1071,7 @@ function cancelCustomPartSide() {
             <input
               class="number-input"
               type="number"
-              step="0.0001"
+              step="0.0625"
               :min="
                 selectedTowerLimits
                   ? selectedTowerLimits.minH
@@ -1078,6 +1083,8 @@ function cancelCustomPartSide() {
               :value="truncTo4(selectedTower.height)"
               :disabled="false"
               @change="onDimensionInput('height', $event)"
+              @blur="onDimensionInput('height', $event)"
+              @keyup.enter="onDimensionInput('height', $event)"
             />
           </div>
 
@@ -1089,7 +1096,7 @@ function cancelCustomPartSide() {
             <input
               class="number-input"
               type="number"
-              step="0.0001"
+              step="0.0625"
               :min="
                 selectedTowerLimits
                   ? selectedTowerLimits.minD
@@ -1103,6 +1110,8 @@ function cancelCustomPartSide() {
               :value="truncTo4(selectedTower.depth)"
               :disabled="selectedTower.partType === 'filler'"
               @change="onDimensionInput('depth', $event)"
+              @blur="onDimensionInput('depth', $event)"
+              @keyup.enter="onDimensionInput('depth', $event)"
             />
           </div>
 
@@ -1115,10 +1124,12 @@ function cancelCustomPartSide() {
               id="tower-outset-input"
               class="number-input"
               type="number"
-              step="0.0001"
+              step="0.0625"
               min="0"
               :value="truncTo4(selectedTower.outset ?? 0)"
               @change="onDimensionInput('outset', $event)"
+              @blur="onDimensionInput('outset', $event)"
+              @keyup.enter="onDimensionInput('outset', $event)"
             />
           </div>
 
@@ -1131,11 +1142,13 @@ function cancelCustomPartSide() {
               id="tower-elevation-input"
               class="number-input"
               type="number"
-              step="0.0001"
+              step="0.0625"
               min="0"
               :max="maxElevationIn"
               :value="truncTo4(selectedTower.elevation ?? 0)"
               @change="onDimensionInput('elevation', $event)"
+              @blur="onDimensionInput('elevation', $event)"
+              @keyup.enter="onDimensionInput('elevation', $event)"
             />
           </div>
 
@@ -1182,11 +1195,13 @@ function cancelCustomPartSide() {
                 <input
                   class="number-input"
                   type="number"
-                  step="0.0001"
+                  step="0.0625"
                   min="0"
                   :max="fromCm(clearances.left + clearances.right)"
                   :value="truncTo4(fromCm(clearances.left))"
                   @change="onClearanceInput('left', $event)"
+                  @blur="onClearanceInput('left', $event)"
+                  @keyup.enter="onClearanceInput('left', $event)"
                 />
               </div>
 
@@ -1198,11 +1213,13 @@ function cancelCustomPartSide() {
                 <input
                   class="number-input"
                   type="number"
-                  step="0.0001"
+                  step="0.0625"
                   min="0"
                   :max="fromCm(clearances.left + clearances.right)"
                   :value="truncTo4(fromCm(clearances.right))"
                   @change="onClearanceInput('right', $event)"
+                  @blur="onClearanceInput('right', $event)"
+                  @keyup.enter="onClearanceInput('right', $event)"
                 />
               </div>
               <div
