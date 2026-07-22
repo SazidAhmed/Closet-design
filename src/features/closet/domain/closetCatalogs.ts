@@ -473,12 +473,6 @@ export function refreshTowerCabinet(tower: Tower): void {
   );
   tower.cabinetId = cabinet?.id;
   tower.cabinetCode = cabinet?.code;
-
-  if (cabinet) {
-    tower.width = cabinet.width;
-    tower.height = cabinet.height;
-    tower.depth = cabinet.depth;
-  }
 }
 
 function accessoriesForCategory(

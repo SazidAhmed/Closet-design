@@ -118,4 +118,34 @@ describe('box configuration & cabinet resolution', () => {
     // Cleanup
     cas15.cabinets = []
   })
+
+  it('preserves user entered width, height, and depth when matching cabinet is resolved', () => {
+    setActivePinia(createPinia())
+    const closet = useClosetStore()
+
+    const cas15 = CLOSET_CATALOG_CATEGORIES
+      .find(c => c.doorMode === 'without_doors' && c.categoryCode === 'CAS')!
+      .catalogs.find(c => c.catalogId === 205)!
+
+    cas15.cabinets = [
+      { id: 10, code: 'CAS158415', width: 15, height: 84, depth: 15, minW: 13.0625, maxW: 16, minH: 80, maxH: 85, minD: 13, maxD: 16, boxOptions: [1, 2], numberOfShelves: 0, numOfDrawers: 0, numOfRollouts: 0, basePrice: '0' }
+    ]
+
+    closet.setTowers([])
+    closet.addTowerFromCatalog('without_doors', 'CAS')
+    const tower = closet.towers[0]!
+
+    // Set custom width (e.g. 14.5) within cabinet range (13.0625..16)
+    closet.setTowerWidth(tower.id, 14.5)
+
+    // Cabinet should resolve to CAS158415 (#10)
+    expect(tower.cabinetId).toBe(10)
+    expect(tower.cabinetCode).toBe('CAS158415')
+
+    // Tower width should remain 14.5 rather than being snapped to cabinet.width (15)
+    expect(tower.width).toBe(14.5)
+
+    cas15.cabinets = []
+  })
 })
+
