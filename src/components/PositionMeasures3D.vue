@@ -9,7 +9,7 @@ const closet = useClosetStore();
 
 // ── Room & cabinet dimensions ─────────────────────────────────────────────
 const roomBounds = computed(() => roomStore.planBounds);
-const roomH = computed(() => roomStore.height ?? 244);
+const roomH = computed(() => roomStore.height ?? 96);
 const cabW = computed(() => Number(closet.cabinet.width) || 60);
 const cabH = computed(() => Number(closet.cabinet.height) || 200);
 const cabD = computed(() => Number(closet.cabinet.depth) || 60);

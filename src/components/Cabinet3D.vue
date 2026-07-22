@@ -95,7 +95,7 @@ const cabD = computed(() => Number(closet.cabinet.depth) || 60);
 // offsetX: horizontal (left/right), offsetY: vertical lift from floor.
 // The room is centred at origin; floor is at -roomH/2. When offsetY = 0
 // the cabinet sits on the floor: its centre is at floor + cabH/2.
-const roomH = computed(() => roomStore.height ?? 244);
+const roomH = computed(() => roomStore.height ?? 96);
 const roomBounds = computed(() => roomStore.planBounds);
 const closetWall = computed(() => roomStore.closetWall);
 

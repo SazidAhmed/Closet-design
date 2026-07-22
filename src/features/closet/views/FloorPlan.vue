@@ -2598,7 +2598,7 @@ const selectedWallAnchorType = ref<"start" | "end">("start");
 const pendingStartVertex = ref<[number, number] | null>(null);
 const CLOSE_THRESHOLD = 15; // SVG units — snap distance to first vertex
 const GRID_SIZE = 4; // SVG grid snap size
-const drawWallThicknessInput = ref(1);
+const drawWallThicknessInput = ref(5);
 const showInsideSideIndicator = ref(true);
 
 function clampDrawHeight(v: number): number {
@@ -2623,7 +2623,7 @@ function degToRad(deg: number): number {
 function onDrawHeightInput(e: Event) {
   const valueIn = Number((e.target as HTMLInputElement).value);
   if (!Number.isFinite(valueIn)) return;
-  roomStore.setHeight(clampDrawHeight(inchesToCm(valueIn)));
+  roomStore.setHeight(clampDrawHeight(valueIn));
 }
 
 function onDrawThicknessInput(e: Event) {
@@ -3238,7 +3238,7 @@ function setSelectedWallLengthInches(lengthIn: number) {
 
   roomStore.resizeWallLength(
     selectedWall.value.id,
-    inchesToCm(lengthIn),
+    lengthIn,
     "end",
   );
 }
@@ -4693,7 +4693,7 @@ function dimLinePoints(wall: {
                 @change="
                   (e: Event) =>
                     roomStore.setHeight(
-                      inchesToCm(Number((e.target as HTMLInputElement).value)),
+                      clampDrawHeight(Number((e.target as HTMLInputElement).value)),
                     )
                 "
               />

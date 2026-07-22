@@ -25,6 +25,6 @@ export const ACCESSORY_CONSTRAINTS = {
 } as const
 
 export const ROOM_CONSTRAINTS = {
-  wallLength: { min: 30, max: 1200 },
-  height: { min: 200, max: 400 },
+  wallLength: { min: 12, max: 1200 },
+  height: { min: 48, max: 180 },
 } as const

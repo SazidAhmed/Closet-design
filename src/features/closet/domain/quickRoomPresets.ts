@@ -101,7 +101,7 @@ function wallsFromPoints(points: Vec2[], closetWallIndex: number): Wall[] {
       position: [start[0], start[1]],
       angle: Math.atan2(dy, dx),
       hasCloset: i === closetWallIndex,
-      thickness: 1.0,
+      thickness: 5.0,
       label: String(walls.length + 1),
       visible: true,
     })

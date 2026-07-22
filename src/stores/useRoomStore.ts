@@ -475,12 +475,14 @@ export const useRoomStore = defineStore('room', {
   actions: {
     /** Replace the entire room (e.g. when switching closet type). */
     setRoom(room: Room) {
-      this.$patch(room)
+      const sanitizedHeight = (!room.height || room.height === 244 || room.height > 180) ? 96 : room.height
+      this.$patch({ ...room, height: sanitizedHeight })
     },
 
     /** Set room ceiling height. */
     setHeight(h: number) {
-      this.height = h
+      const sanitizedHeight = (h === 244 || h > 180) ? 96 : Math.max(ROOM_CONSTRAINTS.height.min, Math.min(ROOM_CONSTRAINTS.height.max, h))
+      this.height = sanitizedHeight
     },
 
     /** Resize a wall by its ID. */
@@ -1030,7 +1032,7 @@ export const useRoomStore = defineStore('room', {
      * cabinetH is the total cabinet height in cm.
      */
     setClosetOffsetY(y: number, cabinetH = 0) {
-      const roomH = this.height ?? 244
+      const roomH = this.height ?? 96
       const maxOffset = Math.max(0, roomH - cabinetH)
       this.closetOffsetY = Math.max(0, Math.min(maxOffset, y))
     },
@@ -1109,7 +1111,7 @@ export const useRoomStore = defineStore('room', {
     },
 
     /** Append a new wall segment from the previous endpoint to (x, y). */
-    addWallVertex(x: number, y: number, thickness = 6, firstStart?: Vec2) {
+    addWallVertex(x: number, y: number, thickness = 5, firstStart?: Vec2) {
       const walls = this.walls
       let startPos: Vec2
       if (firstStart) {
@@ -1143,7 +1145,7 @@ export const useRoomStore = defineStore('room', {
     },
 
     /** Close the polygon by adding a final segment back to the first vertex. */
-    closeRoom(thickness = 6) {
+    closeRoom(thickness = 5) {
       const walls = this.walls
       if (walls.length < 2) return
       const first = walls[0]

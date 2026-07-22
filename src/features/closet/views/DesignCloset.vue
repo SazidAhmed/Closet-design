@@ -73,7 +73,7 @@ const visibleCatalogCategories = computed(() =>
 function addCatalogTower(categoryCode: string) {
   closet.addTowerFromCatalog(
     selectedDoorMode.value,
-    categoryCode as import('../domain/closetCatalogs').ClosetCatalogCategoryCode,
+    categoryCode as import("../domain/closetCatalogs").ClosetCatalogCategoryCode,
   );
 }
 
@@ -220,8 +220,10 @@ function openSlots(mode: "save" | "load") {
 }
 // ── Closet position helpers ───────────────────────────────────────────────
 const closetWall = computed(() => roomStore.closetWall);
-const roomWall = computed(() => closetWall.value?.length ?? roomStore.planBounds.width);
-const roomCeil = computed(() => roomStore.height ?? 244);
+const roomWall = computed(
+  () => closetWall.value?.length ?? roomStore.planBounds.width,
+);
+const roomCeil = computed(() => roomStore.height ?? 96);
 const cabW = computed(() => Number(closet.cabinet.width) || 60);
 const cabH = computed(() => Number(closet.cabinet.height) || 200);
 const cabD = computed(() => Number(closet.cabinet.depth) || 60);
@@ -317,7 +319,6 @@ const depthLabel = computed(() => {
 
         <!-- Towers Tab -->
         <div v-if="activeTab === 'towers'" class="tab-content">
-
           <!-- Door Mode toggle -->
           <div class="door-mode-toggle">
             <button
@@ -352,7 +353,9 @@ const depthLabel = computed(() => {
                   {{ cat.categoryName }} ({{ cat.categoryCode }})
                 </span>
                 <span class="catalog-category-depth">
-                  {{ fmt(cat.catalogs[0]?.minD ?? 0) }} – {{ fmt(cat.catalogs[cat.catalogs.length - 1]?.maxD ?? 0) }} depth
+                  {{ fmt(cat.catalogs[0]?.minD ?? 0) }} –
+                  {{ fmt(cat.catalogs[cat.catalogs.length - 1]?.maxD ?? 0) }}
+                  depth
                 </span>
               </div>
               <button
@@ -368,7 +371,12 @@ const depthLabel = computed(() => {
           <!-- Placed towers list -->
           <div v-if="closet.towers.length > 0" class="tower-section-label">
             Closet Towers
-            <span class="tower-count">{{ closet.towers.length }} tower{{ closet.towers.length !== 1 ? 's' : '' }} configured</span>
+            <span class="tower-count"
+              >{{ closet.towers.length }} tower{{
+                closet.towers.length !== 1 ? "s" : ""
+              }}
+              configured</span
+            >
           </div>
           <div class="tower-list">
             <button
@@ -407,7 +415,8 @@ const depthLabel = computed(() => {
                 </div>
               </div>
               <div class="tower-catalog-badge" v-if="tower.categoryCode">
-                {{ tower.categoryName }} ({{ tower.categoryCode }}) · Catalog {{ tower.catalogId }}
+                {{ tower.categoryName }} ({{ tower.categoryCode }}) · Catalog
+                {{ tower.catalogId }}
               </div>
               <div class="tower-dims">
                 {{ fmt(tower.width) }} × {{ fmt(tower.depth) }}
@@ -423,16 +432,36 @@ const depthLabel = computed(() => {
                 type="number"
                 class="config-input"
                 :value="selectedTower.width"
-                :min="selectedTower.categoryCode
-                  ? closet.catalogCategoriesForMode(selectedTower.doorMode ?? 'without_doors')
-                      .find(c => c.categoryCode === selectedTower!.categoryCode)
-                      ?.catalogs.reduce((min, c) => Math.min(min, c.minW), Infinity) ?? 20
-                  : 20"
-                :max="selectedTower.categoryCode
-                  ? closet.catalogCategoriesForMode(selectedTower.doorMode ?? 'without_doors')
-                      .find(c => c.categoryCode === selectedTower!.categoryCode)
-                      ?.catalogs.reduce((max, c) => Math.max(max, c.maxW), 0) ?? 200
-                  : 200"
+                :min="
+                  selectedTower.categoryCode
+                    ? (closet
+                        .catalogCategoriesForMode(
+                          selectedTower.doorMode ?? 'without_doors',
+                        )
+                        .find(
+                          (c) => c.categoryCode === selectedTower!.categoryCode,
+                        )
+                        ?.catalogs.reduce(
+                          (min, c) => Math.min(min, c.minW),
+                          Infinity,
+                        ) ?? 20)
+                    : 20
+                "
+                :max="
+                  selectedTower.categoryCode
+                    ? (closet
+                        .catalogCategoriesForMode(
+                          selectedTower.doorMode ?? 'without_doors',
+                        )
+                        .find(
+                          (c) => c.categoryCode === selectedTower!.categoryCode,
+                        )
+                        ?.catalogs.reduce(
+                          (max, c) => Math.max(max, c.maxW),
+                          0,
+                        ) ?? 200)
+                    : 200
+                "
                 step="0.1"
                 @change="
                   closet.setTowerWidth(
@@ -448,16 +477,36 @@ const depthLabel = computed(() => {
                 type="number"
                 class="config-input"
                 :value="selectedTower.depth"
-                :min="selectedTower.categoryCode
-                  ? closet.catalogCategoriesForMode(selectedTower.doorMode ?? 'without_doors')
-                      .find(c => c.categoryCode === selectedTower!.categoryCode)
-                      ?.catalogs.reduce((min, c) => Math.min(min, c.minD), Infinity) ?? 15
-                  : 15"
-                :max="selectedTower.categoryCode
-                  ? closet.catalogCategoriesForMode(selectedTower.doorMode ?? 'without_doors')
-                      .find(c => c.categoryCode === selectedTower!.categoryCode)
-                      ?.catalogs.reduce((max, c) => Math.max(max, c.maxD), 0) ?? 60
-                  : 60"
+                :min="
+                  selectedTower.categoryCode
+                    ? (closet
+                        .catalogCategoriesForMode(
+                          selectedTower.doorMode ?? 'without_doors',
+                        )
+                        .find(
+                          (c) => c.categoryCode === selectedTower!.categoryCode,
+                        )
+                        ?.catalogs.reduce(
+                          (min, c) => Math.min(min, c.minD),
+                          Infinity,
+                        ) ?? 15)
+                    : 15
+                "
+                :max="
+                  selectedTower.categoryCode
+                    ? (closet
+                        .catalogCategoriesForMode(
+                          selectedTower.doorMode ?? 'without_doors',
+                        )
+                        .find(
+                          (c) => c.categoryCode === selectedTower!.categoryCode,
+                        )
+                        ?.catalogs.reduce(
+                          (max, c) => Math.max(max, c.maxD),
+                          0,
+                        ) ?? 60)
+                    : 60
+                "
                 step="0.1"
                 @change="
                   closet.setTowerDepth(
@@ -473,16 +522,36 @@ const depthLabel = computed(() => {
                 type="number"
                 class="config-input"
                 :value="selectedTower.height"
-                :min="selectedTower.categoryCode
-                  ? closet.catalogCategoriesForMode(selectedTower.doorMode ?? 'without_doors')
-                      .find(c => c.categoryCode === selectedTower!.categoryCode)
-                      ?.catalogs.reduce((min, c) => Math.min(min, c.minH), Infinity) ?? 84
-                  : 84"
-                :max="selectedTower.categoryCode
-                  ? closet.catalogCategoriesForMode(selectedTower.doorMode ?? 'without_doors')
-                      .find(c => c.categoryCode === selectedTower!.categoryCode)
-                      ?.catalogs.reduce((max, c) => Math.max(max, c.maxH), 0) ?? 250
-                  : 250"
+                :min="
+                  selectedTower.categoryCode
+                    ? (closet
+                        .catalogCategoriesForMode(
+                          selectedTower.doorMode ?? 'without_doors',
+                        )
+                        .find(
+                          (c) => c.categoryCode === selectedTower!.categoryCode,
+                        )
+                        ?.catalogs.reduce(
+                          (min, c) => Math.min(min, c.minH),
+                          Infinity,
+                        ) ?? 84)
+                    : 84
+                "
+                :max="
+                  selectedTower.categoryCode
+                    ? (closet
+                        .catalogCategoriesForMode(
+                          selectedTower.doorMode ?? 'without_doors',
+                        )
+                        .find(
+                          (c) => c.categoryCode === selectedTower!.categoryCode,
+                        )
+                        ?.catalogs.reduce(
+                          (max, c) => Math.max(max, c.maxH),
+                          0,
+                        ) ?? 250)
+                    : 250
+                "
                 step="0.1"
                 @change="
                   closet.setTowerHeight(
@@ -494,7 +563,6 @@ const depthLabel = computed(() => {
             </div>
           </div>
         </div>
-
 
         <!-- Edit Components Tab -->
         <div v-if="activeTab === 'edit'" class="tab-content">
@@ -1315,7 +1383,6 @@ const depthLabel = computed(() => {
   margin-top: 2px;
   opacity: 0.8;
 }
-
 
 .action-btn {
   display: flex;

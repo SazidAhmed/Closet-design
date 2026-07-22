@@ -60,8 +60,12 @@ export const useHistoryStore = defineStore('history', {
       try {
         const closet = useClosetStore()
         const room = useRoomStore()
+        const parsedRoom = JSON.parse(snap.room)
+        if (!parsedRoom.height || parsedRoom.height === 244 || parsedRoom.height > 180) {
+          parsedRoom.height = 96
+        }
         closet.$patch(JSON.parse(snap.closet))
-        room.$patch(JSON.parse(snap.room))
+        room.$patch(parsedRoom)
       } finally {
         this._replaying = false
       }

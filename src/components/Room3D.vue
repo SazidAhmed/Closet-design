@@ -16,9 +16,9 @@ const ctx = useTresContext();
 const { onBeforeRender } = useLoop();
 
 // Room dimensions from walls
-const roomW = computed(() => roomStore.walls[0]?.length ?? 244);
-const roomD = computed(() => roomStore.walls[1]?.length ?? 244);
-const roomH = computed(() => roomStore.height ?? 244);
+const roomW = computed(() => roomStore.walls[0]?.length ?? 96);
+const roomD = computed(() => roomStore.walls[1]?.length ?? 96);
+const roomH = computed(() => roomStore.height ?? 96);
 
 // Use actual floor-plan wall segments so custom drawn rooms are reflected in 3D.
 const wallSegments = computed(() =>
