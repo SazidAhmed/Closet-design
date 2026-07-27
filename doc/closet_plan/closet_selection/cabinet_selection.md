@@ -5,10 +5,11 @@
 When a user edits a tower's **width**, **height**, or **depth** in the Build Closet UI, the system automatically resolves the best-matching cabinet from the active catalog using **range-based matching**. Each cabinet entry in the catalog carries its own valid coverage ranges (`minW`–`maxW`, `minH`–`maxH`, `minD`–`maxD`) received from the backend API.
 
 Key behavior principles:
-1. **Catalog Resolution**: The catalog array (15D, 18D, 21D, etc.) is resolved dynamically based on the tower's `doorMode`, `categoryCode`, and entered `depth`.
-2. **Box Configuration Enforcement**: If a 1-box configuration is active (`boxCount: 1`), but the entered `width` exceeds the max 1-box threshold (`40"` for 15D/18D, `37"` for 21D+), `refreshTowerCabinet` automatically forces `boxCount` to `2`.
-3. **Cabinet Code & ID Assignment**: The matched cabinet's `id` and `code` are assigned to `tower.cabinetId` and `tower.cabinetCode`.
-4. **Dimension Preservation**: The user's entered `width`, `height`, and `depth` are **preserved as entered** (clamped only to category boundaries). They are **not** overwritten or snapped by the nominal dimensions (`cabinet.width`, `cabinet.height`, `cabinet.depth`) of the matched cabinet.
+1. **Catalog Resolution**: The catalog array (15D, 18D, 21D, etc.) is resolved dynamically based on the tower's `doorMode`, `categoryCode`, and entered `depth` using catalog `minD` and `maxD` ranges (`minD <= depth <= maxD`).
+2. **Catalog Switch Selection**: When a depth change causes a catalog switch (`catalogId` changes), `refreshTowerCabinet` selects the **very first cabinet** (`catalog.cabinets[0]`) of that newly resolved catalog.
+3. **Box Configuration Enforcement**: If a 1-box configuration is active (`boxCount: 1`), but the entered `width` exceeds the max 1-box threshold (`40"` for 15D/18D, `37"` for 21D+), `refreshTowerCabinet` automatically forces `boxCount` to `2`.
+4. **Cabinet Code & ID Assignment**: The matched cabinet's `id` and `code` are assigned to `tower.cabinetId` and `tower.cabinetCode`.
+5. **Dimension Preservation**: The user's entered `width`, `height`, and `depth` are **preserved as entered** (clamped only to category boundaries). They are **not** overwritten or snapped by the nominal dimensions (`cabinet.width`, `cabinet.height`, `cabinet.depth`) of the matched cabinet.
 
 ## Data Flow & Caching
 

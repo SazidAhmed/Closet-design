@@ -323,8 +323,8 @@ export const useClosetStore = defineStore('closet', {
       const tower = this.towers.find((t) => t.id === towerId)
       if (!tower) return
       tower.depth = snapTo16th(clampTowerDepth(tower, snapTo16th(depth)))
-      refreshTowerCatalog(tower)
-      refreshTowerCabinet(tower)
+      const res = refreshTowerCatalog(tower)
+      refreshTowerCabinet(tower, { catalogSwitched: res?.switched ?? false })
 
       // Sync attached parts
       this.towers

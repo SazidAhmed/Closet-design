@@ -263,6 +263,11 @@ export function resolveCatalogForTower(
     return category.catalogs[0]!;
   }
 
+  const matchedCatalog = category.catalogs.find(
+    (catalog) => depth >= catalog.minD && depth <= catalog.maxD,
+  );
+  if (matchedCatalog) return matchedCatalog;
+
   return (
     category.catalogs.find((catalog) => depth <= catalog.maxD) ??
     category.catalogs[category.catalogs.length - 1]!
@@ -287,15 +292,17 @@ export function clampTowerHeight(tower: Tower, height: number): number {
   return clamp(height, limits.minH, limits.maxH);
 }
 
-export function refreshTowerCatalog(tower: Tower): void {
-  if (!tower.doorMode || !tower.categoryCode) return;
+export function refreshTowerCatalog(tower: Tower): { switched: boolean; catalog: ClosetCatalogEntry } | null {
+  if (!tower.doorMode || !tower.categoryCode) return null;
   const catalog = resolveCatalogForTower(
     tower.doorMode,
     tower.categoryCode,
     tower.depth,
   );
+  const switched = tower.catalogId !== catalog.catalogId;
   tower.catalogId = catalog.catalogId;
   tower.catalogCode = catalog.code;
+  return { switched, catalog };
 }
 
 /**
@@ -448,11 +455,10 @@ export function isOneBoxAvailable(
   return width <= maxW;
 }
 
-/**
- * Refresh the tower's cabinetId and cabinetCode after any dimension or
- * box-count change.  Also enforces box-count availability rules.
- */
-export function refreshTowerCabinet(tower: Tower): void {
+export function refreshTowerCabinet(
+  tower: Tower,
+  options?: { catalogSwitched?: boolean },
+): void {
   if (!tower.doorMode || !tower.categoryCode) return;
 
   // Auto-force 2-box if 1-box is no longer available at current dimensions
@@ -461,6 +467,19 @@ export function refreshTowerCabinet(tower: Tower): void {
     !isOneBoxAvailable(tower.doorMode, tower.categoryCode, tower.width, tower.depth)
   ) {
     tower.boxCount = 2;
+  }
+
+  const catalog = resolveCatalogForTower(
+    tower.doorMode,
+    tower.categoryCode,
+    tower.depth,
+  );
+
+  if (options?.catalogSwitched && catalog.cabinets && catalog.cabinets.length > 0) {
+    const firstCabinet = catalog.cabinets[0]!;
+    tower.cabinetId = Number(firstCabinet.id ?? (firstCabinet as any).cabinet_id ?? 0);
+    tower.cabinetCode = String(firstCabinet.code ?? (firstCabinet as any).cabinet_code ?? '');
+    return;
   }
 
   const cabinet = resolveCabinetForTower(

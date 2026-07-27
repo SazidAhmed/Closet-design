@@ -119,6 +119,50 @@ describe('box configuration & cabinet resolution', () => {
     cas15.cabinets = []
   })
 
+  it('selects the very first cabinet of the new catalog when depth edit causes a catalog switch', () => {
+    setActivePinia(createPinia())
+    const closet = useClosetStore()
+
+    const cas15 = CLOSET_CATALOG_CATEGORIES
+      .find(c => c.doorMode === 'without_doors' && c.categoryCode === 'CAS')!
+      .catalogs.find(c => c.catalogId === 205)!
+
+    const cas18 = CLOSET_CATALOG_CATEGORIES
+      .find(c => c.doorMode === 'without_doors' && c.categoryCode === 'CAS')!
+      .catalogs.find(c => c.catalogId === 204)!
+
+    cas15.cabinets = [
+      { id: 4050, code: 'CAS128415', width: 12, height: 84, depth: 15, minW: 6, maxW: 13, minH: 80, maxH: 85, minD: 6, maxD: 16, boxOptions: [1, 2], numberOfShelves: 7, numOfDrawers: 0, numOfRollouts: 0, basePrice: '350' },
+      { id: 4052, code: 'CAS308415', width: 30, height: 84, depth: 15, minW: 25, maxW: 35, minH: 80, maxH: 85, minD: 6, maxD: 16, boxOptions: [1, 2], numberOfShelves: 7, numOfDrawers: 0, numOfRollouts: 0, basePrice: '450' }
+    ]
+
+    cas18.cabinets = [
+      { id: 4053, code: 'CAS128418', width: 12, height: 84, depth: 18, minW: 6, maxW: 13, minH: 80, maxH: 85, minD: 16.0625, maxD: 19, boxOptions: [1, 2], numberOfShelves: 7, numOfDrawers: 0, numOfRollouts: 0, basePrice: '380' },
+      { id: 4055, code: 'CAS308418', width: 30, height: 84, depth: 18, minW: 25, maxW: 35, minH: 80, maxH: 85, minD: 16.0625, maxD: 19, boxOptions: [1, 2], numberOfShelves: 7, numOfDrawers: 0, numOfRollouts: 0, basePrice: '480' }
+    ]
+
+    closet.setTowers([])
+    closet.addTowerFromCatalog('without_doors', 'CAS')
+    const tower = closet.towers[0]!
+
+    // Initially at depth 15, set width to 30 -> resolves to CAS308415 (#4052)
+    closet.setTowerDepth(tower.id, 15)
+    closet.setTowerWidth(tower.id, 30)
+    expect(tower.catalogId).toBe(205)
+    expect(tower.cabinetId).toBe(4052)
+    expect(tower.cabinetCode).toBe('CAS308415')
+
+    // Change depth to 18 -> switches to catalog 204 -> should select the very first cabinet CAS128418 (#4053)
+    closet.setTowerDepth(tower.id, 18)
+    expect(tower.catalogId).toBe(204)
+    expect(tower.cabinetId).toBe(4053)
+    expect(tower.cabinetCode).toBe('CAS128418')
+
+    // Cleanup
+    cas15.cabinets = []
+    cas18.cabinets = []
+  })
+
   it('preserves user entered width, height, and depth when matching cabinet is resolved', () => {
     setActivePinia(createPinia())
     const closet = useClosetStore()
