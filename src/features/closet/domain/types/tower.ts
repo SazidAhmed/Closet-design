@@ -52,6 +52,8 @@ export type Accessory =
 /** Accessory level used by the slider UI (None / Low / Medium / High). */
 export type AccessoryLevel = 'none' | 'low' | 'medium' | 'high'
 
+export type CornerPosition = 'left' | 'none' | 'right'
+
 /** A single vertical section (tower) inside the closet. */
 export type Tower = {
   id: string
@@ -75,6 +77,8 @@ export type Tower = {
   catalogCode?: string
   /** Whether this tower is using a corner cabinet catalog/category. */
   isCorner?: boolean
+  /** Corner cabinet section mode: 'left' | 'none' | 'right'. Defaults to 'none'. */
+  cornerPosition?: CornerPosition
   /** The type of custom part, if any (defaults to cabinet implicitly). */
   partType?: 'cabinet' | 'panel' | 'filler'
   /** For panel/filler: the ID of the cabinet they are attached to. */

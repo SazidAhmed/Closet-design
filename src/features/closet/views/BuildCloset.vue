@@ -18,6 +18,7 @@ import {
   type ClosetCatalogLimits,
   type ClosetDoorMode,
 } from "../domain/closetCatalogs";
+import type { CornerPosition } from "../domain/types/tower";
 import { snapTo16th } from "../domain/snapUtils";
 import { Plus, Trash2 } from "lucide-vue-next";
 
@@ -700,6 +701,20 @@ function toggleBoxCount(boxCount: 1 | 2) {
   closet.setTowerBoxCount(tower.id, boxCount);
 }
 
+/** Whether the corner cabinet section should be shown (for standard cabinet towers). */
+const showCornerSection = computed(() => {
+  const tower = selectedTower.value;
+  if (!tower) return false;
+  if (tower.partType === "panel" || tower.partType === "filler") return false;
+  return true;
+});
+
+function setCornerPosition(pos: CornerPosition) {
+  const tower = selectedTower.value;
+  if (!tower) return;
+  closet.setTowerCornerPosition(tower.id, pos);
+}
+
 function onDimensionInput(
   dimension: "width" | "depth" | "height" | "outset" | "elevation",
   event: Event,
@@ -1184,6 +1199,36 @@ function cancelCustomPartSide() {
             </div>
           </div>
 
+          <!-- Corner Cabinet Section -->
+          <div v-if="showCornerSection" class="box-toggle-section">
+            <div class="dimension-head">
+              <label>Corner Cabinet</label>
+            </div>
+            <div class="segmented-control corner-toggle">
+              <button
+                class="segment-btn"
+                :class="{ active: (selectedTower.cornerPosition ?? 'none') === 'left' }"
+                @click="setCornerPosition('left')"
+              >
+                Left Corner
+              </button>
+              <button
+                class="segment-btn"
+                :class="{ active: (selectedTower.cornerPosition ?? 'none') === 'none' }"
+                @click="setCornerPosition('none')"
+              >
+                No
+              </button>
+              <button
+                class="segment-btn"
+                :class="{ active: (selectedTower.cornerPosition ?? 'none') === 'right' }"
+                @click="setCornerPosition('right')"
+              >
+                Right Corner
+              </button>
+            </div>
+          </div>
+
           <!-- Clearance display -->
           <div v-if="clearances" class="clearance-section">
             <h2 class="section-title">Clearance</h2>
@@ -1333,6 +1378,10 @@ function cancelCustomPartSide() {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   background: rgba(2, 6, 23, 0.42);
+}
+
+.segmented-control.corner-toggle {
+  grid-template-columns: 1fr 1fr 1fr;
 }
 
 .segment-btn,

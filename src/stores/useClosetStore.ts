@@ -11,7 +11,7 @@ import {
 } from '../features/closet/domain/schema'
 import { validateCloset } from '../features/closet/domain/validateCloset'
 import { snapTo16th } from '../features/closet/domain/snapUtils'
-import type { Tower, Accessory } from '../features/closet/domain/types/tower'
+import type { Tower, Accessory, CornerPosition } from '../features/closet/domain/types/tower'
 import { createDefaultTower, createTowerId } from '../features/closet/domain/types/tower'
 import {
   clampTowerDepth,
@@ -363,6 +363,17 @@ export const useClosetStore = defineStore('closet', {
         tower.boxCount = boxCount
       }
 
+      refreshTowerCabinet(tower)
+    },
+
+    setTowerCornerPosition(towerId: string, cornerPosition: CornerPosition) {
+      const tower = this.towers.find((t) => t.id === towerId)
+      if (!tower) return
+
+      tower.cornerPosition = cornerPosition
+      tower.isCorner = cornerPosition === 'left' || cornerPosition === 'right'
+
+      refreshTowerCatalog(tower)
       refreshTowerCabinet(tower)
     },
 
