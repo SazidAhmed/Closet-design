@@ -167,7 +167,7 @@ onMounted(() => {
   }
 });
 
-import { snapTo16th } from "../domain/snapUtils";
+import { snapTo16th, parseFractionInput } from "../domain/snapUtils";
 
 // ───── Change Room Height dialog ───────────────────────────────────────────
 function formatInches(valIn: number): string {
@@ -194,29 +194,29 @@ const DOOR_ITEMS: ItemDef[] = [
   {
     type: "wall_opening",
     category: "door",
-    width: 27,
+    width: 24,
     height: 72,
     icon: "🚪",
   },
   {
     type: "double_door",
     category: "door",
-    width: 60,
+    width: 48,
     height: 84,
     icon: "🚪",
   },
-  { type: "single_door", category: "door", width: 36, height: 84, icon: "🚪" },
+  { type: "single_door", category: "door", width: 28, height: 84, icon: "🚪" },
   {
     type: "sliding_door",
     category: "door",
-    width: 60,
+    width: 48,
     height: 84,
     icon: "🚪",
   },
   {
     type: "bifold_door",
     category: "door",
-    width: 48,
+    width: 36,
     height: 84,
     icon: "🚪",
   },
@@ -226,7 +226,7 @@ const DECO_ITEMS: ItemDef[] = [
   {
     type: "window",
     category: "wall_decorator",
-    width: 36,
+    width: 24,
     height: 42,
     icon: "🪟",
   },
@@ -373,9 +373,9 @@ const selectedDoorWindowItem = computed<PlacedItem | null>(() => {
 function onSelectedItemSizeInput(dimension: "width" | "height", e: Event) {
   if (!selectedDoorWindowItem.value) return;
   const target = e.target as HTMLInputElement;
-  const valueIn = Number(target.value);
-  if (!Number.isFinite(valueIn)) return;
-  const nextValue = Math.max(1, snapTo16th(valueIn));
+  const parsed = parseFractionInput(target.value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return;
+  const nextValue = Math.max(1, snapTo16th(parsed));
 
   if (dimension === "width") {
     roomStore.updateItemProps(selectedDoorWindowItem.value.id, {
@@ -396,9 +396,8 @@ function onSelectedItemSizeInput(dimension: "width" | "height", e: Event) {
 function onSelectedItemElevationInput(e: Event) {
   if (!selectedDoorWindowItem.value) return;
   const target = e.target as HTMLInputElement;
-  const valueIn = Number(target.value);
-  if (!Number.isFinite(valueIn)) return;
-  const nextValue = Math.max(0, snapTo16th(valueIn));
+  const parsed = parseFractionInput(target.value);
+  const nextValue = Math.max(0, snapTo16th(parsed));
 
   roomStore.updateItemProps(selectedDoorWindowItem.value.id, {
     elevation: nextValue,
@@ -416,8 +415,7 @@ function onSelectedItemSideInput(
 ) {
   if (!selectedDoorWindowItem.value) return;
   const target = e.target as HTMLInputElement;
-  const valueIn = Number(target.value);
-  if (!Number.isFinite(valueIn)) return;
+  const parsed = parseFractionInput(target.value);
 
   const item = selectedDoorWindowItem.value;
   if (!item.wallId) return;
@@ -430,7 +428,7 @@ function onSelectedItemSideInput(
 
   const itemWidthIn = item.width;
   const halfWidthIn = itemWidthIn / 2;
-  const requested = Math.max(0, snapTo16th(valueIn));
+  const requested = Math.max(0, snapTo16th(parsed));
 
   let centerOffsetIn =
     side === "leftPosition"
@@ -2639,18 +2637,16 @@ function degToRad(deg: number): number {
 
 function onDrawHeightInput(e: Event) {
   const target = e.target as HTMLInputElement;
-  const valueIn = Number(target.value);
-  if (!Number.isFinite(valueIn)) return;
-  const height = snapTo16th(clampDrawHeight(valueIn));
+  const parsed = parseFractionInput(target.value);
+  const height = snapTo16th(clampDrawHeight(parsed));
   roomStore.setHeight(height);
   target.value = formatTo4DecimalsNoRound(roomStore.height);
 }
 
 function onDrawThicknessInput(e: Event) {
   const target = e.target as HTMLInputElement;
-  const value = Number(target.value);
-  if (!Number.isFinite(value)) return;
-  const thickness = snapTo16th(clampDrawThickness(value));
+  const parsed = parseFractionInput(target.value);
+  const thickness = snapTo16th(clampDrawThickness(parsed));
   drawWallThicknessInput.value = thickness;
 
   // Keep already drawn walls consistent with the selected thickness.
@@ -3267,9 +3263,9 @@ function setSelectedWallLengthInches(lengthIn: number) {
 
 function onSelectedWallLengthInput(e: Event) {
   const target = e.target as HTMLInputElement;
-  const next = Number(target.value);
-  if (!Number.isFinite(next)) return;
-  const snapped = snapTo16th(next);
+  const parsed = parseFractionInput(target.value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return;
+  const snapped = snapTo16th(parsed);
   setSelectedWallLengthInches(snapped);
   if (selectedWall.value) {
     target.value = formatTo4DecimalsNoRound(selectedWall.value.length);
@@ -3680,77 +3676,134 @@ function dimLinePoints(wall: {
               @pointerdown="startItemDrag(item.id, item.wallId ?? '', $event)"
               @click.stop="selectItem(item.id, $event)"
             >
+              <!-- Wall-band cutout rectangle -->
               <rect
                 :x="-item.width / 2"
                 :y="-itemWallBandThickness(item) / 2"
                 :width="item.width"
                 :height="itemWallBandThickness(item)"
-                :fill="itemColor(item.category)"
-                :stroke="selectedItemId === item.id ? '#fbbf24' : 'none'"
-                :stroke-width="selectedItemId === item.id ? 2 : 0"
-                rx="2"
-                :opacity="selectedItemId === item.id ? 1 : 0.8"
+                :fill="item.category === 'door' ? 'rgba(249, 115, 22, 0.18)' : 'rgba(6, 182, 212, 0.18)'"
+                :stroke="
+                  selectedItemId === item.id
+                    ? item.category === 'door'
+                      ? '#f97316'
+                      : item.type === 'window' || item.category === 'wall_decorator'
+                        ? '#06b6d4'
+                        : '#fbbf24'
+                    : itemColor(item.category)
+                "
+                :stroke-width="selectedItemId === item.id ? 1.5 : 1"
+                rx="1"
                 style="cursor: grab"
               />
+
+              <!-- Architectural window glass details -->
+              <g v-if="item.type === 'window'" pointer-events="none">
+                <line
+                  :x1="-item.width / 2"
+                  y1="0"
+                  :x2="item.width / 2"
+                  y2="0"
+                  :stroke="itemColor(item.category)"
+                  stroke-width="1.2"
+                />
+                <line
+                  :x1="-item.width / 4"
+                  :y1="-itemWallBandThickness(item) / 2"
+                  :x2="-item.width / 4"
+                  :y2="itemWallBandThickness(item) / 2"
+                  :stroke="itemColor(item.category)"
+                  stroke-width="0.8"
+                  opacity="0.6"
+                />
+                <line
+                  :x1="item.width / 4"
+                  :y1="-itemWallBandThickness(item) / 2"
+                  :x2="item.width / 4"
+                  :y2="itemWallBandThickness(item) / 2"
+                  :stroke="itemColor(item.category)"
+                  stroke-width="0.8"
+                  opacity="0.6"
+                />
+              </g>
+
+              <!-- Architectural door opening details (window style in orange) -->
+              <g v-else-if="item.category === 'door'" pointer-events="none">
+                <line
+                  :x1="-item.width / 2"
+                  y1="0"
+                  :x2="item.width / 2"
+                  y2="0"
+                  :stroke="itemColor(item.category)"
+                  stroke-width="1.2"
+                />
+                <line
+                  :x1="-item.width / 4"
+                  :y1="-itemWallBandThickness(item) / 2"
+                  :x2="-item.width / 4"
+                  :y2="itemWallBandThickness(item) / 2"
+                  :stroke="itemColor(item.category)"
+                  stroke-width="0.8"
+                  opacity="0.6"
+                />
+                <line
+                  :x1="item.width / 4"
+                  :y1="-itemWallBandThickness(item) / 2"
+                  :x2="item.width / 4"
+                  :y2="itemWallBandThickness(item) / 2"
+                  :stroke="itemColor(item.category)"
+                  stroke-width="0.8"
+                  opacity="0.6"
+                />
+              </g>
+
+              <!-- Item type label -->
               <text
                 x="0"
-                :y="
-                  selectedItemId === item.id
-                    ? isVerticalWall(item.wallId)
-                      ? 10
-                      : -10
-                    : isVerticalWall(item.wallId)
-                      ? -16
-                      : 16
-                "
+                :y="-itemWallBandThickness(item) / 2 - 3"
                 text-anchor="middle"
                 :fill="itemColor(item.category)"
-                font-size="8"
+                font-size="4"
                 font-weight="600"
               >
                 {{ itemLabel(item.type) }}
               </text>
+              <!-- Measurement label -->
               <text
                 v-if="isDoorOrWindowItem(item)"
                 x="0"
-                :y="
-                  selectedItemId === item.id
-                    ? isVerticalWall(item.wallId)
-                      ? 19
-                      : -19
-                    : isVerticalWall(item.wallId)
-                      ? -25
-                      : 25
-                "
+                :y="-itemWallBandThickness(item) / 2 - 7.5"
                 text-anchor="middle"
                 fill="#cbd5e1"
-                font-size="7"
+                font-size="3.5"
                 font-weight="600"
               >
                 {{ itemMeasurementLabel(item) }}
               </text>
+              <!-- Delete handle badge -->
               <g
                 v-if="selectedItemId === item.id"
                 @click.stop="deleteSelectedItem"
                 style="cursor: pointer"
               >
                 <circle
-                  :cx="item.width / 2 + 8"
+                  :cx="item.width / 2 + 4"
                   :cy="-itemWallBandThickness(item) / 2"
-                  r="6"
+                  r="3.5"
                   fill="#ef4444"
                   stroke="#0f172a"
-                  stroke-width="1"
+                  stroke-width="0.8"
                 />
                 <text
-                  :x="item.width / 2 + 8"
-                  y="-1"
+                  :x="item.width / 2 + 4"
+                  y="-0.5"
                   text-anchor="middle"
                   fill="white"
-                  font-size="8"
+                  font-size="4"
                   font-weight="bold"
+                  dominant-baseline="central"
                 >
-                  x
+                  ×
                 </text>
               </g>
             </g>
@@ -4639,13 +4692,12 @@ function dimLinePoints(wall: {
               <label class="prop-label">Wall Height</label>
               <input
                 class="prop-input"
-                type="number"
+                type="text"
+                inputmode="decimal"
                 step="0.0625"
                 :value="
                   formatTo4DecimalsNoRound(roomStore.height)
                 "
-                :min="ROOM_CONSTRAINTS.height.min"
-                :max="ROOM_CONSTRAINTS.height.max"
                 @change="onDrawHeightInput"
                 @blur="onDrawHeightInput"
                 @keyup.enter="onDrawHeightInput"
@@ -4656,11 +4708,10 @@ function dimLinePoints(wall: {
               <label class="prop-label">Wall Thickness</label>
               <input
                 class="prop-input"
-                type="number"
+                type="text"
+                inputmode="decimal"
                 step="0.0625"
                 :value="formatTo4DecimalsNoRound(drawWallThicknessInput)"
-                min="1"
-                max="30"
                 @change="onDrawThicknessInput"
                 @blur="onDrawThicknessInput"
                 @keyup.enter="onDrawThicknessInput"
@@ -4703,7 +4754,8 @@ function dimLinePoints(wall: {
               <label class="prop-label">Length</label>
               <input
                 class="prop-input"
-                type="number"
+                type="text"
+                inputmode="decimal"
                 step="0.0625"
                 :value="
                   formatTo4DecimalsNoRound(selectedWall.length)
@@ -4718,7 +4770,8 @@ function dimLinePoints(wall: {
               <label class="prop-label">Height</label>
               <input
                 class="prop-input"
-                type="number"
+                type="text"
+                inputmode="decimal"
                 step="0.0625"
                 :value="
                   formatTo4DecimalsNoRound(roomStore.height)
@@ -4733,13 +4786,14 @@ function dimLinePoints(wall: {
               <label class="prop-label">Thickness</label>
               <input
                 class="prop-input"
-                type="number"
+                type="text"
+                inputmode="decimal"
                 step="0.0625"
                 :value="formatTo4DecimalsNoRound(selectedWall.thickness)"
                 @change="
                   (e: Event) => {
                     const target = e.target as HTMLInputElement;
-                    const val = snapTo16th(Number(target.value));
+                    const val = snapTo16th(clampDrawThickness(parseFractionInput(target.value)));
                     roomStore.updateWallProps(selectedWall!.id, { thickness: val });
                     target.value = formatTo4DecimalsNoRound(selectedWall!.thickness);
                   }
@@ -4747,7 +4801,7 @@ function dimLinePoints(wall: {
                 @blur="
                   (e: Event) => {
                     const target = e.target as HTMLInputElement;
-                    const val = snapTo16th(Number(target.value));
+                    const val = snapTo16th(clampDrawThickness(parseFractionInput(target.value)));
                     roomStore.updateWallProps(selectedWall!.id, { thickness: val });
                     target.value = formatTo4DecimalsNoRound(selectedWall!.thickness);
                   }
@@ -4755,7 +4809,7 @@ function dimLinePoints(wall: {
                 @keyup.enter="
                   (e: Event) => {
                     const target = e.target as HTMLInputElement;
-                    const val = snapTo16th(Number(target.value));
+                    const val = snapTo16th(clampDrawThickness(parseFractionInput(target.value)));
                     roomStore.updateWallProps(selectedWall!.id, { thickness: val });
                     target.value = formatTo4DecimalsNoRound(selectedWall!.thickness);
                   }
@@ -4879,8 +4933,8 @@ function dimLinePoints(wall: {
               <label class="prop-label">Width</label>
               <input
                 class="prop-input"
-                type="number"
-                min="1"
+                type="text"
+                inputmode="decimal"
                 step="0.0625"
                 :value="
                   formatTo4DecimalsNoRound(
@@ -4897,8 +4951,8 @@ function dimLinePoints(wall: {
               <label class="prop-label">Height</label>
               <input
                 class="prop-input"
-                type="number"
-                min="1"
+                type="text"
+                inputmode="decimal"
                 step="0.0625"
                 :value="
                   formatTo4DecimalsNoRound(
@@ -4915,8 +4969,8 @@ function dimLinePoints(wall: {
               <label class="prop-label">Left Position</label>
               <input
                 class="prop-input"
-                type="number"
-                min="0"
+                type="text"
+                inputmode="decimal"
                 step="0.0625"
                 data-testid="left-position-input"
                 :value="
@@ -4934,8 +4988,8 @@ function dimLinePoints(wall: {
               <label class="prop-label">Right Position</label>
               <input
                 class="prop-input"
-                type="number"
-                min="0"
+                type="text"
+                inputmode="decimal"
                 step="0.0625"
                 data-testid="right-position-input"
                 :value="
@@ -4953,8 +5007,8 @@ function dimLinePoints(wall: {
               <label class="prop-label">Elevation</label>
               <input
                 class="prop-input"
-                type="number"
-                min="0"
+                type="text"
+                inputmode="decimal"
                 step="0.0625"
                 :value="
                   formatTo4DecimalsNoRound(
