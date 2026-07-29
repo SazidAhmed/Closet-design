@@ -6,6 +6,7 @@ import { defineStore } from 'pinia'
 import type { Room, PlacedItem, RoomColors, Vec2 } from '../features/closet/domain/types/room'
 import { createDefaultRoom, createItemId, createWallId } from '../features/closet/domain/types/room'
 import { ROOM_CONSTRAINTS } from '../features/closet/domain/constraints'
+import { snapTo16th } from '../features/closet/domain/snapUtils'
 
 function clampWall(v: number): number {
   return Math.max(ROOM_CONSTRAINTS.wallLength.min, Math.min(ROOM_CONSTRAINTS.wallLength.max, v))
