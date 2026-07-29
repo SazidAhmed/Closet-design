@@ -35,10 +35,12 @@ function truncTo4(value: number): string {
 
 const selectedDoorMode = ref<ClosetDoorMode>("without_doors");
 const showElevation = ref(false);
-const pendingCustomPart = ref<'panel' | 'filler' | null>(null);
+const pendingCustomPart = ref<"panel" | "filler" | null>(null);
 
 const visibleCategories = computed(() => {
-  const storeCategories = closet.catalogCategoriesForMode(selectedDoorMode.value);
+  const storeCategories = closet.catalogCategoriesForMode(
+    selectedDoorMode.value,
+  );
   if (storeCategories && storeCategories.length > 0) {
     return storeCategories;
   }
@@ -50,10 +52,10 @@ watch(
   (categories) => {
     console.log(
       `[BuildCloset] Visible Categories loaded for door mode "${selectedDoorMode.value}":`,
-      JSON.parse(JSON.stringify(categories))
+      JSON.parse(JSON.stringify(categories)),
     );
   },
-  { immediate: true, deep: true }
+  { immediate: true, deep: true },
 );
 
 const selectedTower = computed(
@@ -480,9 +482,14 @@ const clearances = computed(() => {
   const nominalUsable = nominalGlobalRight - nominalGlobalLeft;
 
   const totalPhysicalGap = Math.max(0, physicalUsable - totalTowerWidthIn);
-  
+
   const nominalTowerWidthIn = closet.towers
-    .filter((t) => t.wallId === wall.id && t.partType !== 'panel' && t.partType !== 'filler')
+    .filter(
+      (t) =>
+        t.wallId === wall.id &&
+        t.partType !== "panel" &&
+        t.partType !== "filler",
+    )
     .reduce((sum, t) => sum + t.width, 0);
   const totalNominalGap = Math.max(0, nominalUsable - nominalTowerWidthIn);
   const gapScale =
@@ -509,7 +516,7 @@ const selectedTowerWall = computed(() => {
 
 onMounted(async () => {
   appStore.setStep("design");
-  
+
   await closet.loadCatalogs();
 
   if (
@@ -670,16 +677,21 @@ function setDoorMode(mode: ClosetDoorMode) {
 const oneBoxAvailable = computed(() => {
   const tower = selectedTower.value;
   if (!tower?.doorMode || !tower.categoryCode) return false;
-  if (tower.doorMode !== 'without_doors') return false;
-  return isOneBoxAvailable(tower.doorMode, tower.categoryCode, tower.width, tower.depth);
+  if (tower.doorMode !== "without_doors") return false;
+  return isOneBoxAvailable(
+    tower.doorMode,
+    tower.categoryCode,
+    tower.width,
+    tower.depth,
+  );
 });
 
 /** Whether the box-count toggle should be shown (only for without-doors catalog towers). */
 const showBoxToggle = computed(() => {
   const tower = selectedTower.value;
   if (!tower?.doorMode || !tower.categoryCode) return false;
-  if (tower.partType === 'panel' || tower.partType === 'filler') return false;
-  return tower.doorMode === 'without_doors';
+  if (tower.partType === "panel" || tower.partType === "filler") return false;
+  return tower.doorMode === "without_doors";
 });
 
 function toggleBoxCount(boxCount: 1 | 2) {
@@ -714,7 +726,9 @@ function onDimensionInput(
   }
 
   const currentTower = selectedTower.value;
-  const updatedValue = currentTower ? (currentTower[dimension] ?? value) : value;
+  const updatedValue = currentTower
+    ? (currentTower[dimension] ?? value)
+    : value;
   target.value = truncTo4(updatedValue);
 }
 
@@ -849,12 +863,14 @@ function towerSubtitle(tower: {
   if (tower.partType === "filler") return "Filler";
   if (!tower.categoryName || !tower.categoryCode) return "Legacy tower";
   const base = `${tower.categoryName} (${tower.categoryCode})`;
-  return tower.cabinetCode ? `${base} - ${tower.cabinetCode}` : `${base} - NULL_CAB`;
+  return tower.cabinetCode
+    ? `${base} - ${tower.cabinetCode}`
+    : `${base} - NULL_CAB`;
 }
 
-function addCustomPartHandler(type: 'panel' | 'filler') {
+function addCustomPartHandler(type: "panel" | "filler") {
   const tower = selectedTower.value;
-  if (tower && (!tower.partType || tower.partType === 'cabinet')) {
+  if (tower && (!tower.partType || tower.partType === "cabinet")) {
     pendingCustomPart.value = type;
   } else {
     const wallId = selection.selectedWallId ?? room.closetWall?.id ?? null;
@@ -867,21 +883,21 @@ function addCustomPartHandler(type: 'panel' | 'filler') {
 }
 
 function addPanel() {
-  addCustomPartHandler('panel');
+  addCustomPartHandler("panel");
 }
 
 function addFiller() {
-  addCustomPartHandler('filler');
+  addCustomPartHandler("filler");
 }
 
-function confirmCustomPartSide(side: 'left' | 'right') {
+function confirmCustomPartSide(side: "left" | "right") {
   if (!pendingCustomPart.value) return;
   const attachedId = selection.selectedTowerId ?? undefined;
   const newPart = closet.addCustomPart(
     pendingCustomPart.value,
     attachedId,
     selectedTowerWall.value?.length,
-    side
+    side,
   );
   selection.selectTower(newPart.id);
   pendingCustomPart.value = null;
@@ -1037,7 +1053,7 @@ function cancelCustomPartSide() {
           <div class="dimension-control">
             <div class="dimension-head">
               <label>Width</label>
-              <span>{{ fmt(selectedTower.width) }}</span>
+              <span>{{ truncTo4(selectedTower.width) }}"</span>
             </div>
             <input
               class="number-input"
@@ -1050,11 +1066,7 @@ function cancelCustomPartSide() {
                     ? selectedTowerLimits.minW
                     : 0
               "
-              :max="
-                selectedTowerLimits
-                  ? selectedTowerLimits.maxW
-                  : undefined
-              "
+              :max="selectedTowerLimits ? selectedTowerLimits.maxW : undefined"
               :value="truncTo4(selectedTower.width)"
               :disabled="selectedTower.partType === 'panel'"
               @change="onDimensionInput('width', $event)"
@@ -1066,17 +1078,13 @@ function cancelCustomPartSide() {
           <div class="dimension-control">
             <div class="dimension-head">
               <label>Height</label>
-              <span>{{ fmt(selectedTower.height) }}</span>
+              <span>{{ truncTo4(selectedTower.height) }}"</span>
             </div>
             <input
               class="number-input"
               type="number"
               step="0.0625"
-              :min="
-                selectedTowerLimits
-                  ? selectedTowerLimits.minH
-                  : 0
-              "
+              :min="selectedTowerLimits ? selectedTowerLimits.minH : 0"
               :max="
                 Math.min(selectedTowerLimits?.maxH ?? Infinity, maxHeightIn)
               "
@@ -1091,22 +1099,14 @@ function cancelCustomPartSide() {
           <div class="dimension-control">
             <div class="dimension-head">
               <label>Depth</label>
-              <span>{{ fmt(selectedTower.depth) }}</span>
+              <span>{{ truncTo4(selectedTower.depth) }}"</span>
             </div>
             <input
               class="number-input"
               type="number"
               step="0.0625"
-              :min="
-                selectedTowerLimits
-                  ? selectedTowerLimits.minD
-                  : 0
-              "
-              :max="
-                selectedTowerLimits
-                  ? selectedTowerLimits.maxD
-                  : undefined
-              "
+              :min="selectedTowerLimits ? selectedTowerLimits.minD : 0"
+              :max="selectedTowerLimits ? selectedTowerLimits.maxD : undefined"
               :value="truncTo4(selectedTower.depth)"
               :disabled="selectedTower.partType === 'filler'"
               @change="onDimensionInput('depth', $event)"
@@ -1118,7 +1118,7 @@ function cancelCustomPartSide() {
           <div class="dimension-control">
             <div class="dimension-head">
               <label>Outset</label>
-              <span>{{ fmt(selectedTower.outset ?? 0) }}</span>
+              <span>{{ truncTo4(selectedTower.outset ?? 0) }}"</span>
             </div>
             <input
               id="tower-outset-input"
@@ -1136,7 +1136,7 @@ function cancelCustomPartSide() {
           <div class="dimension-control">
             <div class="dimension-head">
               <label>Elevation</label>
-              <span>{{ fmt(selectedTower.elevation ?? 0) }}</span>
+              <span>{{ truncTo4(selectedTower.elevation ?? 0) }}"</span>
             </div>
             <input
               id="tower-elevation-input"
@@ -1167,19 +1167,21 @@ function cancelCustomPartSide() {
               </button>
               <button
                 class="segment-btn"
-                :class="{ active: selectedTower.boxCount === 1, disabled: !oneBoxAvailable }"
+                :class="{
+                  active: selectedTower.boxCount === 1,
+                  disabled: !oneBoxAvailable,
+                }"
                 :disabled="!oneBoxAvailable"
-                :title="!oneBoxAvailable ? 'Width exceeds 1-box limit for this depth' : ''"
+                :title="
+                  !oneBoxAvailable
+                    ? 'Width exceeds 1-box limit for this depth'
+                    : ''
+                "
                 @click="toggleBoxCount(1)"
               >
                 1 Box
               </button>
             </div>
-          </div>
-
-          <!-- Cabinet Info (debug/tracing) -->
-          <div v-if="selectedTower.cabinetId" class="cabinet-info">
-            <span>Cabinet: {{ selectedTower.cabinetCode || '—' }} #{{ selectedTower.cabinetId }}</span>
           </div>
 
           <!-- Clearance display -->
@@ -1190,7 +1192,7 @@ function cancelCustomPartSide() {
               <div class="dimension-control">
                 <div class="dimension-head">
                   <label>Left</label>
-                  <span>{{ fmt(clearances.left) }}</span>
+                  <span>{{ truncTo4(fromCm(clearances.left)) }}"</span>
                 </div>
                 <input
                   class="number-input"
@@ -1208,7 +1210,7 @@ function cancelCustomPartSide() {
               <div class="dimension-control">
                 <div class="dimension-head">
                   <label>Right</label>
-                  <span>{{ fmt(clearances.right) }}</span>
+                  <span>{{ truncTo4(fromCm(clearances.right)) }}"</span>
                 </div>
                 <input
                   class="number-input"
@@ -1262,9 +1264,15 @@ function cancelCustomPartSide() {
       <div class="modal-dialog">
         <h3 class="modal-title">Select position of the part</h3>
         <div class="modal-actions">
-          <button class="modal-btn" @click="confirmCustomPartSide('left')">Left</button>
-          <button class="modal-btn" @click="confirmCustomPartSide('right')">Right</button>
-          <button class="modal-btn secondary" @click="cancelCustomPartSide()">Cancel</button>
+          <button class="modal-btn" @click="confirmCustomPartSide('left')">
+            Left
+          </button>
+          <button class="modal-btn" @click="confirmCustomPartSide('right')">
+            Right
+          </button>
+          <button class="modal-btn secondary" @click="cancelCustomPartSide()">
+            Cancel
+          </button>
         </div>
       </div>
     </div>
@@ -1757,7 +1765,9 @@ function cancelCustomPartSide() {
   border-radius: 12px;
   padding: 24px;
   min-width: 320px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.5),
+    0 8px 10px -6px rgba(0, 0, 0, 0.5);
 }
 
 .modal-title {
@@ -1810,12 +1820,5 @@ function cancelCustomPartSide() {
 .segment-btn.disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.cabinet-info {
-  margin-top: 12px;
-  font-size: 12px;
-  color: #94a3b8; /* Slate-400 */
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 </style>

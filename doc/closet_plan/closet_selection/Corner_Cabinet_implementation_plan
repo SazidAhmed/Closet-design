@@ -1,0 +1,74 @@
+# Implement Corner Cabinet
+
+This plan describes how to implement the corner cabinet feature for the closet design app, specifically for Shelves (CAS), Double Hanging (CDH), and Long Hanging (CLH) without doors.
+
+## User Review Required
+
+> [!IMPORTANT]
+> Please review the open questions below regarding catalog limits and the exact API structure before proceeding.
+
+## Open Questions
+
+> [!WARNING]
+> 1. **Orientation UI**: Should the "Corner Left" vs "Corner Right" be automatically determined by where the cabinet is placed on the wall, or manually selected by the user via a toggle in the properties panel? (The plan assumes manual selection via properties panel for now).
+> 2. **Catalog API**: Currently the backend API (`getCatalogCategories`) might not return corner catalogs in a structured way (it only returns a flat list of `catalogs` per category). We will implement a static fallback for the corner catalogs (IDs 214-217). Is this acceptable, or does the API need to be updated first?
+
+## Proposed Changes
+
+---
+
+### Domain Models
+
+#### [MODIFY] `src/features/closet/domain/types/tower.ts`
+- Add `cornerOrientation?: 'left' | 'right'` to the `Tower` type to distinguish between left blind (CLB) and right blind (CRB).
+
+#### [MODIFY] `src/features/closet/domain/closetCatalogs.ts`
+- Update the `ClosetCatalogCategory` type to support structured corner catalogs:
+  ```ts
+  cornerLeftCatalogs?: ClosetCatalogEntry[];
+  cornerRightCatalogs?: ClosetCatalogEntry[];
+  ```
+- Update `CLOSET_CATALOG_CATEGORIES` for CAS, CDH, and CLH (without doors) to include the new corner catalogs:
+  - **Left**: ID 217 (Depth 15), ID 216 (Depth 18)
+  - **Right**: ID 215 (Depth 15), ID 214 (Depth 18)
+- Update `resolveCatalogForTower` to check if `tower.isCorner` is true. If so, it should look up the correct corner catalog array based on `tower.cornerOrientation`, and resolve the catalog ID based on the tower's depth (15 or 18).
+
+#### [MODIFY] `src/features/closet/domain/schema.ts`
+- Ensure `isCorner` and the new `cornerOrientation` properties are included in the payload mapped by `exportForBackend`.
+
+---
+
+### Store Management
+
+#### [MODIFY] `src/stores/useClosetStore.ts`
+- Add an action: `setTowerCorner(towerId: string, isCorner: boolean, orientation?: 'left' | 'right')`.
+- Update `refreshTowerCatalog` and `refreshTowerCabinet` to respect the `isCorner` and `cornerOrientation` flags so that depth changes will switch between the 15-depth and 18-depth corner catalogs.
+
+---
+
+### User Interface
+
+#### [MODIFY] `src/features/closet/views/DesignCloset.vue` (or the relevant Properties Panel component)
+- When a tower is selected that belongs to CAS, CDH, or CLH (and is `without_doors`), display a toggle/checkbox for "Corner Cabinet".
+- If "Corner Cabinet" is checked, show a radio group or selector for "Orientation: Left / Right".
+- Bind these inputs to the `setTowerCorner` store action.
+
+---
+
+### Validation
+
+#### [MODIFY] `src/features/closet/domain/validateCloset.ts`
+- Add rules to warn or error if a tower is marked as a corner cabinet but its depth is not supported by the corner catalogs (must be 15 or 18).
+- Ensure that `cornerOrientation` is provided if `isCorner` is true.
+
+## Verification Plan
+
+### Automated Tests
+- Run `npm test` after adding tests to `tests/closetCatalogs.test.ts` to verify that `resolveCatalogForTower` correctly picks ID 214, 215, 216, or 217 based on `isCorner`, `cornerOrientation`, and depth.
+
+### Manual Verification
+- In the local dev server (`npm run dev`), place a doorless CAS tower.
+- Toggle "Corner Cabinet" on.
+- Select "Left". Verify the active catalog becomes 217 (if depth is 15) or 216 (if depth is 18).
+- Select "Right". Verify the active catalog becomes 215 (if depth 15) or 214 (if depth 18).
+- Change depth to 18 and verify the catalog updates correctly.
