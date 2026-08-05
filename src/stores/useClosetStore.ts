@@ -387,7 +387,7 @@ export const useClosetStore = defineStore('closet', {
         if (tower.cornerBridgeWidth === undefined || currentTotalD! < 22 || currentTotalD! > 24) {
           tower.cornerBridgeWidth = Math.max(0, 23 - tower.depth)
         }
-        tower.cornerBridgeDepth = clampBridgeDepth(tower.cornerBridgeDepth ?? tower.depth)
+        tower.cornerBridgeDepth = clampTowerDepth(tower, tower.cornerBridgeDepth ?? tower.depth)
         refreshBridgeCabinetForTower(tower)
       } else {
         // Clear bridge fields when corner is turned off.
@@ -415,7 +415,7 @@ export const useClosetStore = defineStore('closet', {
         tower.cornerBridgeWidth = Math.max(0, clampedTotalD - tower.depth)
       }
       if (typeof bridgeDepth === 'number') {
-        tower.cornerBridgeDepth = clampBridgeDepth(bridgeDepth)
+        tower.cornerBridgeDepth = clampTowerDepth(tower, snapTo16th(bridgeDepth))
       }
 
       refreshBridgeCabinetForTower(tower)

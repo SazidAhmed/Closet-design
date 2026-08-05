@@ -149,6 +149,10 @@ describe('closet catalog selection', () => {
     // Setting bridge width to achieve Total Depth of 23.5
     closet.setTowerBridgeDimensions(tower.id, { bridgeWidth: 23.5 - tower.depth })
     expect(tower.depth + (tower.cornerBridgeWidth ?? 0)).toBe(23.5)
+
+    // Setting bridge depth should clamp to main cabinet depth limits (15 to 23 for CAS)
+    closet.setTowerBridgeDimensions(tower.id, { bridgeDepth: 10 })
+    expect(tower.cornerBridgeDepth).toBe(15)
   })
 })
 

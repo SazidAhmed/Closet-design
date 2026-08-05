@@ -762,6 +762,8 @@ function onBridgeDimensionInput(
     target.value = truncTo4(updated?.cornerBridgeWidth ?? rawValue);
   } else {
     closet.setTowerBridgeDimensions(tower.id, { bridgeDepth: rawValue });
+    const updated = closet.towers.find((t) => t.id === tower.id);
+    target.value = truncTo4(updated?.cornerBridgeDepth ?? rawValue);
   }
 }
 
@@ -1136,7 +1138,7 @@ function cancelCustomPartSide() {
 
           <div class="dimension-control">
             <div class="dimension-head">
-              <label>Width</label>
+              <label>{{ showBridgeSection ? 'Main Width' : 'Width' }}</label>
               <span>{{ truncTo4(selectedTower.width) }}"</span>
             </div>
             <input
@@ -1188,7 +1190,7 @@ function cancelCustomPartSide() {
 
           <div class="dimension-control">
             <div class="dimension-head">
-              <label>Depth</label>
+              <label>{{ showBridgeSection ? 'Main Depth' : 'Depth' }}</label>
               <span>{{ truncTo4(selectedTower.depth) }}"</span>
             </div>
             <input
@@ -1221,6 +1223,25 @@ function cancelCustomPartSide() {
               @change="onTotalDepthInput($event)"
               @blur="onTotalDepthInput($event)"
               @keyup.enter="onTotalDepthInput($event)"
+            />
+          </div>
+
+          <!-- Bridge Depth input (shown for corner cabinets below Total Depth) -->
+          <div v-if="showBridgeSection" class="dimension-control">
+            <div class="dimension-head">
+              <label>Bridge Depth</label>
+              <span>{{ truncTo4(selectedTower.cornerBridgeDepth ?? selectedTower.depth) }}"</span>
+            </div>
+            <input
+              class="number-input"
+              type="number"
+              step="0.0625"
+              :min="selectedTowerLimits ? selectedTowerLimits.minD : 0"
+              :max="selectedTowerLimits ? selectedTowerLimits.maxD : undefined"
+              :value="truncTo4(selectedTower.cornerBridgeDepth ?? selectedTower.depth)"
+              @change="onBridgeDimensionInput('bridgeDepth', $event)"
+              @blur="onBridgeDimensionInput('bridgeDepth', $event)"
+              @keyup.enter="onBridgeDimensionInput('bridgeDepth', $event)"
             />
           </div>
 
@@ -1332,7 +1353,7 @@ function cancelCustomPartSide() {
             <!-- Bridge Width input -->
             <div class="dimension-control">
               <div class="dimension-head">
-                <label>Bridge W</label>
+                <label>Bridge Width</label>
                 <span>{{ truncTo4(selectedTower?.cornerBridgeWidth ?? 5) }}"</span>
               </div>
               <input
@@ -1346,24 +1367,6 @@ function cancelCustomPartSide() {
                 @blur="onBridgeDimensionInput('bridgeWidth', $event)"
                 @keyup.enter="onBridgeDimensionInput('bridgeWidth', $event)"
               />
-            </div>
-
-            <!-- Bridge Depth toggle (15" or 18") -->
-            <div class="dimension-control" style="margin-top: 6px">
-              <div class="dimension-head">
-                <label>Bridge D</label>
-              </div>
-              <div class="segmented-control">
-                <button
-                  v-for="d in CORNER_BRIDGE_DEPTH_OPTIONS"
-                  :key="d"
-                  class="segment-btn"
-                  :class="{ active: (selectedTower?.cornerBridgeDepth ?? selectedTower?.depth) === d }"
-                  @click="setBridgeDepth(d)"
-                >
-                  {{ d }}"
-                </button>
-              </div>
             </div>
 
             <!-- Total D summary -->
