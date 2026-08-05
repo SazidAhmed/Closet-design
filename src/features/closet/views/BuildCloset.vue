@@ -12,7 +12,10 @@ import { useUnit } from "../../../composables/useUnit";
 import {
   getCategoriesForDoorMode,
   getCategoryLimits,
+  getCornerTotalDepth,
   isOneBoxAvailable,
+  CORNER_BRIDGE_DEPTH_OPTIONS,
+  MIN_CORNER_TOTAL_D_FOR_HANGING,
   type ClosetCatalogCategory,
   type ClosetCatalogCategoryCode,
   type ClosetCatalogLimits,
@@ -715,6 +718,72 @@ function setCornerPosition(pos: CornerPosition) {
   closet.setTowerCornerPosition(tower.id, pos);
 }
 
+/** Whether the bridge sub-section should be shown (tower is an active corner). */
+const showBridgeSection = computed(() => {
+  const tower = selectedTower.value;
+  return tower?.isCorner === true ||
+    tower?.cornerPosition === 'left' ||
+    tower?.cornerPosition === 'right';
+});
+
+/** Computed total depth for the selected corner tower (Main D + Bridge W). */
+const cornerTotalDepth = computed(() => {
+  const tower = selectedTower.value;
+  if (!tower || !tower.isCorner) return null;
+  const mainD = tower.depth;
+  const bridgeW = tower.cornerBridgeWidth ?? Math.max(0, 23 - mainD);
+  const total = mainD + bridgeW;
+  return Math.min(24, Math.max(22, total));
+});
+
+/** Whether Total D meets the minimum for hanging configurations. */
+const cornerTotalDepthValid = computed(() => {
+  const tower = selectedTower.value;
+  const total = cornerTotalDepth.value;
+  if (total === null || !tower) return true;
+  const isHanging = tower.categoryCode === 'CDH' || tower.categoryCode === 'CLH';
+  if (!isHanging) return true;
+  return total >= MIN_CORNER_TOTAL_D_FOR_HANGING;
+});
+
+function onBridgeDimensionInput(
+  field: 'bridgeWidth' | 'bridgeDepth',
+  event: Event,
+) {
+  const tower = selectedTower.value;
+  if (!tower) return;
+  const target = event.target as HTMLInputElement;
+  const rawValue = Number(target.value);
+  if (!Number.isFinite(rawValue)) return;
+
+  if (field === 'bridgeWidth') {
+    closet.setTowerBridgeDimensions(tower.id, { bridgeWidth: rawValue });
+    const updated = closet.towers.find((t) => t.id === tower.id);
+    target.value = truncTo4(updated?.cornerBridgeWidth ?? rawValue);
+  } else {
+    closet.setTowerBridgeDimensions(tower.id, { bridgeDepth: rawValue });
+  }
+}
+
+function setBridgeDepth(depth: number) {
+  const tower = selectedTower.value;
+  if (!tower) return;
+  closet.setTowerBridgeDimensions(tower.id, { bridgeDepth: depth });
+}
+
+function onTotalDepthInput(event: Event) {
+  const tower = selectedTower.value;
+  if (!tower) return;
+  const target = event.target as HTMLInputElement;
+  const rawValue = Number(target.value);
+  if (!Number.isFinite(rawValue)) return;
+
+  const clampedTotal = Math.min(24, Math.max(22, rawValue));
+  const newBridgeW = Math.max(0, clampedTotal - tower.depth);
+  closet.setTowerBridgeDimensions(tower.id, { bridgeWidth: newBridgeW });
+  target.value = truncTo4(clampedTotal);
+}
+
 function onDimensionInput(
   dimension: "width" | "depth" | "height" | "outset" | "elevation",
   event: Event,
@@ -1077,9 +1146,11 @@ function cancelCustomPartSide() {
               :min="
                 selectedTower.partType === 'filler'
                   ? 1.5
-                  : selectedTowerLimits
-                    ? selectedTowerLimits.minW
-                    : 0
+                  : (selectedTower.isCorner || selectedTower.cornerPosition === 'left' || selectedTower.cornerPosition === 'right')
+                    ? 30
+                    : selectedTowerLimits
+                      ? selectedTowerLimits.minW
+                      : 0
               "
               :max="selectedTowerLimits ? selectedTowerLimits.maxW : undefined"
               :value="truncTo4(selectedTower.width)"
@@ -1099,7 +1170,11 @@ function cancelCustomPartSide() {
               class="number-input"
               type="number"
               step="0.0625"
-              :min="selectedTowerLimits ? selectedTowerLimits.minH : 0"
+              :min="
+                (selectedTower.isCorner || selectedTower.cornerPosition === 'left' || selectedTower.cornerPosition === 'right')
+                  ? (selectedTowerLimits ? Math.max(selectedTowerLimits.minH, 84) : 84)
+                  : (selectedTowerLimits ? selectedTowerLimits.minH : 0)
+              "
               :max="
                 Math.min(selectedTowerLimits?.maxH ?? Infinity, maxHeightIn)
               "
@@ -1127,6 +1202,25 @@ function cancelCustomPartSide() {
               @change="onDimensionInput('depth', $event)"
               @blur="onDimensionInput('depth', $event)"
               @keyup.enter="onDimensionInput('depth', $event)"
+            />
+          </div>
+
+          <!-- Total Depth input (shown for corner cabinets) -->
+          <div v-if="showBridgeSection" class="dimension-control">
+            <div class="dimension-head">
+              <label>Total Depth</label>
+              <span>{{ truncTo4(cornerTotalDepth ?? 23) }}"</span>
+            </div>
+            <input
+              class="number-input"
+              type="number"
+              step="0.0625"
+              min="22"
+              max="24"
+              :value="truncTo4(cornerTotalDepth ?? 23)"
+              @change="onTotalDepthInput($event)"
+              @blur="onTotalDepthInput($event)"
+              @keyup.enter="onTotalDepthInput($event)"
             />
           </div>
 
@@ -1226,6 +1320,65 @@ function cancelCustomPartSide() {
               >
                 Right Corner
               </button>
+            </div>
+          </div>
+
+          <!-- Bridge Dimensions (shown when corner is active) -->
+          <div v-if="showBridgeSection" class="box-toggle-section bridge-section">
+            <div class="dimension-head">
+              <label>Bridge Dimensions</label>
+            </div>
+
+            <!-- Bridge Width input -->
+            <div class="dimension-control">
+              <div class="dimension-head">
+                <label>Bridge W</label>
+                <span>{{ truncTo4(selectedTower?.cornerBridgeWidth ?? 5) }}"</span>
+              </div>
+              <input
+                class="number-input"
+                type="number"
+                step="0.0625"
+                min="0"
+                max="24"
+                :value="truncTo4(selectedTower?.cornerBridgeWidth ?? Math.max(0, 23 - (selectedTower?.depth ?? 15)))"
+                @change="onBridgeDimensionInput('bridgeWidth', $event)"
+                @blur="onBridgeDimensionInput('bridgeWidth', $event)"
+                @keyup.enter="onBridgeDimensionInput('bridgeWidth', $event)"
+              />
+            </div>
+
+            <!-- Bridge Depth toggle (15" or 18") -->
+            <div class="dimension-control" style="margin-top: 6px">
+              <div class="dimension-head">
+                <label>Bridge D</label>
+              </div>
+              <div class="segmented-control">
+                <button
+                  v-for="d in CORNER_BRIDGE_DEPTH_OPTIONS"
+                  :key="d"
+                  class="segment-btn"
+                  :class="{ active: (selectedTower?.cornerBridgeDepth ?? selectedTower?.depth) === d }"
+                  @click="setBridgeDepth(d)"
+                >
+                  {{ d }}"
+                </button>
+              </div>
+            </div>
+
+            <!-- Total D summary -->
+            <div
+              class="bridge-total-d"
+              :class="{ 'bridge-total-d--error': !cornerTotalDepthValid }"
+            >
+              <span class="bridge-total-d__label">Total D</span>
+              <span class="bridge-total-d__value">
+                {{ selectedTower?.depth?.toFixed(4) }}" + {{ (selectedTower?.cornerBridgeWidth ?? 0).toFixed(4) }}" =
+                <strong>{{ cornerTotalDepth?.toFixed(4) }}"</strong>
+              </span>
+              <span v-if="!cornerTotalDepthValid" class="bridge-total-d__warning">
+                ⚠ Hanging cabinets require Total D ≥ {{ MIN_CORNER_TOTAL_D_FOR_HANGING }}"
+              </span>
             </div>
           </div>
 
@@ -1869,5 +2022,52 @@ function cancelCustomPartSide() {
 .segment-btn.disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ── Bridge section ─────────────────────────────────────────────── */
+
+.bridge-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 16px;
+}
+
+.bridge-total-d {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bridge-total-d__label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #94a3b8;
+}
+
+.bridge-total-d__value {
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.bridge-total-d__value strong {
+  color: #f1f5f9;
+  font-weight: 700;
+}
+
+.bridge-total-d__warning {
+  font-size: 11px;
+  color: #f87171;
+  margin-top: 2px;
+}
+
+.bridge-total-d--error {
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(248, 113, 113, 0.08);
 }
 </style>

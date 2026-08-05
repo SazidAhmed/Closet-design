@@ -77,8 +77,22 @@ export type Tower = {
   catalogCode?: string
   /** Whether this tower is using a corner cabinet catalog/category. */
   isCorner?: boolean
+  /** Corner orientation: 'left' | 'right'. */
+  cornerOrientation?: 'left' | 'right'
   /** Corner cabinet section mode: 'left' | 'none' | 'right'. Defaults to 'none'. */
   cornerPosition?: CornerPosition
+  /**
+   * Width of the Closet Bridge piece for corner cabinets (inches).
+   * Only meaningful when isCorner=true. Used to compute Total D = Main D + Bridge W.
+   * Code prefix: CRB (right corner) or CLB (left corner).
+   */
+  cornerBridgeWidth?: number
+  /**
+   * Depth of the Closet Bridge piece for corner cabinets (inches).
+   * Must be 15" or 18" to match corner catalog entries.
+   * Defaults to the same depth as the main cabinet when first toggled.
+   */
+  cornerBridgeDepth?: number
   /** The type of custom part, if any (defaults to cabinet implicitly). */
   partType?: 'cabinet' | 'panel' | 'filler'
   /** For panel/filler: the ID of the cabinet they are attached to. */

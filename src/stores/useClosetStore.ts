@@ -17,9 +17,11 @@ import {
   clampTowerDepth,
   clampTowerHeight,
   clampTowerWidth,
+  clampBridgeDepth,
   createTowerFromCategory,
   isOneBoxAvailable,
   loadCatalogCategories,
+  refreshBridgeCabinetForTower,
   refreshTowerCabinet,
   refreshTowerCatalog,
   setActiveCategories,
@@ -371,10 +373,52 @@ export const useClosetStore = defineStore('closet', {
       if (!tower) return
 
       tower.cornerPosition = cornerPosition
+      tower.cornerOrientation = cornerPosition === 'left' || cornerPosition === 'right' ? cornerPosition : undefined
       tower.isCorner = cornerPosition === 'left' || cornerPosition === 'right'
+
+      if (tower.isCorner) {
+        if (tower.width < 30) {
+          tower.width = 30
+        }
+        tower.height = clampTowerHeight(tower, tower.height)
+        // Initialize bridge dimensions when first toggled to a corner position.
+        // Default total depth = 23", default bridge width = Math.max(0, 23 - tower.depth).
+        const currentTotalD = tower.cornerBridgeWidth !== undefined ? tower.depth + tower.cornerBridgeWidth : undefined
+        if (tower.cornerBridgeWidth === undefined || currentTotalD! < 22 || currentTotalD! > 24) {
+          tower.cornerBridgeWidth = Math.max(0, 23 - tower.depth)
+        }
+        tower.cornerBridgeDepth = clampBridgeDepth(tower.cornerBridgeDepth ?? tower.depth)
+        refreshBridgeCabinetForTower(tower)
+      } else {
+        // Clear bridge fields when corner is turned off.
+        tower.cornerBridgeWidth = undefined
+        tower.cornerBridgeDepth = undefined
+        ;(tower as any).bridgeCabinetId = undefined
+        ;(tower as any).bridgeCabinetCode = undefined
+      }
 
       refreshTowerCatalog(tower)
       refreshTowerCabinet(tower)
+    },
+
+    setTowerBridgeDimensions(
+      towerId: string,
+      { bridgeWidth, bridgeDepth }: { bridgeWidth?: number; bridgeDepth?: number },
+    ) {
+      const tower = this.towers.find((t) => t.id === towerId)
+      if (!tower || !tower.isCorner) return
+
+      if (typeof bridgeWidth === 'number') {
+        // Clamp total depth (tower.depth + bridgeWidth) between 22" and 24"
+        const targetTotalD = tower.depth + bridgeWidth
+        const clampedTotalD = Math.min(24, Math.max(22, snapTo16th(targetTotalD)))
+        tower.cornerBridgeWidth = Math.max(0, clampedTotalD - tower.depth)
+      }
+      if (typeof bridgeDepth === 'number') {
+        tower.cornerBridgeDepth = clampBridgeDepth(bridgeDepth)
+      }
+
+      refreshBridgeCabinetForTower(tower)
     },
 
     setTowerOutset(towerId: string, outset: number) {

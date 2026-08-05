@@ -273,11 +273,43 @@ const placedTowerPolygons = computed(() => {
 
       const d = tower.depth;
 
+      let renderCorners = corners;
+      const isCorner = tower.isCorner ?? (tower.cornerPosition === 'left' || tower.cornerPosition === 'right' || tower.cornerOrientation === 'left' || tower.cornerOrientation === 'right');
+      
+      if (isCorner && typeof tower.cornerBridgeWidth === 'number' && tower.cornerBridgeWidth > 0) {
+        const bd = tower.cornerBridgeDepth ?? tower.depth;
+        const bw = tower.cornerBridgeWidth;
+        const [BL, BR, FR, FL] = corners;
+        const wx = Math.cos(wall.angle);
+        const wy = Math.sin(wall.angle);
+        
+        const isLeft = tower.cornerOrientation === 'left' || tower.cornerPosition === 'left';
+        if (isLeft) {
+          renderCorners = [
+            BL,
+            BR,
+            FR,
+            [FL[0] + wx * bd, FL[1] + wy * bd],
+            [FL[0] + wx * bd + px * bw, FL[1] + wy * bd + py * bw],
+            [FL[0] + px * bw, FL[1] + py * bw]
+          ];
+        } else {
+          renderCorners = [
+            BL,
+            BR,
+            [FR[0] + px * bw, FR[1] + py * bw],
+            [FR[0] - wx * bd + px * bw, FR[1] - wy * bd + py * bw],
+            [FR[0] - wx * bd, FR[1] - wy * bd],
+            FL
+          ];
+        }
+      }
+
       return {
         id: tower.id,
         label: tower.label,
         partType: tower.partType,
-        points: corners.map((c) => c.join(",")).join(" "),
+        points: renderCorners.map((c) => c.join(",")).join(" "),
         labelX: cx_inner + (px * d) / 2,
         labelY: cy_inner + (py * d) / 2,
         selected: selectionStore.selectedTowerId === tower.id,

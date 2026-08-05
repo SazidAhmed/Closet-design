@@ -62,6 +62,8 @@ export type ClosetCatalogCategory = {
   categoryCode: ClosetCatalogCategoryCode;
   categoryName: string;
   catalogs: ClosetCatalogEntry[];
+  cornerLeftCatalogs?: ClosetCatalogEntry[];
+  cornerRightCatalogs?: ClosetCatalogEntry[];
   cornerCatalogIds?: number[];
   category_id?: number; // added to match api
 };
@@ -104,7 +106,15 @@ const CLOSET_CATALOG_CATEGORIES: ClosetCatalogCategory[] = [
     doorMode: "without_doors",
     categoryCode: "CAS",
     categoryName: "Shelves",
-    cornerCatalogIds: [214, 215],
+    cornerCatalogIds: [214, 215, 216, 217],
+    cornerLeftCatalogs: [
+      entry(217, "CLB128415-459615", 12, 45, 15, 16, 84, 96),
+      entry(216, "CLB128418-459618", 12, 45, 18, 20, 84, 96),
+    ],
+    cornerRightCatalogs: [
+      entry(215, "CRB128415-459615", 12, 45, 15, 16, 84, 96),
+      entry(214, "CRB128418-459618", 12, 45, 18, 20, 84, 96),
+    ],
     catalogs: [
       entry(205, "CAS128415-459615", 12, 45, 15, 16, 84, 96),
       entry(204, "CAS128418-459618", 12, 45, 18, 20, 84, 96),
@@ -115,7 +125,15 @@ const CLOSET_CATALOG_CATEGORIES: ClosetCatalogCategory[] = [
     doorMode: "without_doors",
     categoryCode: "CDH",
     categoryName: "Double Hanging",
-    cornerCatalogIds: [214, 215],
+    cornerCatalogIds: [214, 215, 216, 217],
+    cornerLeftCatalogs: [
+      entry(217, "CLB128415-459615", 12, 45, 15, 16, 84, 96),
+      entry(216, "CLB128418-459618", 12, 45, 18, 20, 84, 96),
+    ],
+    cornerRightCatalogs: [
+      entry(215, "CRB128415-459615", 12, 45, 15, 16, 84, 96),
+      entry(214, "CRB128418-459618", 12, 45, 18, 20, 84, 96),
+    ],
     catalogs: [
       entry(207, "CDH128415-459615", 12, 45, 15, 16, 84, 96),
       entry(206, "CDH128418-459618", 12, 45, 18, 20, 84, 96),
@@ -126,7 +144,15 @@ const CLOSET_CATALOG_CATEGORIES: ClosetCatalogCategory[] = [
     doorMode: "without_doors",
     categoryCode: "CLH",
     categoryName: "Long Hanging",
-    cornerCatalogIds: [214, 215],
+    cornerCatalogIds: [214, 215, 216, 217],
+    cornerLeftCatalogs: [
+      entry(217, "CLB128415-459615", 12, 45, 15, 16, 84, 96),
+      entry(216, "CLB128418-459618", 12, 45, 18, 20, 84, 96),
+    ],
+    cornerRightCatalogs: [
+      entry(215, "CRB128415-459615", 12, 45, 15, 16, 84, 96),
+      entry(214, "CRB128418-459618", 12, 45, 18, 20, 84, 96),
+    ],
     catalogs: [
       entry(209, "CLH128415-459615", 12, 45, 15, 16, 84, 96),
       entry(208, "CLH128418-459618", 12, 45, 18, 20, 84, 96),
@@ -256,8 +282,25 @@ export function resolveCatalogForTower(
   doorMode: ClosetDoorMode,
   categoryCode: ClosetCatalogCategoryCode,
   depth: number,
+  isCorner?: boolean,
+  cornerPosition?: CornerPosition | 'left' | 'right',
 ): ClosetCatalogEntry {
   const category = getCategoryByCode(doorMode, categoryCode);
+
+  const cornerPos = cornerPosition ?? (isCorner ? 'left' : 'none');
+  const isCornerActive = isCorner || (cornerPos === 'left' || cornerPos === 'right');
+
+  if (isCornerActive && doorMode === 'without_doors') {
+    const list = cornerPos === 'right'
+      ? (category.cornerRightCatalogs ?? (category.cornerCatalogIds?.includes(214) ? [entry(215, "CRB128415-459615", 12, 45, 15, 16, 84, 96), entry(214, "CRB128418-459618", 12, 45, 18, 20, 84, 96)] : []))
+      : (category.cornerLeftCatalogs ?? (category.cornerCatalogIds?.includes(217) ? [entry(217, "CLB128415-459615", 12, 45, 15, 16, 84, 96), entry(216, "CLB128418-459618", 12, 45, 18, 20, 84, 96)] : []));
+
+    if (list && list.length > 0) {
+      const matched = list.find((catalog) => depth >= catalog.minD && depth <= catalog.maxD);
+      if (matched) return matched;
+      return list.find((catalog) => depth <= catalog.maxD) ?? list[list.length - 1]!;
+    }
+  }
 
   if (doorMode === "with_doors") {
     return category.catalogs[0]!;
@@ -277,7 +320,9 @@ export function resolveCatalogForTower(
 export function clampTowerWidth(tower: Tower, width: number): number {
   if (!tower.doorMode || !tower.categoryCode) return width;
   const limits = getCategoryLimits(tower.doorMode, tower.categoryCode);
-  return clamp(width, limits.minW, limits.maxW);
+  const isCorner = tower.isCorner ?? (tower.cornerPosition === 'left' || tower.cornerPosition === 'right' || tower.cornerOrientation === 'left' || tower.cornerOrientation === 'right');
+  const minW = isCorner ? Math.max(limits.minW, 30) : limits.minW;
+  return clamp(width, minW, limits.maxW);
 }
 
 export function clampTowerDepth(tower: Tower, depth: number): number {
@@ -289,15 +334,21 @@ export function clampTowerDepth(tower: Tower, depth: number): number {
 export function clampTowerHeight(tower: Tower, height: number): number {
   if (!tower.doorMode || !tower.categoryCode) return height;
   const limits = getCategoryLimits(tower.doorMode, tower.categoryCode);
-  return clamp(height, limits.minH, limits.maxH);
+  const isCorner = tower.isCorner ?? (tower.cornerPosition === 'left' || tower.cornerPosition === 'right' || tower.cornerOrientation === 'left' || tower.cornerOrientation === 'right');
+  const minH = isCorner ? Math.max(limits.minH, 84) : limits.minH;
+  return clamp(height, minH, limits.maxH);
 }
 
 export function refreshTowerCatalog(tower: Tower): { switched: boolean; catalog: ClosetCatalogEntry } | null {
   if (!tower.doorMode || !tower.categoryCode) return null;
+  const isCorner = tower.isCorner ?? (tower.cornerPosition === 'left' || tower.cornerPosition === 'right' || tower.cornerOrientation === 'left' || tower.cornerOrientation === 'right');
+  const position = tower.cornerPosition ?? tower.cornerOrientation ?? (isCorner ? 'left' : 'none');
   const catalog = resolveCatalogForTower(
     tower.doorMode,
     tower.categoryCode,
     tower.depth,
+    isCorner,
+    position,
   );
   const switched = tower.catalogId !== catalog.catalogId;
   tower.catalogId = catalog.catalogId;
@@ -428,8 +479,10 @@ export function resolveCabinetForTower(
   height: number,
   depth: number,
   boxCount: 1 | 2 = 2,
+  isCorner?: boolean,
+  cornerPosition?: CornerPosition | 'left' | 'right',
 ): ClosetCabinetEntry | null {
-  const catalog = resolveCatalogForTower(doorMode, categoryCode, depth);
+  const catalog = resolveCatalogForTower(doorMode, categoryCode, depth, isCorner, cornerPosition);
   console.log("resolveCabinetForTower catalog found:", catalog?.code, "cabinets count:", catalog?.cabinets?.length);
   if (!catalog.cabinets || catalog.cabinets.length === 0) return null;
   return selectCabinet(catalog.cabinets, width, height, boxCount);
@@ -469,10 +522,15 @@ export function refreshTowerCabinet(
     tower.boxCount = 2;
   }
 
+  const isCorner = tower.isCorner ?? (tower.cornerPosition === 'left' || tower.cornerPosition === 'right' || tower.cornerOrientation === 'left' || tower.cornerOrientation === 'right');
+  const position = tower.cornerPosition ?? tower.cornerOrientation ?? (isCorner ? 'left' : 'none');
+
   const catalog = resolveCatalogForTower(
     tower.doorMode,
     tower.categoryCode,
     tower.depth,
+    isCorner,
+    position,
   );
 
   if (options?.catalogSwitched && catalog.cabinets && catalog.cabinets.length > 0) {
@@ -489,14 +547,124 @@ export function refreshTowerCabinet(
     tower.height,
     tower.depth,
     tower.boxCount ?? 2,
+    isCorner,
+    position,
   );
   tower.cabinetId = cabinet?.id;
   tower.cabinetCode = cabinet?.code;
 }
 
+// ---------------------------------------------------------------------------
+// Corner Bridge helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * The minimum Total D (Main D + Bridge W) required for hanging corner cabinets
+ * (CDH / CLH categories). Per the design spec this is 23 inches.
+ */
+export const MIN_CORNER_TOTAL_D_FOR_HANGING = 23;
+
+/**
+ * Valid bridge depth options (inches) for corner cabinet bridge pieces.
+ * Must match CRB/CLB catalog depth ranges.
+ */
+export const CORNER_BRIDGE_DEPTH_OPTIONS = [15, 18] as const;
+export type CornerBridgeDepth = (typeof CORNER_BRIDGE_DEPTH_OPTIONS)[number];
+
+/**
+ * Computes the combined depth footprint of a corner cabinet assembly.
+ *   Total D = Main Cabinet Depth + Bridge Width
+ */
+export function getCornerTotalDepth(mainDepth: number, bridgeWidth: number): number {
+  return mainDepth + bridgeWidth;
+}
+
+/**
+ * Clamps a bridge depth value to the nearest valid option (15 or 18 inches).
+ */
+export function clampBridgeDepth(depth: number): CornerBridgeDepth {
+  // Pick whichever valid option is closest
+  return CORNER_BRIDGE_DEPTH_OPTIONS.reduce((best, opt) =>
+    Math.abs(opt - depth) < Math.abs(best - depth) ? opt : best,
+  );
+}
+
+/**
+ * Resolves the CRB or CLB catalog entry for the bridge piece of a corner cabinet.
+ *
+ * @param cornerPosition - 'left' uses CLB catalogs, 'right' uses CRB catalogs
+ * @param bridgeDepth    - depth of the bridge piece (15 or 18 inches)
+ * @param categoryCode   - the category of the main cabinet (determines which category's
+ *                         corner catalogs to use; defaults to CAS which holds them all)
+ */
+export function resolveBridgeCatalogForCorner(
+  cornerPosition: 'left' | 'right',
+  bridgeDepth: number,
+  categoryCode: ClosetCatalogCategoryCode = 'CAS',
+): ClosetCatalogEntry | null {
+  try {
+    const category = getCategoryByCode('without_doors', categoryCode);
+    const list = cornerPosition === 'right'
+      ? (category.cornerRightCatalogs ?? [])
+      : (category.cornerLeftCatalogs ?? []);
+
+    if (!list || list.length === 0) return null;
+
+    const matched = list.find((c) => bridgeDepth >= c.minD && bridgeDepth <= c.maxD);
+    return matched ?? list.find((c) => bridgeDepth <= c.maxD) ?? list[list.length - 1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolves the specific bridge cabinet record within the CRB/CLB catalog
+ * for the given bridge width and height.
+ */
+export function resolveBridgeCabinetForCorner(
+  cornerPosition: 'left' | 'right',
+  bridgeWidth: number,
+  bridgeHeight: number,
+  bridgeDepth: number,
+  categoryCode: ClosetCatalogCategoryCode = 'CAS',
+): ClosetCabinetEntry | null {
+  const catalog = resolveBridgeCatalogForCorner(cornerPosition, bridgeDepth, categoryCode);
+  if (!catalog || !catalog.cabinets || catalog.cabinets.length === 0) return null;
+  return selectCabinet(catalog.cabinets, bridgeWidth, bridgeHeight, 2);
+}
+
+/**
+ * Refreshes the bridge cabinet ID/code on a corner tower based on its current
+ * cornerBridgeWidth, cornerBridgeDepth, height, and cornerPosition.
+ * No-op if the tower is not a corner tower.
+ */
+export function refreshBridgeCabinetForTower(tower: Tower): void {
+  if (!tower.isCorner && tower.cornerPosition !== 'left' && tower.cornerPosition !== 'right') return;
+  const position = (tower.cornerPosition === 'left' || tower.cornerPosition === 'right')
+    ? tower.cornerPosition
+    : 'left';
+
+  const bridgeWidth = tower.cornerBridgeWidth ?? Math.max(0, 23 - tower.depth);
+  const bridgeDepth = tower.cornerBridgeDepth ?? tower.depth;
+  const categoryCode = tower.categoryCode ?? 'CAS';
+
+  const cabinet = resolveBridgeCabinetForCorner(
+    position,
+    bridgeWidth,
+    tower.height,
+    bridgeDepth,
+    categoryCode,
+  );
+
+  // Store bridge cabinet resolution metadata on the tower for export/quote
+  ;(tower as any).bridgeCabinetId = cabinet?.id;
+  ;(tower as any).bridgeCabinetCode = cabinet?.code;
+}
+
 function accessoriesForCategory(
   categoryCode: ClosetCatalogCategoryCode,
 ): Accessory[] {
+
   switch (categoryCode) {
     case "CDH":
     case "CCH":

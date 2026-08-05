@@ -58,6 +58,98 @@ describe('closet catalog selection', () => {
     const payload = exportForBackend(closet.$state)
     expect(payload.towers[0]?.catalogId).toBe(199)
   })
+
+  it('resolves corner cabinet catalog IDs based on orientation and depth', () => {
+    // Left Corner: 15" -> ID 217, 18" -> ID 216
+    expect(resolveCatalogForTower('without_doors', 'CAS', 15, true, 'left').catalogId).toBe(217)
+    expect(resolveCatalogForTower('without_doors', 'CAS', 18, true, 'left').catalogId).toBe(216)
+
+    // Right Corner: 15" -> ID 215, 18" -> ID 214
+    expect(resolveCatalogForTower('without_doors', 'CAS', 15, true, 'right').catalogId).toBe(215)
+    expect(resolveCatalogForTower('without_doors', 'CAS', 18, true, 'right').catalogId).toBe(214)
+
+    // CDH Category corner catalogs
+    expect(resolveCatalogForTower('without_doors', 'CDH', 15, true, 'left').catalogId).toBe(217)
+    expect(resolveCatalogForTower('without_doors', 'CDH', 18, true, 'right').catalogId).toBe(214)
+
+    // CLH Category corner catalogs
+    expect(resolveCatalogForTower('without_doors', 'CLH', 15, true, 'left').catalogId).toBe(217)
+    expect(resolveCatalogForTower('without_doors', 'CLH', 18, true, 'right').catalogId).toBe(214)
+  })
+
+  it('store setTowerCornerPosition updates catalog ID, corner flags and backend export payload', () => {
+    setActivePinia(createPinia())
+    const closet = useClosetStore()
+
+    closet.setTowers([])
+    closet.addTowerFromCatalog('without_doors', 'CAS')
+    const tower = closet.towers[0]!
+
+    // Default depth is 15
+    closet.setTowerCornerPosition(tower.id, 'left')
+    expect(tower.isCorner).toBe(true)
+    expect(tower.cornerPosition).toBe('left')
+    expect(tower.cornerOrientation).toBe('left')
+    expect(tower.catalogId).toBe(217)
+
+    // Change orientation to right
+    closet.setTowerCornerPosition(tower.id, 'right')
+    expect(tower.cornerPosition).toBe('right')
+    expect(tower.cornerOrientation).toBe('right')
+    expect(tower.catalogId).toBe(215)
+
+    // Change depth to 18
+    closet.setTowerDepth(tower.id, 18)
+    expect(tower.catalogId).toBe(214)
+
+    const payload = exportForBackend(closet.$state)
+    expect(payload.towers[0]?.isCorner).toBe(true)
+    expect(payload.towers[0]?.cornerPosition).toBe('right')
+    expect(payload.towers[0]?.cornerOrientation).toBe('right')
+    expect(payload.towers[0]?.catalogId).toBe(214)
+  })
+
+  it('sets width to 30 when toggling corner position if width is less than 30', () => {
+    setActivePinia(createPinia())
+    const closet = useClosetStore()
+
+    closet.setTowers([])
+    closet.addTowerFromCatalog('without_doors', 'CAS')
+    const tower = closet.towers[0]!
+
+    // Set width to 12 (< 30)
+    closet.setTowerWidth(tower.id, 12)
+    expect(tower.width).toBe(12)
+
+    // Toggle to left corner -> width should be set to 30
+    closet.setTowerCornerPosition(tower.id, 'left')
+    expect(tower.isCorner).toBe(true)
+    expect(tower.width).toBe(30)
+
+    // Set width to 36 (>= 30)
+    closet.setTowerWidth(tower.id, 36)
+    expect(tower.width).toBe(36)
+
+    // Toggle to right corner -> width should remain 36
+    closet.setTowerCornerPosition(tower.id, 'right')
+    expect(tower.isCorner).toBe(true)
+    expect(tower.width).toBe(36)
+
+    // Attempting to set width < 30 on a corner cabinet should clamp to 30
+    closet.setTowerWidth(tower.id, 18)
+    expect(tower.width).toBe(30)
+
+    // Attempting to set height < 84 on a corner cabinet should clamp to 84 (main cabinet min height)
+    closet.setTowerHeight(tower.id, 72)
+    expect(tower.height).toBe(84)
+
+    // Default Total Depth (depth + cornerBridgeWidth) should be 23
+    expect(tower.depth + (tower.cornerBridgeWidth ?? 0)).toBe(23)
+
+    // Setting bridge width to achieve Total Depth of 23.5
+    closet.setTowerBridgeDimensions(tower.id, { bridgeWidth: 23.5 - tower.depth })
+    expect(tower.depth + (tower.cornerBridgeWidth ?? 0)).toBe(23.5)
+  })
 })
 
 describe('box configuration & cabinet resolution', () => {

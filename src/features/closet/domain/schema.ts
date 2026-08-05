@@ -89,8 +89,16 @@ export function exportForBackend(state: ClosetStateV2) {
       categoryName: t.categoryName,
       catalogId: t.catalogId,
       catalogCode: t.catalogCode,
-      isCorner: t.isCorner ?? (t.cornerPosition === 'left' || t.cornerPosition === 'right'),
-      cornerPosition: t.cornerPosition ?? (t.isCorner ? 'left' : 'none'),
+      isCorner: t.isCorner ?? (t.cornerPosition === 'left' || t.cornerPosition === 'right' || t.cornerOrientation === 'left' || t.cornerOrientation === 'right'),
+      cornerPosition: t.cornerPosition ?? t.cornerOrientation ?? (t.isCorner ? 'left' : 'none'),
+      cornerOrientation: t.cornerOrientation ?? (t.cornerPosition === 'right' ? 'right' : t.cornerPosition === 'left' ? 'left' : undefined),
+      cornerBridgeWidth: t.cornerBridgeWidth,
+      cornerBridgeDepth: t.cornerBridgeDepth,
+      /** Total D = Main D + Bridge W. Only present for corner cabinets. */
+      cornerTotalDepth: (
+        (t.isCorner || t.cornerPosition === 'left' || t.cornerPosition === 'right') &&
+        typeof t.cornerBridgeWidth === 'number'
+      ) ? t.depth + t.cornerBridgeWidth : undefined,
       boxCount: t.boxCount ?? 2,
       cabinetId: t.cabinetId,
       cabinetCode: t.cabinetCode,

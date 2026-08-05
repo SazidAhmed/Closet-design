@@ -4,7 +4,7 @@
 
 import type { ClosetStateV2 } from './schema'
 import { CABINET_CONSTRAINTS, TOWER_CONSTRAINTS, ACCESSORY_CONSTRAINTS } from './constraints'
-import { getCategoryLimits } from './closetCatalogs'
+import { getCategoryLimits, getCornerTotalDepth, MIN_CORNER_TOTAL_D_FOR_HANGING } from './closetCatalogs'
 
 export type ViolationSeverity = 'error' | 'warning'
 
@@ -212,6 +212,56 @@ export function validateCloset(state: ClosetStateV2): ClosetViolation[] {
             path: `${prefix}.height`,
             message: `${tower.label}: height is outside the selected category range.`,
           })
+        }
+
+        const isCorner = tower.isCorner ?? (tower.cornerPosition === 'left' || tower.cornerPosition === 'right' || tower.cornerOrientation === 'left' || tower.cornerOrientation === 'right');
+        if (isCorner) {
+          // 1. Main cabinet depth must be 15" or 18"
+          const depthValid = Math.abs(tower.depth - 15) < 0.5 || Math.abs(tower.depth - 18) < 0.5;
+          if (!depthValid) {
+            v.push({
+              severity: 'warning',
+              code: 'TOWER_CORNER_DEPTH_INVALID',
+              path: `${prefix}.depth`,
+              message: `${tower.label}: corner cabinet depth should be 15" or 18".`,
+            })
+          }
+
+          // 2. Bridge dimensions must be present
+          if (typeof tower.cornerBridgeWidth !== 'number') {
+            v.push({
+              severity: 'warning',
+              code: 'CORNER_BRIDGE_MISSING',
+              path: `${prefix}.cornerBridgeWidth`,
+              message: `${tower.label}: corner cabinet is missing bridge dimensions. Set a Bridge Width to complete the corner assembly.`,
+            })
+          } else {
+            // 3. Bridge depth must be 15" or 18"
+            const bridgeDepth = tower.cornerBridgeDepth ?? tower.depth
+            const bridgeDepthValid = Math.abs(bridgeDepth - 15) < 0.5 || Math.abs(bridgeDepth - 18) < 0.5
+            if (!bridgeDepthValid) {
+              v.push({
+                severity: 'warning',
+                code: 'CORNER_BRIDGE_DEPTH_INVALID',
+                path: `${prefix}.cornerBridgeDepth`,
+                message: `${tower.label}: corner bridge depth should be 15" or 18".`,
+              })
+            }
+
+            // 4. Hanging categories require Total D ≥ 23"
+            const isHanging = tower.categoryCode === 'CDH' || tower.categoryCode === 'CLH'
+            if (isHanging) {
+              const totalD = getCornerTotalDepth(tower.depth, tower.cornerBridgeWidth)
+              if (totalD < MIN_CORNER_TOTAL_D_FOR_HANGING) {
+                v.push({
+                  severity: 'error',
+                  code: 'CORNER_TOTAL_DEPTH_TOO_SHALLOW',
+                  path: `${prefix}.cornerBridgeWidth`,
+                  message: `${tower.label}: hanging corner cabinets require Total D (Main D + Bridge W) ≥ ${MIN_CORNER_TOTAL_D_FOR_HANGING}". Current: ${totalD.toFixed(2)}".`,
+                })
+              }
+            }
+          }
         }
       }
     } else {
