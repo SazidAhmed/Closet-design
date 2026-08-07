@@ -1138,7 +1138,7 @@ function cancelCustomPartSide() {
 
           <div class="dimension-control">
             <div class="dimension-head">
-              <label>{{ showBridgeSection ? 'Main Width' : 'Width' }}</label>
+              <label>Width</label>
               <span>{{ truncTo4(selectedTower.width) }}"</span>
             </div>
             <input

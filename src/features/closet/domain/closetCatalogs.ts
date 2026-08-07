@@ -334,9 +334,7 @@ export function clampTowerDepth(tower: Tower, depth: number): number {
 export function clampTowerHeight(tower: Tower, height: number): number {
   if (!tower.doorMode || !tower.categoryCode) return height;
   const limits = getCategoryLimits(tower.doorMode, tower.categoryCode);
-  const isCorner = tower.isCorner ?? (tower.cornerPosition === 'left' || tower.cornerPosition === 'right' || tower.cornerOrientation === 'left' || tower.cornerOrientation === 'right');
-  const minH = isCorner ? Math.max(limits.minH, 84) : limits.minH;
-  return clamp(height, minH, limits.maxH);
+  return clamp(height, limits.minH, limits.maxH);
 }
 
 export function refreshTowerCatalog(tower: Tower): { switched: boolean; catalog: ClosetCatalogEntry } | null {
