@@ -424,42 +424,59 @@ export function refreshTowerCabinet(
   const isCorner = tower.isCorner ?? (tower.cornerPosition === 'left' || tower.cornerPosition === 'right' || tower.cornerOrientation === 'left' || tower.cornerOrientation === 'right');
   const position = tower.cornerPosition ?? tower.cornerOrientation ?? (isCorner ? 'left' : 'none');
 
-  const catalog = resolveCatalogForTower(
+  // Map corner categories to their base counterparts for the main cabinet lookup
+  let baseCategoryCode = tower.categoryCode;
+  if (baseCategoryCode === 'CCS') baseCategoryCode = 'CAS';
+  if (baseCategoryCode === 'CCH') baseCategoryCode = 'CDH';
+  if (baseCategoryCode === 'CCL') baseCategoryCode = 'CLH';
+
+  // Resolve the base catalog (ignoring isCorner so we get CAS/CDH/etc., not CRB)
+  const baseCatalog = resolveCatalogForTower(
     tower.doorMode,
-    tower.categoryCode,
+    baseCategoryCode,
     tower.depth,
-    isCorner,
-    position,
+    false,
+    'none',
   );
 
-  if (options?.catalogSwitched && catalog.cabinets && catalog.cabinets.length > 0) {
-    const firstCabinet = catalog.cabinets[0]!;
+  if (options?.catalogSwitched && baseCatalog.cabinets && baseCatalog.cabinets.length > 0) {
+    const firstCabinet = baseCatalog.cabinets[0]!;
     tower.cabinetId = Number(firstCabinet.id ?? (firstCabinet as any).cabinet_id ?? 0);
     tower.cabinetCode = String(firstCabinet.code ?? (firstCabinet as any).cabinet_code ?? '');
+    if (isCorner) {
+      refreshBridgeCabinetForTower(tower);
+    }
     return;
   }
 
-  let searchWidth = tower.width;
-  let searchDepth = tower.depth;
+  // 1. Resolve Base Cabinet
+  let baseSearchWidth = tower.width;
+  let baseSearchDepth = tower.depth;
   
   if (isCorner) {
-    // For corner cabinets, the tower width represents "Total Depth".
-    // The actual cabinet code is resolved using the bridge width and depth.
-    // W: Total depth - main depth
-    // D: Bridge depth
-    searchWidth = Math.max(0, tower.width - tower.depth);
-    searchDepth = tower.cornerBridgeDepth ?? tower.depth;
+    // The tower.width is the total footprint on the wall.
+    // The main cabinet's physical width is the footprint minus the depth of the bridge.
+    const bridgeDepth = tower.cornerBridgeDepth ?? tower.depth;
+    baseSearchWidth = Math.max(0, tower.width - bridgeDepth);
   }
-
-  // We also need to get the catalog to extract debug info
-  const finalCatalog = resolveCatalogForTower(tower.doorMode, tower.categoryCode, searchDepth, isCorner, position);
   
-  const cabinet = selectCabinet(finalCatalog, finalCatalog.cabinets, searchWidth, tower.height, tower.boxCount ?? 2);
-
-  tower.cabinetId = cabinet?.id;
-  tower.cabinetCode = cabinet?.code;
+  const baseCabinet = selectCabinet(baseCatalog, baseCatalog.cabinets, baseSearchWidth, tower.height, tower.boxCount ?? 2);
+  tower.cabinetId = baseCabinet?.id;
+  tower.cabinetCode = baseCabinet?.code;
   // @ts-ignore
-  tower.__debugInfo = finalCatalog.__debugInfo;
+  tower.__debugInfo = baseCatalog.__debugInfo ?? 'Base resolved';
+
+  // 2. Resolve Bridge Cabinet (if corner)
+  if (isCorner) {
+    refreshBridgeCabinetForTower(tower);
+  } else {
+    // Clear bridge info if not a corner
+    ;(tower as any).bridgeCabinetId = undefined;
+    ;(tower as any).bridgeCabinetCode = undefined;
+    ;(tower as any).bridgeCatalogId = undefined;
+    ;(tower as any).bridgeCatalogCode = undefined;
+    ;(tower as any).bridgeDebug = undefined;
+  }
 }
 
 // ---------------------------------------------------------------------------

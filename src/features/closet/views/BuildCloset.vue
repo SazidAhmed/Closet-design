@@ -944,6 +944,7 @@ function towerSubtitle(tower: {
   catalogId?: number;
   partType?: "cabinet" | "panel" | "filler";
   cabinetCode?: string;
+  bridgeCabinetCode?: string;
 }): string {
   if (tower.partType === "panel") return "Panel";
   if (tower.partType === "filler") return "Filler";
@@ -953,9 +954,14 @@ function towerSubtitle(tower: {
   // @ts-ignore
   const debugInfo = tower.__debugInfo || 'None';
 
-  return tower.cabinetCode
-    ? `${base} - ${tower.cabinetCode}`
-    : `${base} - NULL_CAB [W:${tower.width}, D:${tower.depth}, CW:${tower.cornerBridgeWidth}, Cat:${tower.catalogId}, CabId:${tower.cabinetId}, Dbg:${debugInfo}]`;
+  if (tower.cabinetCode) {
+    if (tower.bridgeCabinetCode) {
+      return `${base} - ${tower.cabinetCode} - ${tower.bridgeCabinetCode}`;
+    }
+    return `${base} - ${tower.cabinetCode}`;
+  }
+
+  return `${base} - NULL_CAB [W:${(tower as any).width}, D:${(tower as any).depth}, CW:${(tower as any).cornerBridgeWidth}, Cat:${tower.catalogId}, CabId:${(tower as any).cabinetId}, Dbg:${debugInfo}]`;
 }
 
 function addCustomPartHandler(type: "panel" | "filler") {
