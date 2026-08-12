@@ -73,7 +73,7 @@ export const useClosetStore = defineStore('closet', {
      * Subsequent calls load from memory/localStorage and make 0 network requests.
      */
     async loadCatalogs(forceRefresh = false) {
-      const CACHE_KEY = 'closet-catalog-categories-cache-v2'
+      const CACHE_KEY = 'closet-catalog-categories-cache-v5'
 
       // 1. If already in Pinia memory state and not forcing refresh -> skip network request completely
       if (this.catalogCategories.length > 0 && !forceRefresh) {

@@ -37,6 +37,7 @@ class ApiClient {
       method,
       headers,
       signal: options?.signal,
+      cache: "no-store",
     };
 
     if (data) {

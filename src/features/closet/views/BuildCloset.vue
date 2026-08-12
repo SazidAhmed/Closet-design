@@ -949,9 +949,13 @@ function towerSubtitle(tower: {
   if (tower.partType === "filler") return "Filler";
   if (!tower.categoryName || !tower.categoryCode) return "Legacy tower";
   const base = `${tower.categoryName} (${tower.categoryCode})`;
+  
+  // @ts-ignore
+  const debugInfo = tower.__debugInfo || 'None';
+
   return tower.cabinetCode
     ? `${base} - ${tower.cabinetCode}`
-    : `${base} - NULL_CAB`;
+    : `${base} - NULL_CAB [W:${tower.width}, D:${tower.depth}, CW:${tower.cornerBridgeWidth}, Cat:${tower.catalogId}, CabId:${tower.cabinetId}, Dbg:${debugInfo}]`;
 }
 
 function addCustomPartHandler(type: "panel" | "filler") {
@@ -1134,6 +1138,19 @@ function cancelCustomPartSide() {
               </button>
             </div>
             <span>{{ towerSubtitle(selectedTower) }}</span>
+            <div 
+              v-if="selectedTower.isCorner || selectedTower.cornerPosition === 'left' || selectedTower.cornerPosition === 'right'"
+              class="text-xs text-[#a0a5b1] mt-1"
+            >
+              Find W: {{ Math.max(0, 23 - (selectedTower.depth || 15)) }}<br/>
+              Find H: {{ selectedTower.height }}<br/>
+              Find D: {{ selectedTower.cornerBridgeDepth || selectedTower.depth }}<br />
+              Catalog: {{ (selectedTower as any).bridgeCatalogCode }} ({{ (selectedTower as any).bridgeCatalogId }})<br />
+              Cabinet: {{ (selectedTower as any).bridgeCabinetCode }}<br />
+              <div style="font-size:10px; color:#ff9999; margin-top:4px;">
+                Debug: {{ (selectedTower as any).bridgeDebug }}
+              </div>
+            </div>
           </div>
 
           <div class="dimension-control">

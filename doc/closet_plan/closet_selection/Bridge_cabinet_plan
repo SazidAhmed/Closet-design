@@ -1,0 +1,72 @@
+# Identify Bridge Cabinet for Corner Towers
+
+This plan implements the logic described to correctly identify the bridge cabinet based on the `bridge depth`, `bridge width` (Total Depth - Main Depth), and `height`.
+
+## User Review Required
+
+Please review the proposed changes to `closetCatalogs.ts` to ensure it aligns with your expectations for identifying the corner bridge cabinets.
+
+## Open Questions
+
+- Does the API return the corner bridge catalogs (`CLB...` and `CRB...`) within the main `catalogs` array for the category (e.g., CAS), or are they returned separately? The plan assumes they are returned in the main `catalogs` array or that we can filter them out by checking if their codes start with `CLB` or `CRB`. 
+
+## Proposed Changes
+
+### `src/features/closet/domain/closetCatalogs.ts`
+
+- **Update `resolveBridgeCatalogForCorner`**: 
+  We will update this function to search the `category.catalogs` for catalogs that match the `CLB` (Corner Left Bridge) or `CRB` (Corner Right Bridge) prefix, depending on the `cornerPosition`. 
+  Then, as requested, we identify the catalog based on the `bridgeDepth` against the `minD` and `maxD`.
+
+- **Update `refreshBridgeCabinetForTower` / `resolveBridgeCabinetForCorner`**:
+  Ensure the logic calculates:
+  - `w`: `Total Depth - Main Depth` (i.e., `tower.cornerBridgeWidth`)
+  - `h`: `Height of the cabinet` (i.e., `tower.height`)
+  - `d`: `Bridge depth` (i.e., `tower.cornerBridgeDepth`)
+  
+  And uses these to query `resolveBridgeCabinetForCorner` -> `selectCabinet` to find a cabinet that fits `min_w`, `max_w`, `min_h`, `max_h`, `min_d`, `max_d`.
+
+#### [MODIFY] [closetCatalogs.ts](file:///h:/Vue/Closet/src/features/closet/domain/closetCatalogs.ts)
+
+1. **In `loadCatalogCategories`**: We will ensure that when parsing the API response, if `cornerLeftCatalogs` and `cornerRightCatalogs` are separated in the API response, they are correctly mapped. Otherwise, they'll just fall back to filtering the `catalogs` list.
+2. **In `resolveBridgeCatalogForCorner`**:
+   ```typescript
+   export function resolveBridgeCatalogForCorner(
+     cornerPosition: 'left' | 'right',
+     bridgeDepth: number,
+     categoryCode: ClosetCatalogCategoryCode = 'CAS',
+   ): ClosetCatalogEntry | null {
+     try {
+       const category = getCategoryByCode('without_doors', categoryCode);
+       
+       // Try to get them from the static separate arrays if they exist
+       let list = cornerPosition === 'right'
+         ? (category.cornerRightCatalogs ?? [])
+         : (category.cornerLeftCatalogs ?? []);
+
+       // If not in separate arrays, they might be in the main catalogs array (API response)
+       if (!list || list.length === 0) {
+         const prefix = cornerPosition === 'right' ? 'CRB' : 'CLB';
+         list = category.catalogs.filter(c => c.code.startsWith(prefix));
+       }
+
+       if (!list || list.length === 0) return null;
+
+       // Identify the catalog based on the bridge depth
+       const matched = list.find((c) => bridgeDepth >= c.minD && bridgeDepth <= c.maxD);
+       return matched ?? list.find((c) => bridgeDepth <= c.maxD) ?? list[list.length - 1] ?? null;
+     } catch {
+       return null;
+     }
+   }
+   ```
+
+3. **In `refreshBridgeCabinetForTower`**: Verify that the calculated `bridgeWidth` (`w`), `bridgeHeight` (`h`), and `bridgeDepth` (`d`) are correctly passed to `resolveBridgeCabinetForCorner`. (This seems to already be doing `Math.max(0, 23 - tower.depth)` for width, but we can verify it aligns perfectly with the spec).
+
+## Verification Plan
+
+### Manual Verification
+- Go to the Closet Builder UI in the browser.
+- Configure a corner tower (e.g. Shelves).
+- Set Main Depth to 15, Total Depth to 23, Height to 84.
+- Verify that the cabinet updates from `NULL_CAB` to the correct bridge cabinet code (e.g., `CLB128415...` or similar).

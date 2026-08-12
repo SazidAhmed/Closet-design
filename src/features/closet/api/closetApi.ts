@@ -97,18 +97,12 @@ export async function fetchClosetCatalogCategories(
   console.log("Catalog Categories API Response:", rawCategories)
 
   return rawCategories.map((apiCat) => {
-    const staticCat = CLOSET_CATALOG_CATEGORIES.find(
-      (c) => c.doorMode === apiCat.doorMode && c.categoryCode === apiCat.categoryCode
-    )
-
     return {
       ...apiCat,
       catalogs: apiCat.catalogs.map((apiCatalog) => {
-        const staticCatalog = staticCat?.catalogs.find(c => c.catalogId === apiCatalog.catalogId || c.code === apiCatalog.code)
-        
         // Map cabinets from the API response (may be raw objects with snake_case keys)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const rawCabinets: any[] = (apiCatalog as any).cabinets ?? []
+        const rawCabinets: any[] = (apiCatalog as any).cabinets ?? (apiCatalog as any).cabinet_list ?? (apiCatalog as any).items ?? (apiCatalog as any).closet_cabinets ?? []
         const cabinets: ClosetCabinetEntry[] = rawCabinets.map(mapCabinet)
 
         const catMinW = Number((apiCatalog as any).min_w ?? (apiCatalog as any).minW ?? 0);
@@ -129,15 +123,16 @@ export async function fetchClosetCatalogCategories(
         return {
           ...apiCatalog,
           catalogId: catalogId > 0 ? catalogId : (apiCatalog.catalogId ?? 0),
-          minW: catMinW > 0 ? catMinW : (cabMinW > 0 ? cabMinW : (staticCatalog ? staticCatalog.minW : 20)),
-          maxW: catMaxW > 0 ? catMaxW : (cabMaxW > 0 ? cabMaxW : (staticCatalog ? staticCatalog.maxW : 200)),
-          minD: catMinD > 0 ? catMinD : (cabMinD > 0 ? cabMinD : (staticCatalog ? staticCatalog.minD : 15)),
-          maxD: catMaxD > 0 ? catMaxD : (cabMaxD > 0 ? cabMaxD : (staticCatalog ? staticCatalog.maxD : 60)),
-          minH: catMinH > 0 ? catMinH : (cabMinH > 0 ? cabMinH : (staticCatalog ? staticCatalog.minH : 84)),
-          maxH: catMaxH > 0 ? catMaxH : (cabMaxH > 0 ? cabMaxH : (staticCatalog ? staticCatalog.maxH : 250)),
+          minW: catMinW > 0 ? catMinW : (cabMinW > 0 ? cabMinW : 20),
+          maxW: catMaxW > 0 ? catMaxW : (cabMaxW > 0 ? cabMaxW : 200),
+          minD: catMinD > 0 ? catMinD : (cabMinD > 0 ? cabMinD : 15),
+          maxD: catMaxD > 0 ? catMaxD : (cabMaxD > 0 ? cabMaxD : 60),
+          minH: catMinH > 0 ? catMinH : (cabMinH > 0 ? cabMinH : 84),
+          maxH: catMaxH > 0 ? catMaxH : (cabMaxH > 0 ? cabMaxH : 250),
           cabinets,
         }
-      })
+      }),
+      cornerCatalogIds: apiCat.cornerCatalogIds?.map(id => Number(id)) ?? [],
     }
   })
 }

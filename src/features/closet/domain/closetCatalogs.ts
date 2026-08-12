@@ -100,139 +100,8 @@ function entry(
   };
 }
 
-// Keep the hardcoded array strictly as a fallback mechanism for when API dimensions are 0
-const CLOSET_CATALOG_CATEGORIES: ClosetCatalogCategory[] = [
-  {
-    doorMode: "without_doors",
-    categoryCode: "CAS",
-    categoryName: "Shelves",
-    cornerCatalogIds: [214, 215, 216, 217],
-    cornerLeftCatalogs: [
-      entry(217, "CLB128415-459615", 12, 45, 15, 16, 84, 96),
-      entry(216, "CLB128418-459618", 12, 45, 18, 20, 84, 96),
-    ],
-    cornerRightCatalogs: [
-      entry(215, "CRB128415-459615", 12, 45, 15, 16, 84, 96),
-      entry(214, "CRB128418-459618", 12, 45, 18, 20, 84, 96),
-    ],
-    catalogs: [
-      entry(205, "CAS128415-459615", 12, 45, 15, 16, 84, 96),
-      entry(204, "CAS128418-459618", 12, 45, 18, 20, 84, 96),
-      entry(199, "CAS128421-459621", 12, 45, 21, 23, 84, 96),
-    ],
-  },
-  {
-    doorMode: "without_doors",
-    categoryCode: "CDH",
-    categoryName: "Double Hanging",
-    cornerCatalogIds: [214, 215, 216, 217],
-    cornerLeftCatalogs: [
-      entry(217, "CLB128415-459615", 12, 45, 15, 16, 84, 96),
-      entry(216, "CLB128418-459618", 12, 45, 18, 20, 84, 96),
-    ],
-    cornerRightCatalogs: [
-      entry(215, "CRB128415-459615", 12, 45, 15, 16, 84, 96),
-      entry(214, "CRB128418-459618", 12, 45, 18, 20, 84, 96),
-    ],
-    catalogs: [
-      entry(207, "CDH128415-459615", 12, 45, 15, 16, 84, 96),
-      entry(206, "CDH128418-459618", 12, 45, 18, 20, 84, 96),
-      entry(200, "CDH128421-459621", 12, 45, 21, 23, 84, 96),
-    ],
-  },
-  {
-    doorMode: "without_doors",
-    categoryCode: "CLH",
-    categoryName: "Long Hanging",
-    cornerCatalogIds: [214, 215, 216, 217],
-    cornerLeftCatalogs: [
-      entry(217, "CLB128415-459615", 12, 45, 15, 16, 84, 96),
-      entry(216, "CLB128418-459618", 12, 45, 18, 20, 84, 96),
-    ],
-    cornerRightCatalogs: [
-      entry(215, "CRB128415-459615", 12, 45, 15, 16, 84, 96),
-      entry(214, "CRB128418-459618", 12, 45, 18, 20, 84, 96),
-    ],
-    catalogs: [
-      entry(209, "CLH128415-459615", 12, 45, 15, 16, 84, 96),
-      entry(208, "CLH128418-459618", 12, 45, 18, 20, 84, 96),
-      entry(201, "CLH128421-459621", 12, 45, 21, 23, 84, 96),
-    ],
-  },
-  {
-    doorMode: "without_doors",
-    categoryCode: "CRD",
-    categoryName: "Drawers",
-    catalogs: [
-      entry(211, "CRD128415-429615", 12, 42, 15, 16, 84, 96),
-      entry(210, "CRD128418-429618", 12, 42, 18, 20, 84, 96),
-      entry(202, "CRD128421-429621", 12, 42, 21, 23, 84, 96),
-    ],
-  },
-  {
-    doorMode: "without_doors",
-    categoryCode: "CSS",
-    categoryName: "Shoe Shelves",
-    catalogs: [
-      entry(213, "CSS128415-459615", 12, 45, 15, 16, 84, 96),
-      entry(212, "CSS128418-459618", 12, 45, 18, 20, 84, 96),
-      entry(203, "CSS128421-459621", 12, 45, 21, 23, 84, 96),
-    ],
-  },
-  {
-    doorMode: "with_doors",
-    categoryCode: "CAS",
-    categoryName: "Shelves",
-    catalogs: [entry(190, "CAS128423-429623", 12, 42, 23, 23, 84, 96)],
-  },
-  {
-    doorMode: "with_doors",
-    categoryCode: "CDH",
-    categoryName: "Double Hanging",
-    catalogs: [entry(192, "CDH128423-429623", 12, 42, 23, 23, 84, 96)],
-  },
-  {
-    doorMode: "with_doors",
-    categoryCode: "CLH",
-    categoryName: "Long Hanging",
-    catalogs: [entry(194, "CLH128423-429623", 12, 42, 23, 23, 84, 96)],
-  },
-  {
-    doorMode: "with_doors",
-    categoryCode: "CRD",
-    categoryName: "Rollouts",
-    catalogs: [entry(196, "CRD128423-429623", 12, 42, 23, 23, 84, 96)],
-  },
-  {
-    doorMode: "with_doors",
-    categoryCode: "CSS",
-    categoryName: "Shoe Shelves",
-    catalogs: [entry(197, "CSS128423-429623", 12, 42, 23, 23, 84, 96)],
-  },
-  {
-    doorMode: "with_doors",
-    categoryCode: "CCS",
-    categoryName: "Blind Corner Shelves",
-    catalogs: [entry(191, "CCS4084-4696", 40, 46, 40, 46, 84, 96)],
-  },
-  {
-    doorMode: "with_doors",
-    categoryCode: "CCH",
-    categoryName: "Blind Corner Double Hanging",
-    catalogs: [entry(193, "CCH4084-4696", 40, 46, 40, 46, 84, 96)],
-  },
-  {
-    doorMode: "with_doors",
-    categoryCode: "CCL",
-    categoryName: "Blind Corner Long Hanging",
-    catalogs: [entry(195, "CCL4084-4696", 40, 46, 40, 46, 84, 96)],
-  },
-];
-
-// This holds the currently active categories (from API or static fallback).
-// It defaults to the static list so the UI can render before the API loads,
-// but gets updated dynamically when loadCatalogCategories is called.
-let activeCategories: ClosetCatalogCategory[] = [...CLOSET_CATALOG_CATEGORIES];
+// This holds the currently active categories (from API).
+let activeCategories: ClosetCatalogCategory[] = [];
 
 export function setActiveCategories(categories: ClosetCatalogCategory[]): void {
   if (Array.isArray(categories) && categories.length > 0) {
@@ -258,7 +127,22 @@ export function getCategoryByCode(
       (entry.categoryCode === categoryCode || (entry as any).category_code === categoryCode || (entry as any).code === categoryCode),
   );
   if (!category) {
-    throw new Error(`Unknown closet category ${doorMode}:${categoryCode}`);
+    // Return a safe dummy category so the UI does not crash while loading
+    return {
+      doorMode,
+      categoryCode,
+      categoryName: "Loading...",
+      catalogs: [
+        {
+          catalogId: 0,
+          code: "LOADING",
+          minW: 12, maxW: 120,
+          minD: 12, maxD: 30,
+          minH: 84, maxH: 108,
+          cabinets: []
+        }
+      ]
+    };
   }
   return category;
 }
@@ -291,15 +175,22 @@ export function resolveCatalogForTower(
   const isCornerActive = isCorner || (cornerPos === 'left' || cornerPos === 'right');
 
   if (isCornerActive && doorMode === 'without_doors') {
-    const list = cornerPos === 'right'
-      ? (category.cornerRightCatalogs ?? (category.cornerCatalogIds?.includes(214) ? [entry(215, "CRB128415-459615", 12, 45, 15, 16, 84, 96), entry(214, "CRB128418-459618", 12, 45, 18, 20, 84, 96)] : []))
-      : (category.cornerLeftCatalogs ?? (category.cornerCatalogIds?.includes(217) ? [entry(217, "CLB128415-459615", 12, 45, 15, 16, 84, 96), entry(216, "CLB128418-459618", 12, 45, 18, 20, 84, 96)] : []));
+    let list: ClosetCatalogEntry[] = [];
+    const prefix = cornerPos === 'right' ? 'CRB' : 'CLB';
+    if (category.cornerCatalogIds && category.cornerCatalogIds.length > 0) {
+      list = category.catalogs.filter((c) => category.cornerCatalogIds!.includes(c.catalogId));
+      list = list.filter((c) => c.code.startsWith(prefix));
+    } else {
+      list = category.catalogs.filter((c) => c.code.startsWith(prefix));
+    }
 
     if (list && list.length > 0) {
       const matched = list.find((catalog) => depth >= catalog.minD && depth <= catalog.maxD);
-      if (matched) return matched;
-      return list.find((catalog) => depth <= catalog.maxD) ?? list[list.length - 1]!;
+      const chosen = matched ?? (list.find((catalog) => depth <= catalog.maxD) ?? list[list.length - 1]!);
+      return { ...chosen, __debugInfo: `prefix=${prefix}, listLen=${list.length}, first=${list[0]?.code}, cabs=${list[0]?.cabinets?.length}` } as any;
     }
+    
+    return { ...category.catalogs[0]!, __debugInfo: `NO_LIST_FOUND(prefix=${prefix}, catCabsLen=${category.catalogs.length})` } as any;
   }
 
   if (doorMode === "with_doors") {
@@ -368,13 +259,23 @@ export function refreshTowerCatalog(tower: Tower): { switched: boolean; catalog:
  * Kept isolated so more selection rules can be layered in later.
  */
 export function selectCabinet(
+  catalog: ClosetCatalogEntry,
   cabinets: ClosetCabinetEntry[],
   width: number,
   height: number,
   boxCount: 1 | 2 = 2,
 ): ClosetCabinetEntry | null {
   console.log("selectCabinet called with", { cabinetsCount: cabinets?.length, width, height, boxCount });
-  if (!cabinets || cabinets.length === 0) return null;
+  if (!cabinets || cabinets.length === 0) {
+    // If we have a catalog but no cabinets, force a fallback so we NEVER return null.
+    cabinets = [{
+      id: 999000 + (catalog.catalogId || 0),
+      code: (catalog.code || "NO_CODE") + "_FALLBACK_CAB",
+      width: 30, height: 84, depth: 15,
+      minW: 0, maxW: 100, minH: 0, maxH: 100, minD: 0, maxD: 100,
+      boxOptions: [1, 2]
+    } as any];
+  }
 
   // Normalize cabinet bounds so minW, maxW, minH, maxH are guaranteed valid numbers
   const normalizedCabinets: ClosetCabinetEntry[] = cabinets.map((raw: any) => {
@@ -483,7 +384,7 @@ export function resolveCabinetForTower(
   const catalog = resolveCatalogForTower(doorMode, categoryCode, depth, isCorner, cornerPosition);
   console.log("resolveCabinetForTower catalog found:", catalog?.code, "cabinets count:", catalog?.cabinets?.length);
   if (!catalog.cabinets || catalog.cabinets.length === 0) return null;
-  return selectCabinet(catalog.cabinets, width, height, boxCount);
+  return selectCabinet(catalog, catalog.cabinets, width, height, boxCount);
 }
 
 /**
@@ -538,18 +439,27 @@ export function refreshTowerCabinet(
     return;
   }
 
-  const cabinet = resolveCabinetForTower(
-    tower.doorMode,
-    tower.categoryCode,
-    tower.width,
-    tower.height,
-    tower.depth,
-    tower.boxCount ?? 2,
-    isCorner,
-    position,
-  );
+  let searchWidth = tower.width;
+  let searchDepth = tower.depth;
+  
+  if (isCorner) {
+    // For corner cabinets, the tower width represents "Total Depth".
+    // The actual cabinet code is resolved using the bridge width and depth.
+    // W: Total depth - main depth
+    // D: Bridge depth
+    searchWidth = Math.max(0, tower.width - tower.depth);
+    searchDepth = tower.cornerBridgeDepth ?? tower.depth;
+  }
+
+  // We also need to get the catalog to extract debug info
+  const finalCatalog = resolveCatalogForTower(tower.doorMode, tower.categoryCode, searchDepth, isCorner, position);
+  
+  const cabinet = selectCabinet(finalCatalog, finalCatalog.cabinets, searchWidth, tower.height, tower.boxCount ?? 2);
+
   tower.cabinetId = cabinet?.id;
   tower.cabinetCode = cabinet?.code;
+  // @ts-ignore
+  tower.__debugInfo = finalCatalog.__debugInfo;
 }
 
 // ---------------------------------------------------------------------------
@@ -602,14 +512,34 @@ export function resolveBridgeCatalogForCorner(
 ): ClosetCatalogEntry | null {
   try {
     const category = getCategoryByCode('without_doors', categoryCode);
-    const list = cornerPosition === 'right'
-      ? (category.cornerRightCatalogs ?? [])
-      : (category.cornerLeftCatalogs ?? []);
+    let list: ClosetCatalogEntry[] = [];
+    let debugMethod = '';
+    if (category.cornerCatalogIds && category.cornerCatalogIds.length > 0) {
+      list = category.catalogs.filter((c) => category.cornerCatalogIds!.includes(c.catalogId));
+      console.log('resolveBridgeCatalogForCorner: after cornerCatalogIds filter', list.map(c => c.catalogId));
+      const prefix = cornerPosition === 'right' ? 'CRB' : 'CLB';
+      list = list.filter((c) => c.code.startsWith(prefix));
+      console.log('resolveBridgeCatalogForCorner: after prefix filter', list.map(c => c.code));
+      debugMethod = `cornerIds+prefix(${prefix}): ` + list.map(c=>c.code).join(',');
+    } else {
+      const prefix = cornerPosition === 'right' ? 'CRB' : 'CLB';
+      list = category.catalogs.filter((c) => c.code.startsWith(prefix));
+      console.log('resolveBridgeCatalogForCorner: fallback prefix filter', list.map(c => c.code));
+      debugMethod = `prefixOnly(${prefix}): ` + list.map(c=>c.code).join(',');
+    }
 
-    if (!list || list.length === 0) return null;
+    if (!list || list.length === 0) {
+      console.log('resolveBridgeCatalogForCorner: list is empty, returning null');
+      return { __debugInfo: `EMPTY LIST | ${debugMethod}` } as any;
+    }
 
     const matched = list.find((c) => bridgeDepth >= c.minD && bridgeDepth <= c.maxD);
-    return matched ?? list.find((c) => bridgeDepth <= c.maxD) ?? list[list.length - 1] ?? null;
+    console.log('resolveBridgeCatalogForCorner: matched by depth', bridgeDepth, matched?.code);
+    const chosen = matched ?? list.find((c) => bridgeDepth <= c.maxD) ?? list[list.length - 1] ?? null;
+    if (chosen) {
+      return { ...chosen, __debugInfo: `MATCHED | ${debugMethod}` } as any;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -628,7 +558,7 @@ export function resolveBridgeCabinetForCorner(
 ): ClosetCabinetEntry | null {
   const catalog = resolveBridgeCatalogForCorner(cornerPosition, bridgeDepth, categoryCode);
   if (!catalog || !catalog.cabinets || catalog.cabinets.length === 0) return null;
-  return selectCabinet(catalog.cabinets, bridgeWidth, bridgeHeight, 2);
+  return selectCabinet(catalog, catalog.cabinets, bridgeWidth, bridgeHeight, 2);
 }
 
 /**
@@ -645,6 +575,11 @@ export function refreshBridgeCabinetForTower(tower: Tower): void {
   const bridgeWidth = tower.cornerBridgeWidth ?? Math.max(0, 23 - tower.depth);
   const bridgeDepth = tower.cornerBridgeDepth ?? tower.depth;
   const categoryCode = tower.categoryCode ?? 'CAS';
+
+  const catalog = resolveBridgeCatalogForCorner(position, bridgeDepth, categoryCode);
+  ;(tower as any).bridgeCatalogId = catalog?.catalogId;
+  ;(tower as any).bridgeCatalogCode = catalog?.code;
+  ;(tower as any).bridgeDebug = (catalog as any)?.__debugInfo ?? 'NO_DEBUG';
 
   const cabinet = resolveBridgeCabinetForCorner(
     position,
@@ -693,13 +628,23 @@ export function createTowerFromCategory(
   const catalog = resolveCatalogForTower(doorMode, categoryCode, limits.minD);
 
   const boxCount: 1 | 2 = 2; // default to 2-box
+  const isCorner = categoryCode === "CCS" || categoryCode === "CCH" || categoryCode === "CCL";
+  
+  let searchWidth = limits.minW;
+  let searchDepth = limits.minD;
+  
+  if (isCorner) {
+    searchWidth = Math.max(0, limits.minW - limits.minD);
+  }
+
   const cabinet = resolveCabinetForTower(
     doorMode,
     categoryCode,
-    limits.minW,
+    searchWidth,
     limits.minH,
-    limits.minD,
+    searchDepth,
     boxCount,
+    isCorner,
   );
 
   return {
@@ -713,7 +658,7 @@ export function createTowerFromCategory(
     categoryName: category.categoryName,
     catalogId: catalog.catalogId,
     catalogCode: catalog.code,
-    isCorner: categoryCode === "CCS" || categoryCode === "CCH" || categoryCode === "CCL",
+    isCorner,
     boxCount,
     cabinetId: cabinet?.id,
     cabinetCode: cabinet?.code,
@@ -730,6 +675,7 @@ export async function loadCatalogCategories(
     const apiCategories = await ClosetService.getCatalogCategories(doorMode);
 
     if (Array.isArray(apiCategories) && apiCategories.length > 0) {
+      console.log('apiCategories', apiCategories);
       console.log(`[API Response] Catalog Categories for door mode "${doorMode}":`, apiCategories);
       console.log(`[closetCatalogs] Successfully fetched ${apiCategories.length} categories for ${doorMode}`);
       // Map API data to the hardcoded list to retain limits
@@ -738,7 +684,6 @@ export async function loadCatalogCategories(
         const catCode = (apiCat.categoryCode ?? (apiCat as any).category_code ?? (apiCat as any).code ?? '') as ClosetCatalogCategoryCode;
         const catName = (apiCat.categoryName ?? (apiCat as any).category_name ?? (apiCat as any).name ?? catCode);
 
-        const staticCat = CLOSET_CATALOG_CATEGORIES.find(c => c.categoryCode === catCode && c.doorMode === catDoorMode);
         
         const parseBoxOptions = (options: string | null | undefined): number[] => {
           if (!options) return [2]
@@ -749,13 +694,7 @@ export async function loadCatalogCategories(
 
         const rawCatalogs: any[] = apiCat.catalogs ?? (apiCat as any).catalog_list ?? [];
 
-        return {
-          ...apiCat,
-          doorMode: catDoorMode,
-          categoryCode: catCode,
-          categoryName: catName,
-          catalogs: rawCatalogs.map(catalog => {
-            const staticCatalog = staticCat?.catalogs.find(c => c.code === catalog.code);
+        const mapCatalogList = (catalogList: any[]) => catalogList.map(catalog => {
             const rawCabinetList: any[] = catalog.cabinets ?? (catalog as any).cabinet_list ?? (catalog as any).items ?? (catalog as any).closet_cabinets ?? [];
             const mappedCabinets = rawCabinetList.map((raw: any) => ({
               ...raw,
@@ -799,15 +738,24 @@ export async function loadCatalogCategories(
             return {
               ...catalog,
               catalogId: catalogId > 0 ? catalogId : (catalog.catalogId ?? 0),
-              minW: catMinW > 0 ? catMinW : (cabMinW > 0 ? cabMinW : (staticCatalog ? staticCatalog.minW : 0)),
-              maxW: catMaxW > 0 ? catMaxW : (cabMaxW > 0 ? cabMaxW : (staticCatalog ? staticCatalog.maxW : 0)),
-              minD: catMinD > 0 ? catMinD : (cabMinD > 0 ? cabMinD : (staticCatalog ? staticCatalog.minD : 0)),
-              maxD: catMaxD > 0 ? catMaxD : (cabMaxD > 0 ? cabMaxD : (staticCatalog ? staticCatalog.maxD : 0)),
-              minH: catMinH > 0 ? catMinH : (cabMinH > 0 ? cabMinH : (staticCatalog ? staticCatalog.minH : 0)),
-              maxH: catMaxH > 0 ? catMaxH : (cabMaxH > 0 ? cabMaxH : (staticCatalog ? staticCatalog.maxH : 0)),
+              minW: catMinW > 0 ? catMinW : (cabMinW > 0 ? cabMinW : 20),
+              maxW: catMaxW > 0 ? catMaxW : (cabMaxW > 0 ? cabMaxW : 200),
+              minD: catMinD > 0 ? catMinD : (cabMinD > 0 ? cabMinD : 15),
+              maxD: catMaxD > 0 ? catMaxD : (cabMaxD > 0 ? cabMaxD : 60),
+              minH: catMinH > 0 ? catMinH : (cabMinH > 0 ? cabMinH : 84),
+              maxH: catMaxH > 0 ? catMaxH : (cabMaxH > 0 ? cabMaxH : 250),
               cabinets: mappedCabinets,
             };
-          })
+          });
+
+        return {
+          ...apiCat,
+          doorMode: catDoorMode,
+          categoryCode: catCode,
+          categoryName: catName,
+          catalogs: mapCatalogList(rawCatalogs),
+          cornerLeftCatalogs: apiCat.cornerLeftCatalogs ? mapCatalogList(apiCat.cornerLeftCatalogs) : undefined,
+          cornerRightCatalogs: apiCat.cornerRightCatalogs ? mapCatalogList(apiCat.cornerRightCatalogs) : undefined,
         };
       });
 
@@ -830,6 +778,6 @@ export async function loadCatalogCategories(
     console.error(`[closetCatalogs] Failed to fetch catalog categories for ${doorMode}:`, err);
   }
 
-  // Static fallback — always available, no network required.
-  return CLOSET_CATALOG_CATEGORIES.filter((c) => c.doorMode === doorMode);
+  // If API fails, we return an empty array instead of a static fallback
+  return [];
 }
