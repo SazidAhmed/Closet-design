@@ -721,9 +721,11 @@ function setCornerPosition(pos: CornerPosition) {
 /** Whether the bridge sub-section should be shown (tower is an active corner). */
 const showBridgeSection = computed(() => {
   const tower = selectedTower.value;
-  return tower?.isCorner === true ||
-    tower?.cornerPosition === 'left' ||
-    tower?.cornerPosition === 'right';
+  return (
+    tower?.isCorner === true ||
+    tower?.cornerPosition === "left" ||
+    tower?.cornerPosition === "right"
+  );
 });
 
 /** Computed total depth for the selected corner tower (Main D + Bridge W). */
@@ -741,13 +743,14 @@ const cornerTotalDepthValid = computed(() => {
   const tower = selectedTower.value;
   const total = cornerTotalDepth.value;
   if (total === null || !tower) return true;
-  const isHanging = tower.categoryCode === 'CDH' || tower.categoryCode === 'CLH';
+  const isHanging =
+    tower.categoryCode === "CDH" || tower.categoryCode === "CLH";
   if (!isHanging) return true;
   return total >= MIN_CORNER_TOTAL_D_FOR_HANGING;
 });
 
 function onBridgeDimensionInput(
-  field: 'bridgeWidth' | 'bridgeDepth',
+  field: "bridgeWidth" | "bridgeDepth",
   event: Event,
 ) {
   const tower = selectedTower.value;
@@ -756,7 +759,7 @@ function onBridgeDimensionInput(
   const rawValue = Number(target.value);
   if (!Number.isFinite(rawValue)) return;
 
-  if (field === 'bridgeWidth') {
+  if (field === "bridgeWidth") {
     closet.setTowerBridgeDimensions(tower.id, { bridgeWidth: rawValue });
     const updated = closet.towers.find((t) => t.id === tower.id);
     target.value = truncTo4(updated?.cornerBridgeWidth ?? rawValue);
@@ -950,9 +953,9 @@ function towerSubtitle(tower: {
   if (tower.partType === "filler") return "Filler";
   if (!tower.categoryName || !tower.categoryCode) return "Legacy tower";
   const base = `${tower.categoryName} (${tower.categoryCode})`;
-  
+
   // @ts-ignore
-  const debugInfo = tower.__debugInfo || 'None';
+  const debugInfo = tower.__debugInfo || "None";
 
   if (tower.cabinetCode) {
     if (tower.bridgeCabinetCode) {
@@ -1144,16 +1147,23 @@ function cancelCustomPartSide() {
               </button>
             </div>
             <span>{{ towerSubtitle(selectedTower) }}</span>
-            <div 
-              v-if="selectedTower.isCorner || selectedTower.cornerPosition === 'left' || selectedTower.cornerPosition === 'right'"
+            <div
+              v-if="
+                selectedTower.isCorner ||
+                selectedTower.cornerPosition === 'left' ||
+                selectedTower.cornerPosition === 'right'
+              "
               class="text-xs text-[#a0a5b1] mt-1"
             >
-              Find W: {{ Math.max(0, 23 - (selectedTower.depth || 15)) }}<br/>
-              Find H: {{ selectedTower.height }}<br/>
-              Find D: {{ selectedTower.cornerBridgeDepth || selectedTower.depth }}<br />
-              Catalog: {{ (selectedTower as any).bridgeCatalogCode }} ({{ (selectedTower as any).bridgeCatalogId }})<br />
+              Find W: {{ Math.max(0, 23 - (selectedTower.depth || 15)) }}<br />
+              Find H: {{ selectedTower.height }}<br />
+              Find D: {{ selectedTower.cornerBridgeDepth || selectedTower.depth
+              }}<br />
+              Catalog: {{ (selectedTower as any).bridgeCatalogCode }} ({{
+                (selectedTower as any).bridgeCatalogId
+              }})<br />
               Cabinet: {{ (selectedTower as any).bridgeCabinetCode }}<br />
-              <div style="font-size:10px; color:#ff9999; margin-top:4px;">
+              <div style="font-size: 10px; color: #ff9999; margin-top: 4px">
                 Debug: {{ (selectedTower as any).bridgeDebug }}
               </div>
             </div>
@@ -1171,7 +1181,9 @@ function cancelCustomPartSide() {
               :min="
                 selectedTower.partType === 'filler'
                   ? 1.5
-                  : (selectedTower.isCorner || selectedTower.cornerPosition === 'left' || selectedTower.cornerPosition === 'right')
+                  : selectedTower.isCorner ||
+                      selectedTower.cornerPosition === 'left' ||
+                      selectedTower.cornerPosition === 'right'
                     ? 30
                     : selectedTowerLimits
                       ? selectedTowerLimits.minW
@@ -1196,9 +1208,15 @@ function cancelCustomPartSide() {
               type="number"
               step="0.0625"
               :min="
-                (selectedTower.isCorner || selectedTower.cornerPosition === 'left' || selectedTower.cornerPosition === 'right')
-                  ? (selectedTowerLimits ? Math.max(selectedTowerLimits.minH, 84) : 84)
-                  : (selectedTowerLimits ? selectedTowerLimits.minH : 0)
+                selectedTower.isCorner ||
+                selectedTower.cornerPosition === 'left' ||
+                selectedTower.cornerPosition === 'right'
+                  ? selectedTowerLimits
+                    ? Math.max(selectedTowerLimits.minH, 84)
+                    : 84
+                  : selectedTowerLimits
+                    ? selectedTowerLimits.minH
+                    : 0
               "
               :max="
                 Math.min(selectedTowerLimits?.maxH ?? Infinity, maxHeightIn)
@@ -1213,7 +1231,7 @@ function cancelCustomPartSide() {
 
           <div class="dimension-control">
             <div class="dimension-head">
-              <label>{{ showBridgeSection ? 'Main Depth' : 'Depth' }}</label>
+              <label>{{ showBridgeSection ? "Main Depth" : "Depth" }}</label>
               <span>{{ truncTo4(selectedTower.depth) }}"</span>
             </div>
             <input
@@ -1253,7 +1271,13 @@ function cancelCustomPartSide() {
           <div v-if="showBridgeSection" class="dimension-control">
             <div class="dimension-head">
               <label>Bridge Depth</label>
-              <span>{{ truncTo4(selectedTower.cornerBridgeDepth ?? selectedTower.depth) }}"</span>
+              <span
+                >{{
+                  truncTo4(
+                    selectedTower.cornerBridgeDepth ?? selectedTower.depth,
+                  )
+                }}"</span
+              >
             </div>
             <input
               class="number-input"
@@ -1261,7 +1285,9 @@ function cancelCustomPartSide() {
               step="0.0625"
               :min="selectedTowerLimits ? selectedTowerLimits.minD : 0"
               :max="selectedTowerLimits ? selectedTowerLimits.maxD : undefined"
-              :value="truncTo4(selectedTower.cornerBridgeDepth ?? selectedTower.depth)"
+              :value="
+                truncTo4(selectedTower.cornerBridgeDepth ?? selectedTower.depth)
+              "
               @change="onBridgeDimensionInput('bridgeDepth', $event)"
               @blur="onBridgeDimensionInput('bridgeDepth', $event)"
               @keyup.enter="onBridgeDimensionInput('bridgeDepth', $event)"
@@ -1345,21 +1371,27 @@ function cancelCustomPartSide() {
             <div class="segmented-control corner-toggle">
               <button
                 class="segment-btn"
-                :class="{ active: (selectedTower.cornerPosition ?? 'none') === 'left' }"
+                :class="{
+                  active: (selectedTower.cornerPosition ?? 'none') === 'left',
+                }"
                 @click="setCornerPosition('left')"
               >
                 Left Corner
               </button>
               <button
                 class="segment-btn"
-                :class="{ active: (selectedTower.cornerPosition ?? 'none') === 'none' }"
+                :class="{
+                  active: (selectedTower.cornerPosition ?? 'none') === 'none',
+                }"
                 @click="setCornerPosition('none')"
               >
                 No
               </button>
               <button
                 class="segment-btn"
-                :class="{ active: (selectedTower.cornerPosition ?? 'none') === 'right' }"
+                :class="{
+                  active: (selectedTower.cornerPosition ?? 'none') === 'right',
+                }"
                 @click="setCornerPosition('right')"
               >
                 Right Corner
@@ -1368,7 +1400,10 @@ function cancelCustomPartSide() {
           </div>
 
           <!-- Bridge Dimensions (shown when corner is active) -->
-          <div v-if="showBridgeSection" class="box-toggle-section bridge-section">
+          <div
+            v-if="showBridgeSection"
+            class="box-toggle-section bridge-section"
+          >
             <div class="dimension-head">
               <label>Bridge Dimensions</label>
             </div>
@@ -1377,7 +1412,9 @@ function cancelCustomPartSide() {
             <div class="dimension-control">
               <div class="dimension-head">
                 <label>Bridge Width</label>
-                <span>{{ truncTo4(selectedTower?.cornerBridgeWidth ?? 5) }}"</span>
+                <span
+                  >{{ truncTo4(selectedTower?.cornerBridgeWidth ?? 5) }}"</span
+                >
               </div>
               <input
                 class="number-input"
@@ -1385,7 +1422,12 @@ function cancelCustomPartSide() {
                 step="0.0625"
                 min="0"
                 max="24"
-                :value="truncTo4(selectedTower?.cornerBridgeWidth ?? Math.max(0, 23 - (selectedTower?.depth ?? 15)))"
+                :value="
+                  truncTo4(
+                    selectedTower?.cornerBridgeWidth ??
+                      Math.max(0, 23 - (selectedTower?.depth ?? 15)),
+                  )
+                "
                 @change="onBridgeDimensionInput('bridgeWidth', $event)"
                 @blur="onBridgeDimensionInput('bridgeWidth', $event)"
                 @keyup.enter="onBridgeDimensionInput('bridgeWidth', $event)"
@@ -1399,11 +1441,16 @@ function cancelCustomPartSide() {
             >
               <span class="bridge-total-d__label">Total D</span>
               <span class="bridge-total-d__value">
-                {{ selectedTower?.depth?.toFixed(4) }}" + {{ (selectedTower?.cornerBridgeWidth ?? 0).toFixed(4) }}" =
+                {{ selectedTower?.depth?.toFixed(4) }}" +
+                {{ (selectedTower?.cornerBridgeWidth ?? 0).toFixed(4) }}" =
                 <strong>{{ cornerTotalDepth?.toFixed(4) }}"</strong>
               </span>
-              <span v-if="!cornerTotalDepthValid" class="bridge-total-d__warning">
-                ⚠ Hanging cabinets require Total D ≥ {{ MIN_CORNER_TOTAL_D_FOR_HANGING }}"
+              <span
+                v-if="!cornerTotalDepthValid"
+                class="bridge-total-d__warning"
+              >
+                ⚠ Hanging cabinets require Total D ≥
+                {{ MIN_CORNER_TOTAL_D_FOR_HANGING }}"
               </span>
             </div>
           </div>

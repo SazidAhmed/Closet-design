@@ -324,7 +324,20 @@ export const useClosetStore = defineStore('closet', {
     setTowerDepth(towerId: string, depth: number) {
       const tower = this.towers.find((t) => t.id === towerId)
       if (!tower) return
+
+      let oldTotalD: number | undefined
+      if (tower.isCorner) {
+        oldTotalD = tower.depth + (tower.cornerBridgeWidth ?? Math.max(0, 23 - tower.depth))
+      }
+
       tower.depth = snapTo16th(clampTowerDepth(tower, snapTo16th(depth)))
+
+      if (tower.isCorner && oldTotalD !== undefined) {
+        const clampedTotalD = Math.min(24, Math.max(22, oldTotalD))
+        tower.cornerBridgeWidth = Math.max(0, clampedTotalD - tower.depth)
+        refreshBridgeCabinetForTower(tower)
+      }
+
       const res = refreshTowerCatalog(tower)
       refreshTowerCabinet(tower, { catalogSwitched: res?.switched ?? false })
 

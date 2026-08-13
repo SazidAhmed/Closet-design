@@ -454,10 +454,8 @@ export function refreshTowerCabinet(
   let baseSearchDepth = tower.depth;
   
   if (isCorner) {
-    // The tower.width is the total footprint on the wall.
-    // The main cabinet's physical width is the footprint minus the depth of the bridge.
-    const bridgeDepth = tower.cornerBridgeDepth ?? tower.depth;
-    baseSearchWidth = Math.max(0, tower.width - bridgeDepth);
+    // The main cabinet goes into the corner, so its footprint on the main wall is exactly tower.width.
+    baseSearchWidth = tower.width;
   }
   
   const baseCabinet = selectCabinet(baseCatalog, baseCatalog.cabinets, baseSearchWidth, tower.height, tower.boxCount ?? 2);
