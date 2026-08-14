@@ -716,7 +716,63 @@ function setCornerPosition(pos: CornerPosition) {
   closet.setTowerCornerPosition(tower.id, pos);
 }
 
+const showBridgeSection = computed(() => {
+  const tower = selectedTower.value;
+  if (!tower) return false;
+  return (
+    tower.isCorner ||
+    tower.cornerPosition === "left" ||
+    tower.cornerPosition === "right"
+  );
+});
 
+const cornerTotalDepth = computed(() => {
+  const tower = selectedTower.value;
+  if (!tower) return undefined;
+  if (tower.cornerBridgeWidth !== undefined) {
+    return (tower.depth || 0) + tower.cornerBridgeWidth;
+  }
+  return undefined;
+});
+
+function onTotalDepthInput(event: Event) {
+  const tower = selectedTower.value;
+  if (!tower) return;
+  const target = event.target as HTMLInputElement;
+  const rawValue = Number(target.value);
+  if (!Number.isFinite(rawValue)) return;
+  const value = snapTo16th(rawValue);
+
+  closet.setTowerBridgeDimensions(tower.id, {
+    bridgeWidth: Math.max(0, value - (tower.depth || 0)),
+  });
+
+  target.value = truncTo4(cornerTotalDepth.value ?? 23);
+}
+
+function onBridgeDimensionInput(
+  dimension: "bridgeWidth" | "bridgeDepth",
+  event: Event,
+) {
+  const tower = selectedTower.value;
+  if (!tower) return;
+  const target = event.target as HTMLInputElement;
+  const rawValue = Number(target.value);
+  if (!Number.isFinite(rawValue)) return;
+  const value = snapTo16th(rawValue);
+
+  closet.setTowerBridgeDimensions(tower.id, {
+    [dimension]: value,
+  });
+
+  const currentTower = selectedTower.value;
+  const updatedValue = currentTower
+    ? dimension === "bridgeDepth"
+      ? (currentTower.cornerBridgeDepth ?? currentTower.depth)
+      : currentTower.cornerBridgeWidth
+    : value;
+  target.value = truncTo4(updatedValue ?? 0);
+}
 
 function onDimensionInput(
   dimension: "width" | "depth" | "height" | "outset" | "elevation",
@@ -1327,8 +1383,6 @@ function cancelCustomPartSide() {
               </button>
             </div>
           </div>
-
-
 
           <!-- Clearance display -->
           <div v-if="clearances" class="clearance-section">
