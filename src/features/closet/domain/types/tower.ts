@@ -125,6 +125,18 @@ export type Tower = {
    * the tower/shelve. Defaults to 0 when absent.
    */
   elevation?: number
+  /** Gap between the cabinet and the door, used for "with_doors" mode. Default 0.125 inches */
+  doorGap?: number
+  /** Thickness of the door, used for "with_doors" mode. Default 0.75 inches */
+  doorThickness?: number
+  /** Lateral shift of the door relative to the cabinet center, used for "with_doors" mode. Default 0. */
+  doorShift?: number
+  /** Width of the door, used for "with_doors" mode. Defaults to tower width if not set. */
+  doorWidth?: number
+  /** Height of the door, used for "with_doors" mode. Defaults to tower height if not set. */
+  doorHeight?: number
+  /** Hinge side for the door. Defaults to 'left'. */
+  doorHinge?: 'left' | 'right'
 }
 
 // ---- Factory helpers ------------------------------------------------------

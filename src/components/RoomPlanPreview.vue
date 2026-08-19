@@ -274,16 +274,26 @@ const placedTowerPolygons = computed(() => {
       const d = tower.depth;
 
       let renderCorners = corners;
-      const isCorner = tower.isCorner ?? (tower.cornerPosition === 'left' || tower.cornerPosition === 'right' || tower.cornerOrientation === 'left' || tower.cornerOrientation === 'right');
-      
-      if (isCorner && typeof tower.cornerBridgeWidth === 'number' && tower.cornerBridgeWidth > 0) {
+      const isCorner =
+        tower.isCorner ??
+        (tower.cornerPosition === "left" ||
+          tower.cornerPosition === "right" ||
+          tower.cornerOrientation === "left" ||
+          tower.cornerOrientation === "right");
+
+      if (
+        isCorner &&
+        typeof tower.cornerBridgeWidth === "number" &&
+        tower.cornerBridgeWidth > 0
+      ) {
         const bd = tower.cornerBridgeDepth ?? tower.depth;
         const bw = tower.cornerBridgeWidth;
         const [BL, BR, FR, FL] = corners;
         const wx = Math.cos(wall.angle);
         const wy = Math.sin(wall.angle);
-        
-        const isLeft = tower.cornerOrientation === 'left' || tower.cornerPosition === 'left';
+
+        const isLeft =
+          tower.cornerOrientation === "left" || tower.cornerPosition === "left";
         if (isLeft) {
           renderCorners = [
             BL,
@@ -291,7 +301,7 @@ const placedTowerPolygons = computed(() => {
             FR,
             [FL[0] + wx * bd, FL[1] + wy * bd],
             [FL[0] + wx * bd + px * bw, FL[1] + wy * bd + py * bw],
-            [FL[0] + px * bw, FL[1] + py * bw]
+            [FL[0] + px * bw, FL[1] + py * bw],
           ];
         } else {
           renderCorners = [
@@ -300,9 +310,43 @@ const placedTowerPolygons = computed(() => {
             [FR[0] + px * bw, FR[1] + py * bw],
             [FR[0] - wx * bd + px * bw, FR[1] - wy * bd + py * bw],
             [FR[0] - wx * bd, FR[1] - wy * bd],
-            FL
+            FL,
           ];
         }
+      }
+
+      let doorPoints: string | null = null;
+      if (tower.doorMode === "with_doors") {
+        const doorGap = 0.125;
+        const doorThickness = 0.75;
+        const doorShift = tower.doorShift ?? 0;
+        const dWidth = tower.doorWidth ?? tower.width;
+
+        const wx = Math.cos(wall.angle);
+        const wy = Math.sin(wall.angle);
+        const shiftX = wx * doorShift;
+        const shiftY = wy * doorShift;
+
+        const hwDiff = (tower.width - dWidth) / 2;
+        const doorLeftX = corners[3][0] + wx * hwDiff + shiftX;
+        const doorLeftY = corners[3][1] + wy * hwDiff + shiftY;
+        const doorRightX = corners[2][0] - wx * hwDiff + shiftX;
+        const doorRightY = corners[2][1] - wy * hwDiff + shiftY;
+
+        const visualDoorGap = Math.max(doorGap, 1.5);
+        const doorCorners = [
+          [doorLeftX + px * visualDoorGap, doorLeftY + py * visualDoorGap], // Back left of door
+          [doorRightX + px * visualDoorGap, doorRightY + py * visualDoorGap], // Back right of door
+          [
+            doorRightX + px * (visualDoorGap + doorThickness),
+            doorRightY + py * (visualDoorGap + doorThickness),
+          ], // Front right
+          [
+            doorLeftX + px * (visualDoorGap + doorThickness),
+            doorLeftY + py * (visualDoorGap + doorThickness),
+          ], // Front left
+        ];
+        doorPoints = doorCorners.map((c) => c.join(",")).join(" ");
       }
 
       return {
@@ -310,9 +354,15 @@ const placedTowerPolygons = computed(() => {
         label: tower.label,
         partType: tower.partType,
         points: renderCorners.map((c) => c.join(",")).join(" "),
+        doorPoints,
         labelX: cx_inner + (px * d) / 2,
         labelY: cy_inner + (py * d) / 2,
-        selected: selectionStore.selectedTowerId === tower.id,
+        selected:
+          selectionStore.selectedTowerId === tower.id &&
+          selectionStore.selectedTowerSubItem !== "door",
+        doorSelected:
+          selectionStore.selectedTowerId === tower.id &&
+          selectionStore.selectedTowerSubItem === "door",
         corners,
       };
     })
@@ -321,6 +371,11 @@ const placedTowerPolygons = computed(() => {
 
 function selectTowerInPlan(towerId: string) {
   selectionStore.selectTower(towerId);
+}
+
+function selectDoorInPlan(towerId: string) {
+  selectionStore.selectTower(towerId);
+  selectionStore.selectTowerSubItem("door");
 }
 
 // ── Placed door/window item rendering ────────────────────────────────────────
@@ -512,7 +567,7 @@ function clampTowerAwayFromObstructions(
 }
 
 let dragState: {
-  mode: "move" | "depth" | "width-start" | "width-end";
+  mode: "move" | "depth" | "width-start" | "width-end" | "door-move";
   towerId: string;
   wallLength: number;
   startSvgX: number;
@@ -520,6 +575,8 @@ let dragState: {
   startPos: number;
   startWidth: number;
   startDepth: number;
+  startDoorShift?: number;
+  startDoorGap?: number;
   wallAngle: number;
   wallThickness: number;
 } | null = null;
@@ -552,6 +609,42 @@ function onTowerPointerDown(e: PointerEvent, towerId: string) {
     startPos: tower.positionAlongWall ?? 0.5,
     startWidth: tower.width,
     startDepth: tower.depth,
+    wallAngle: wall.angle,
+    wallThickness: wall.thickness ?? 6,
+  };
+  (e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
+}
+
+function onDoorPointerDown(e: PointerEvent, towerId: string) {
+  e.stopPropagation();
+  selectionStore.selectTower(towerId);
+  selectionStore.selectTowerSubItem("door");
+  const tower = closetStore.towers.find((t) => t.id === towerId);
+  const wall = tower?.wallId
+    ? roomStore.walls.find((w) => w.id === tower.wallId)
+    : null;
+  if (!wall || !tower) return;
+
+  const svg = (e.currentTarget as SVGElement).closest(
+    "svg",
+  ) as SVGSVGElement | null;
+  if (!svg) return;
+
+  const pt = svg.createSVGPoint();
+  pt.x = e.clientX;
+  pt.y = e.clientY;
+  const svgPt = pt.matrixTransform(svg.getScreenCTM()!.inverse());
+
+  dragState = {
+    mode: "door-move",
+    towerId,
+    wallLength: wall.length,
+    startSvgX: svgPt.x,
+    startSvgY: svgPt.y,
+    startPos: tower.positionAlongWall ?? 0.5,
+    startWidth: tower.width,
+    startDepth: tower.depth,
+    startDoorShift: tower.doorShift ?? 0,
     wallAngle: wall.angle,
     wallThickness: wall.thickness ?? 6,
   };
@@ -613,7 +706,26 @@ function onSvgPointerMove(e: PointerEvent) {
   const dx = svgPt.x - dragState.startSvgX;
   const dy = svgPt.y - dragState.startSvgY;
 
-  if (dragState.mode === "move") {
+  if (dragState.mode === "door-move") {
+    const wallDx = Math.cos(dragState.wallAngle);
+    const wallDy = Math.sin(dragState.wallAngle);
+    const projectedX = dx * wallDx + dy * wallDy;
+    let requestedShift = (dragState.startDoorShift ?? 0) + projectedX; // '+' to make door follow mouse direction
+
+    const towerCenterCm =
+      (tower.positionAlongWall ?? 0.5) * dragState.wallLength;
+    const halfW = tower.width / 2;
+    const bounds = wallUsableBoundsPos(wall, 0);
+    const usableLeftCm = bounds.min * dragState.wallLength;
+    const usableRightCm = bounds.max * dragState.wallLength;
+
+    const minShift = usableLeftCm - towerCenterCm + halfW;
+    const maxShift = usableRightCm - towerCenterCm - halfW;
+
+    requestedShift = Math.max(minShift, Math.min(maxShift, requestedShift));
+
+    closetStore.setTowerDoorShift(tower.id, requestedShift);
+  } else if (dragState.mode === "move") {
     const wallDx = Math.cos(dragState.wallAngle);
     const wallDy = Math.sin(dragState.wallAngle);
     const projected = dx * wallDx + dy * wallDy;
@@ -974,6 +1086,20 @@ function sanitizeAllTowerPositionsInPlan() {
           :stroke-width="0.5"
           stroke-linejoin="round"
           class="tower-footprint"
+        />
+        <!-- Door polygon (if applicable) -->
+        <polygon
+          v-if="tower.doorPoints"
+          :points="tower.doorPoints"
+          :fill="
+            tower.doorSelected ? 'rgba(239,68,68,0.5)' : 'rgba(239,68,68,0.15)'
+          "
+          :stroke="tower.doorSelected ? '#ef4444' : '#b91c1c'"
+          :stroke-width="tower.doorSelected ? 1.0 : 0.5"
+          stroke-linejoin="round"
+          class="door-footprint"
+          @pointerdown.stop="(e) => onDoorPointerDown(e, tower.id)"
+          @click.stop="selectDoorInPlan(tower.id)"
         />
         <!-- Tower label at centre of footprint -->
         <text

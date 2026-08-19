@@ -66,6 +66,8 @@ const selectedTower = computed(
     null,
 );
 
+const isDoorSelected = computed(() => selection.selectedTowerSubItem === 'door');
+
 const selectedTowerLimits = computed<ClosetCatalogLimits | null>(() => {
   const tower = selectedTower.value;
   if (!tower?.doorMode || !tower.categoryCode) return null;
@@ -775,7 +777,7 @@ function onBridgeDimensionInput(
 }
 
 function onDimensionInput(
-  dimension: "width" | "depth" | "height" | "outset" | "elevation",
+  dimension: "width" | "depth" | "height" | "outset" | "elevation" | "doorWidth" | "doorHeight",
   event: Event,
 ) {
   const tower = selectedTower.value;
@@ -795,6 +797,10 @@ function onDimensionInput(
   } else if (dimension === "elevation") {
     const maxIn = maxElevationIn.value;
     closet.setTowerElevation(tower.id, Math.min(value, maxIn));
+  } else if (dimension === "doorWidth") {
+    closet.setTowerDoorWidth(tower.id, value);
+  } else if (dimension === "doorHeight") {
+    closet.setTowerDoorHeight(tower.id, value);
   } else {
     closet.setTowerHeight(tower.id, Math.min(value, maxHeightIn.value));
   }
@@ -1154,7 +1160,8 @@ function cancelCustomPartSide() {
             </div>
           </div>
 
-          <div class="dimension-control">
+          <template v-if="!isDoorSelected">
+            <div class="dimension-control">
             <div class="dimension-head">
               <label>Width</label>
               <span>{{ truncTo4(selectedTower.width) }}"</span>
@@ -1315,6 +1322,89 @@ function cancelCustomPartSide() {
               @keyup.enter="onDimensionInput('elevation', $event)"
             />
           </div>
+
+          <div v-if="selectedTower.doorMode === 'with_doors'" class="box-toggle-section" style="margin-top: 16px;">
+            <button 
+              class="segment-btn active"
+              style="width: 100%; justify-content: center;"
+              @click="closet.updateTower(selectedTower.id, { doorHinge: selectedTower.doorHinge === 'right' ? 'left' : 'right' })"
+            >
+              Re-Hinge
+            </button>
+          </div>
+          </template>
+
+          <!-- Door properties (With Doors only) -->
+          <template v-if="selectedTower.doorMode === 'with_doors' && isDoorSelected">
+            <div class="dimension-control">
+              <div class="dimension-head">
+                <label>Door Width</label>
+                <span>{{ truncTo4(selectedTower.doorWidth ?? selectedTower.width) }}"</span>
+              </div>
+              <input
+                class="number-input"
+                type="number"
+                step="0.0625"
+                min="0"
+                :value="truncTo4(selectedTower.doorWidth ?? selectedTower.width)"
+                @change="onDimensionInput('doorWidth', $event)"
+                @blur="onDimensionInput('doorWidth', $event)"
+                @keyup.enter="onDimensionInput('doorWidth', $event)"
+              />
+            </div>
+            <div class="dimension-control">
+              <div class="dimension-head">
+                <label>Door Height</label>
+                <span>{{ truncTo4(selectedTower.doorHeight ?? selectedTower.height) }}"</span>
+              </div>
+              <input
+                class="number-input"
+                type="number"
+                step="0.0625"
+                min="0"
+                :value="truncTo4(selectedTower.doorHeight ?? selectedTower.height)"
+                @change="onDimensionInput('doorHeight', $event)"
+                @blur="onDimensionInput('doorHeight', $event)"
+                @keyup.enter="onDimensionInput('doorHeight', $event)"
+              />
+            </div>
+            <div class="dimension-control">
+              <div class="dimension-head">
+                <label>Door Gap</label>
+                <span>0.125"</span>
+              </div>
+              <input
+                class="number-input text-muted"
+                type="text"
+                disabled
+                value="0.125"
+              />
+            </div>
+            <div class="dimension-control">
+              <div class="dimension-head">
+                <label>Door Thickness</label>
+                <span>0.75"</span>
+              </div>
+              <input
+                class="number-input text-muted"
+                type="text"
+                disabled
+                value="0.75"
+              />
+            </div>
+            <div class="dimension-control">
+              <div class="dimension-head">
+                <label>Total Door Outset</label>
+                <span>0.875"</span>
+              </div>
+              <input
+                class="number-input text-muted"
+                type="text"
+                disabled
+                value="0.875"
+              />
+            </div>
+          </template>
 
           <!-- Box Count Toggle (Without Doors only) -->
           <div v-if="showBoxToggle" class="box-toggle-section">

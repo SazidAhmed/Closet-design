@@ -367,6 +367,41 @@ export const useClosetStore = defineStore('closet', {
       }
     },
 
+    setTowerDoorGap(towerId: string, gap: number) {
+      const tower = this.towers.find((t) => t.id === towerId)
+      if (tower) {
+        tower.doorGap = snapTo16th(gap)
+      }
+    },
+
+    setTowerDoorThickness(towerId: string, thickness: number) {
+      const tower = this.towers.find((t) => t.id === towerId)
+      if (tower) {
+        tower.doorThickness = snapTo16th(thickness)
+      }
+    },
+
+    setTowerDoorShift(towerId: string, shift: number) {
+      const tower = this.towers.find((t) => t.id === towerId)
+      if (tower) {
+        tower.doorShift = snapTo16th(shift)
+      }
+    },
+
+    setTowerDoorWidth(towerId: string, width: number) {
+      const tower = this.towers.find((t) => t.id === towerId)
+      if (tower) {
+        tower.doorWidth = snapTo16th(width)
+      }
+    },
+
+    setTowerDoorHeight(towerId: string, height: number) {
+      const tower = this.towers.find((t) => t.id === towerId)
+      if (tower) {
+        tower.doorHeight = snapTo16th(height)
+      }
+    },
+
     setTowerBoxCount(towerId: string, boxCount: 1 | 2) {
       const tower = this.towers.find((t) => t.id === towerId)
       if (!tower || !tower.doorMode || !tower.categoryCode) return
