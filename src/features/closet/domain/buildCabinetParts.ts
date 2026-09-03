@@ -66,14 +66,23 @@ export function buildParts(state: ClosetStateV2): ClosetPart[] {
   const finishId = state.materials.finishId;
   const backingId = state.materials.backingId;
 
+  const isWithDoors = state.towers.some(
+    (t) => t.doorMode === "with_doors" && (!t.partType || t.partType === "cabinet")
+  );
+  const isCabinet = state.towers.length === 0 || state.towers.some(
+    (t) => !t.partType || t.partType === "cabinet"
+  );
+  const bottomGap = isWithDoors ? 4.5 : (isCabinet ? 2 : 0);
+  const hasLegs = isWithDoors;
+
   // ── Carcass panels ──────────────────────────────────────────────────────
 
   // Left panel
   parts.push({
     id: "panel_left",
     type: "panel_left",
-    dims: { x: T, y: H, z: D },
-    transform: { pos: [-W / 2 + T / 2, 0, 0], rot: [0, 0, 0] },
+    dims: { x: T, y: H - bottomGap, z: D },
+    transform: { pos: [-W / 2 + T / 2, bottomGap / 2, 0], rot: [0, 0, 0] },
     materialId: finishId,
   });
 
@@ -81,8 +90,8 @@ export function buildParts(state: ClosetStateV2): ClosetPart[] {
   parts.push({
     id: "panel_right",
     type: "panel_right",
-    dims: { x: T, y: H, z: D },
-    transform: { pos: [W / 2 - T / 2, 0, 0], rot: [0, 0, 0] },
+    dims: { x: T, y: H - bottomGap, z: D },
+    transform: { pos: [W / 2 - T / 2, bottomGap / 2, 0], rot: [0, 0, 0] },
     materialId: finishId,
   });
 
@@ -91,7 +100,7 @@ export function buildParts(state: ClosetStateV2): ClosetPart[] {
     id: "panel_bottom",
     type: "panel_bottom",
     dims: { x: iW, y: T, z: D },
-    transform: { pos: [0, -H / 2 + T / 2, 0], rot: [0, 0, 0] },
+    transform: { pos: [0, -H / 2 + bottomGap + T / 2, 0], rot: [0, 0, 0] },
     materialId: finishId,
   });
 
@@ -108,10 +117,28 @@ export function buildParts(state: ClosetStateV2): ClosetPart[] {
   parts.push({
     id: "panel_back",
     type: "panel_back",
-    dims: { x: iW, y: iH, z: T },
-    transform: { pos: [0, 0, -D / 2 + T / 2], rot: [0, 0, 0] },
+    dims: { x: iW, y: iH - bottomGap, z: T },
+    transform: { pos: [0, bottomGap / 2, -D / 2 + T / 2], rot: [0, 0, 0] },
     materialId: backingId,
   });
+
+  // Legs (only for cabinets with doors)
+  if (hasLegs) {
+    parts.push({
+      id: "leg_left",
+      type: "leg",
+      dims: { x: 2, y: 4.5, z: D - 2 },
+      transform: { pos: [-W / 2 + 2 + 1, -H / 2 + 2.25, 0], rot: [0, 0, 0] },
+      materialId: finishId,
+    });
+    parts.push({
+      id: "leg_right",
+      type: "leg",
+      dims: { x: 2, y: 4.5, z: D - 2 },
+      transform: { pos: [W / 2 - 2 - 1, -H / 2 + 2.25, 0], rot: [0, 0, 0] },
+      materialId: finishId,
+    });
+  }
 
   // ── Tower-based internals ───────────────────────────────────────────────
 
@@ -132,8 +159,8 @@ export function buildParts(state: ClosetStateV2): ClosetPart[] {
       parts.push({
         id: `divider_${ti}`,
         type: "divider",
-        dims: { x: T, y: iH, z: iD },
-        transform: { pos: [currentX, 0, T / 2], rot: [0, 0, 0] },
+        dims: { x: T, y: iH - bottomGap, z: iD },
+        transform: { pos: [currentX, bottomGap / 2, T / 2], rot: [0, 0, 0] },
         materialId: finishId,
         towerId: tower.id,
       });
@@ -151,6 +178,7 @@ export function buildParts(state: ClosetStateV2): ClosetPart[] {
       iD,
       iH,
       finishId,
+      bottomGap,
     );
 
     currentX += tw;
@@ -172,6 +200,7 @@ function buildTowerAccessories(
   iD: number,
   iH: number,
   finishId: string,
+  bottomGap: number,
 ) {
   const towerInnerWidth = towerWidth - T; // account for one divider side
 
@@ -190,10 +219,11 @@ function buildTowerAccessories(
           iD,
           iH,
           finishId,
+          bottomGap,
         );
         break;
       case "rod":
-        buildRods(parts, tower, acc, centerX, towerInnerWidth, T, H, D, iD, iH);
+        buildRods(parts, tower, acc, centerX, towerInnerWidth, T, H, D, iD, iH, bottomGap);
         break;
       case "drawer":
         buildDrawers(
@@ -208,6 +238,7 @@ function buildTowerAccessories(
           D,
           iD,
           finishId,
+          bottomGap,
         );
         break;
       case "shoe_shelf":
@@ -223,6 +254,7 @@ function buildTowerAccessories(
           iD,
           iH,
           finishId,
+          bottomGap,
         );
         break;
       // props are cosmetic — handled separately in 3D renderer
@@ -242,11 +274,12 @@ function buildShelves(
   iD: number,
   iH: number,
   finishId: string,
+  bottomGap: number,
 ) {
   if (count <= 0) return;
 
-  const bottomInnerY = -H / 2 + T;
-  const gap = iH / (count + 1);
+  const bottomInnerY = -H / 2 + bottomGap + T;
+  const gap = (iH - bottomGap) / (count + 1);
 
   for (let i = 0; i < count; i++) {
     const y = bottomInnerY + gap * (i + 1);
@@ -273,6 +306,7 @@ function buildRods(
   _D: number,
   iD: number,
   iH: number,
+  bottomGap: number,
 ) {
   // Position the rod at a fraction of inner height
   const positionFractions: Record<string, number> = {
@@ -282,7 +316,7 @@ function buildRods(
   };
 
   const fraction = positionFractions[rod.position] ?? 0.5;
-  const baseY = -H / 2 + iH * fraction;
+  const baseY = -H / 2 + bottomGap + (iH - bottomGap) * fraction;
   const rodRadius = 1.2; // cm
 
   for (let r = 0; r < rod.count; r++) {
@@ -311,10 +345,11 @@ function buildDrawers(
   _D: number,
   iD: number,
   finishId: string,
+  bottomGap: number,
 ) {
   if (count <= 0) return;
 
-  const bottomInnerY = -H / 2 + T;
+  const bottomInnerY = -H / 2 + bottomGap + T;
   const gap = 1; // 1cm gap between drawers
 
   for (let i = 0; i < count; i++) {
@@ -343,11 +378,12 @@ function buildShoeShelves(
   iD: number,
   iH: number,
   finishId: string,
+  bottomGap: number,
 ) {
   if (count <= 0) return;
 
-  const bottomInnerY = -H / 2 + T;
-  const shelfSpacing = Math.min(20, iH / (count + 1)); // max 20cm between shoe shelves
+  const bottomInnerY = -H / 2 + bottomGap + T;
+  const shelfSpacing = Math.min(20, (iH - bottomGap) / (count + 1)); // max 20cm between shoe shelves
 
   for (let i = 0; i < count; i++) {
     const y = bottomInnerY + shelfSpacing * (i + 1);

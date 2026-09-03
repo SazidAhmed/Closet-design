@@ -16,5 +16,20 @@ export default {
       console.error(`Catalog Categories API Error (${doorMode}):`, error.response?.data || error.message);
       throw error;
     }
+  },
+
+  /**
+   * Fetch custom parts list from the backend.
+   *
+   * @throws if the network request fails or the server returns a non-OK status.
+   */
+  async getCustomParts(): Promise<any[]> {
+    try {
+      const response = await http.get(`/customPartsList`);
+      return response.data.parts || [];
+    } catch (error: any) {
+      console.error(`Custom Parts API Error:`, error.response?.data || error.message);
+      throw error;
+    }
   }
 };

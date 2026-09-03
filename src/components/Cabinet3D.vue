@@ -26,6 +26,7 @@ const panelParts = computed(() =>
       "panel_bottom",
       "panel_back",
       "divider",
+      "leg",
     ].includes(p.type),
   ),
 );

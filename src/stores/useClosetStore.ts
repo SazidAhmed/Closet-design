@@ -36,6 +36,8 @@ import { getClosetType } from '../features/closet/domain/closetTypes'
 type ClosetStoreState = ClosetStateV2 & {
   /** Live catalog categories loaded from the backend (both door modes). */
   catalogCategories: ClosetCatalogCategory[]
+  /** Custom parts from the database */
+  customParts: any[]
   /** Whether catalog data is currently being fetched from the API. */
   catalogsLoading: boolean
 }
@@ -44,6 +46,7 @@ export const useClosetStore = defineStore('closet', {
   state: (): ClosetStoreState => ({
     ...createDefaultClosetState(),
     catalogCategories: [],
+    customParts: [],
     catalogsLoading: false,
   }),
 
@@ -134,6 +137,40 @@ export const useClosetStore = defineStore('closet', {
       }
     },
 
+    async loadCustomParts(forceRefresh = false) {
+      const CACHE_KEY = 'closet-custom-parts-cache-v1'
+      
+      if (this.customParts.length > 0 && !forceRefresh) {
+        return
+      }
+
+      if (!forceRefresh) {
+        try {
+          const cachedRaw = localStorage.getItem(CACHE_KEY)
+          if (cachedRaw) {
+            const parsed = JSON.parse(cachedRaw)
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              this.customParts = parsed
+              return
+            }
+          }
+        } catch (e) {
+          console.warn('[useClosetStore] Failed to read custom parts cache:', e)
+        }
+      }
+
+      try {
+        const { default: ClosetService } = await import('../services/ClosetService');
+        const parts = await ClosetService.getCustomParts();
+        this.customParts = parts;
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify(parts))
+        } catch (e) {}
+      } catch (err) {
+        console.warn('[useClosetStore] loadCustomParts error:', err)
+      }
+    },
+
     // ── Closet type ───────────────────────────────────────────────────────
     setClosetType(name: ClosetTypeName) {
       const type = getClosetType(name)
@@ -167,30 +204,67 @@ export const useClosetStore = defineStore('closet', {
       this.towers.push(createTowerFromCategory(doorMode, categoryCode, idx))
     },
 
-    addCustomPart(partType: 'panel' | 'filler', attachedToTowerId?: string, wallLength?: number, side?: 'left' | 'right') {
+    addCustomPart(partType: string, attachedToTowerId?: string, wallLength?: number, side?: 'left' | 'right', orientation?: 'left' | 'right') {
       const attachedTower = attachedToTowerId ? this.towers.find(t => t.id === attachedToTowerId) : null;
       const idx = this.towers.length + 1;
       
-      const defaultWidth = partType === 'panel' ? 0.75 : 3;
+      const customPartDef = this.customParts.find(p => p.title.toLowerCase() === partType.toLowerCase());
       
-      let initialDepth = 0.75;
+      let defaultWidth = customPartDef?.has_width ? 0.75 : 3;
+      
+      let initialDepth = customPartDef?.has_depth ? 0.75 : 0.75;
       let initialHeight = 84;
       let initialOutset = 0;
+      
+      const isLShapeVertical = partType.toLowerCase() === 'l shape vertical';
+      const isLShapeHorizontal = partType.toLowerCase() === 'l shape horizontal';
+      const isLShape = partType.toLowerCase().includes('l shape');
+      if (isLShapeVertical) {
+        defaultWidth = 3;
+        initialDepth = 3;
+        initialHeight = 84;
+        initialOutset = 20.875;
+      } else if (isLShapeHorizontal) {
+        defaultWidth = 30;
+        initialDepth = 3;
+        initialHeight = 3;
+        initialOutset = 23.875;
+      } else if (isLShape) {
+        defaultWidth = 5;
+        initialDepth = 5;
+      }
 
       if (!attachedTower) {
-        if (partType === 'panel') {
+        if (partType.toLowerCase() === 'panel') {
           initialDepth = 15;
-        } else if (partType === 'filler') {
+        } else if (partType.toLowerCase() === 'filler') {
           initialDepth = 0.75;
           initialOutset = 14.25;
+        } else if (isLShapeVertical) {
+          initialOutset = 20.875;
+        } else if (isLShapeHorizontal) {
+          initialOutset = 23.875;
+        } else if (isLShape) {
+          initialOutset = 10;
         }
       } else {
-        if (partType === 'panel') {
+        if (partType.toLowerCase() === 'panel') {
           initialDepth = attachedTower.depth;
           initialHeight = attachedTower.height;
           initialOutset = attachedTower.outset ?? 0;
-        } else if (partType === 'filler') {
+        } else if (partType.toLowerCase() === 'filler') {
           initialDepth = 0.75;
+          initialHeight = attachedTower.height;
+          initialOutset = (attachedTower.outset ?? 0) + attachedTower.depth - initialDepth;
+        } else if (isLShapeVertical) {
+          initialHeight = 84;
+          initialOutset = 20.875;
+        } else if (isLShapeHorizontal) {
+          defaultWidth = attachedTower.width ?? 30;
+          initialDepth = 3;
+          initialHeight = 3;
+          initialOutset = 23.875;
+        } else if (isLShape) {
           initialHeight = attachedTower.height;
           initialOutset = (attachedTower.outset ?? 0) + attachedTower.depth - initialDepth;
         }
@@ -198,21 +272,37 @@ export const useClosetStore = defineStore('closet', {
       
       let initialPosition = attachedTower?.positionAlongWall;
       if (attachedTower && initialPosition !== undefined && wallLength) {
-        const centerCm = initialPosition * wallLength;
-        if (side === 'right' || (!side && partType === 'panel')) {
-          // Default to placing Panel on the right edge of the attached cabinet
-          const rightEdgeCm = centerCm + (attachedTower.width / 2);
-          initialPosition = (rightEdgeCm + (defaultWidth / 2)) / wallLength;
-        } else if (side === 'left' || (!side && partType === 'filler')) {
-          // Default to placing Filler on the left edge of the attached cabinet
-          const leftEdgeCm = centerCm - (attachedTower.width / 2);
-          initialPosition = (leftEdgeCm - (defaultWidth / 2)) / wallLength;
+        if (isLShapeHorizontal) {
+          initialPosition = attachedTower.positionAlongWall;
+        } else {
+          const centerCm = initialPosition * wallLength;
+          if (side === 'right' || (!side && partType.toLowerCase() === 'panel')) {
+            // Default to placing Panel on the right edge of the attached cabinet
+            const rightEdgeCm = centerCm + (attachedTower.width / 2);
+            initialPosition = (rightEdgeCm + (defaultWidth / 2)) / wallLength;
+          } else if (side === 'left' || (!side && partType.toLowerCase() === 'filler')) {
+            // Default to placing Filler on the left edge of the attached cabinet
+            const leftEdgeCm = centerCm - (attachedTower.width / 2);
+            initialPosition = (leftEdgeCm - (defaultWidth / 2)) / wallLength;
+          }
         }
       }
 
+      let label = customPartDef ? customPartDef.title : partType;
+      // Capitalize first letter if it's fallback
+      if (!customPartDef) {
+          label = label.charAt(0).toUpperCase() + label.slice(1);
+      }
+
+      const initialElevation = isLShapeHorizontal
+        ? (attachedTower ? ((attachedTower.elevation ?? 0) + (attachedTower.height || 84)) : 84)
+        : isLShapeVertical
+          ? 0
+          : (attachedTower?.elevation ?? 0);
+
       const newPart: Tower = {
         id: createTowerId(),
-        label: `${partType === 'panel' ? 'Panel' : 'Filler'} ${idx}`,
+        label: `${label} ${idx}`,
         width: defaultWidth,
         depth: initialDepth,
         height: initialHeight,
@@ -221,8 +311,9 @@ export const useClosetStore = defineStore('closet', {
         accessories: [],
         wallId: attachedTower?.wallId, // Place on same wall by default
         positionAlongWall: initialPosition,
-        elevation: attachedTower?.elevation,
+        elevation: initialElevation,
         outset: initialOutset || undefined,
+        orientation: isLShapeHorizontal ? undefined : (orientation || (isLShapeVertical ? 'left' : undefined)),
       };
       this.towers.push(newPart);
       return newPart;
@@ -362,7 +453,11 @@ export const useClosetStore = defineStore('closet', {
         this.towers
           .filter((t) => t.attachedToTowerId === towerId)
           .forEach((part) => {
-            part.height = tower.height
+            if (part.partType?.toLowerCase() === 'l shape horizontal') {
+              part.elevation = snapTo16th((tower.elevation ?? 0) + tower.height);
+            } else {
+              part.height = tower.height;
+            }
           })
       }
     },
@@ -378,13 +473,6 @@ export const useClosetStore = defineStore('closet', {
       const tower = this.towers.find((t) => t.id === towerId)
       if (tower) {
         tower.doorThickness = snapTo16th(thickness)
-      }
-    },
-
-    setTowerDoorShift(towerId: string, shift: number) {
-      const tower = this.towers.find((t) => t.id === towerId)
-      if (tower) {
-        tower.doorShift = snapTo16th(shift)
       }
     },
 
@@ -449,6 +537,12 @@ export const useClosetStore = defineStore('closet', {
       refreshTowerCabinet(tower)
     },
 
+    setTowerOrientation(towerId: string, orientation: 'left' | 'right') {
+      const tower = this.towers.find((t) => t.id === towerId)
+      if (!tower) return
+      tower.orientation = orientation
+    },
+
     setTowerBridgeDimensions(
       towerId: string,
       { bridgeWidth, bridgeDepth }: { bridgeWidth?: number; bridgeDepth?: number },
@@ -484,7 +578,20 @@ export const useClosetStore = defineStore('closet', {
 
     setTowerElevation(towerId: string, elevation: number) {
       const tower = this.towers.find((t) => t.id === towerId)
-      if (tower) tower.elevation = snapTo16th(Math.max(0, elevation))
+      if (tower) {
+        const oldElevation = tower.elevation ?? 0
+        tower.elevation = snapTo16th(Math.max(0, elevation))
+        const delta = tower.elevation - oldElevation
+        if (delta !== 0) {
+          this.towers
+            .filter((t) => t.attachedToTowerId === towerId)
+            .forEach((part) => {
+              if (part.partType?.toLowerCase() === 'l shape horizontal') {
+                part.elevation = snapTo16th((part.elevation ?? 0) + delta)
+              }
+            })
+        }
+      }
     },
 
     // ── Accessories ───────────────────────────────────────────────────────

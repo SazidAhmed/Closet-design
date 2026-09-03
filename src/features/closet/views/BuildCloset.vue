@@ -37,7 +37,13 @@ function truncTo4(value: number): string {
 
 const selectedDoorMode = ref<ClosetDoorMode>("without_doors");
 const showElevation = ref(false);
-const pendingCustomPart = ref<"panel" | "filler" | null>(null);
+const pendingCustomPart = ref<string | null>(null);
+
+const allowedCustomParts = ['panel', 'filler', 'toe kick', 'l shape vertical', 'l shape horizontal'];
+
+const filteredCustomParts = computed(() => {
+  return closet.customParts.filter(part => allowedCustomParts.includes(part.title.toLowerCase()));
+});
 
 const visibleCategories = computed(() => {
   const storeCategories = closet.catalogCategoriesForMode(
@@ -65,8 +71,6 @@ const selectedTower = computed(
     closet.towers.find((tower) => tower.id === selection.selectedTowerId) ??
     null,
 );
-
-const isDoorSelected = computed(() => selection.selectedTowerSubItem === 'door');
 
 const selectedTowerLimits = computed<ClosetCatalogLimits | null>(() => {
   const tower = selectedTower.value;
@@ -522,6 +526,7 @@ onMounted(async () => {
   appStore.setStep("design");
 
   await closet.loadCatalogs();
+  await closet.loadCustomParts();
 
   if (
     closet.towers.length > 0 &&
@@ -716,6 +721,18 @@ function setCornerPosition(pos: CornerPosition) {
   const tower = selectedTower.value;
   if (!tower) return;
   closet.setTowerCornerPosition(tower.id, pos);
+}
+
+const showOrientationSection = computed(() => {
+  const tower = selectedTower.value;
+  if (!tower) return false;
+  return tower.partType?.toLowerCase() === "l shape vertical";
+});
+
+function setTowerOrientation(orientation: "left" | "right") {
+  const tower = selectedTower.value;
+  if (!tower) return;
+  closet.setTowerOrientation(tower.id, orientation);
 }
 
 const showBridgeSection = computed(() => {
@@ -936,12 +953,15 @@ function towerSubtitle(tower: {
   categoryName?: string;
   categoryCode?: ClosetCatalogCategoryCode;
   catalogId?: number;
-  partType?: "cabinet" | "panel" | "filler";
+  partType?: "cabinet" | "panel" | "filler" | string;
   cabinetCode?: string;
   bridgeCabinetCode?: string;
 }): string {
   if (tower.partType === "panel") return "Panel";
   if (tower.partType === "filler") return "Filler";
+  if (tower.partType?.toLowerCase() === "l shape vertical") return "L Shape Vertical";
+  if (tower.partType?.toLowerCase() === "l shape horizontal") return "L Shape Horizontal";
+  if (tower.partType) return tower.partType;
   if (!tower.categoryName || !tower.categoryCode) return "Legacy tower";
   const base = `${tower.categoryName} (${tower.categoryCode})`;
 
@@ -958,7 +978,34 @@ function towerSubtitle(tower: {
   return `${base} - NULL_CAB [W:${(tower as any).width}, D:${(tower as any).depth}, CW:${(tower as any).cornerBridgeWidth}, Cat:${tower.catalogId}, CabId:${(tower as any).cabinetId}, Dbg:${debugInfo}]`;
 }
 
-function addCustomPartHandler(type: "panel" | "filler") {
+const isPendingLShape = computed(() => {
+  return pendingCustomPart.value?.toLowerCase() === "l shape vertical";
+});
+
+function addCustomPartHandler(type: string) {
+  const isLShapeVertical = type.toLowerCase() === "l shape vertical";
+  if (isLShapeVertical) {
+    pendingCustomPart.value = type;
+    return;
+  }
+
+  const isLShapeHorizontal = type.toLowerCase() === "l shape horizontal";
+  if (isLShapeHorizontal) {
+    const tower = selectedTower.value;
+    const attachedId = (tower && (!tower.partType || tower.partType === "cabinet")) ? tower.id : undefined;
+    const wallId = tower?.wallId ?? selection.selectedWallId ?? room.closetWall?.id ?? null;
+    const newPart = closet.addCustomPart(
+      type,
+      attachedId,
+      selectedTowerWall.value?.length,
+    );
+    selection.selectTower(newPart.id);
+    if (!attachedId && wallId) {
+      closet.setTowerWall(newPart.id, wallId, 0.5);
+    }
+    return;
+  }
+
   const tower = selectedTower.value;
   if (tower && (!tower.partType || tower.partType === "cabinet")) {
     pendingCustomPart.value = type;
@@ -972,24 +1019,24 @@ function addCustomPartHandler(type: "panel" | "filler") {
   }
 }
 
-function addPanel() {
-  addCustomPartHandler("panel");
-}
-
-function addFiller() {
-  addCustomPartHandler("filler");
-}
-
 function confirmCustomPartSide(side: "left" | "right") {
   if (!pendingCustomPart.value) return;
-  const attachedId = selection.selectedTowerId ?? undefined;
+  const isLShapeVertical = pendingCustomPart.value.toLowerCase() === "l shape vertical";
+  const tower = selectedTower.value;
+  const attachedId = (tower && (!tower.partType || tower.partType === "cabinet")) ? tower.id : undefined;
+  const wallId = selection.selectedWallId ?? room.closetWall?.id ?? null;
+
   const newPart = closet.addCustomPart(
     pendingCustomPart.value,
     attachedId,
     selectedTowerWall.value?.length,
     side,
+    isLShapeVertical ? side : undefined,
   );
   selection.selectTower(newPart.id);
+  if (!attachedId && wallId) {
+    closet.setTowerWall(newPart.id, wallId, 0.5);
+  }
   pendingCustomPart.value = null;
 }
 
@@ -1047,20 +1094,54 @@ function cancelCustomPartSide() {
         <section class="panel-section">
           <h2 class="section-title">Custom Parts</h2>
           <div class="category-list">
-            <button class="category-card" @click="addPanel">
-              <div>
-                <strong>Panel</strong>
-                <span>W: 0.7500"</span>
-              </div>
-              <Plus :size="16" />
-            </button>
-            <button class="category-card" @click="addFiller">
-              <div>
-                <strong>Filler</strong>
-                <span>D: 0.7500"</span>
-              </div>
-              <Plus :size="16" />
-            </button>
+            <template v-if="filteredCustomParts.length > 0">
+              <button
+                v-for="part in filteredCustomParts"
+                :key="part.id"
+                class="category-card"
+                @click="addCustomPartHandler(part.title)"
+              >
+                <div>
+                  <strong>{{ part.title }}</strong>
+                  <span v-if="part.title.toLowerCase() === 'panel'">W: 0.7500"</span>
+                  <span v-else-if="part.title.toLowerCase() === 'filler'">D: 0.7500"</span>
+                  <span v-else-if="part.title.toLowerCase() === 'l shape vertical' || part.title.toLowerCase() === 'l shape horizontal'">3" x 3"</span>
+                  <span v-else-if="part.has_width">W: 0.7500"</span>
+                  <span v-else-if="part.has_depth">D: 0.7500"</span>
+                </div>
+                <Plus :size="16" />
+              </button>
+            </template>
+            <template v-else>
+              <button class="category-card" @click="addCustomPartHandler('panel')">
+                <div>
+                  <strong>Panel</strong>
+                  <span>W: 0.7500"</span>
+                </div>
+                <Plus :size="16" />
+              </button>
+              <button class="category-card" @click="addCustomPartHandler('filler')">
+                <div>
+                  <strong>Filler</strong>
+                  <span>D: 0.7500"</span>
+                </div>
+                <Plus :size="16" />
+              </button>
+              <button class="category-card" @click="addCustomPartHandler('l shape vertical')">
+                <div>
+                  <strong>L Shape Vertical</strong>
+                  <span>3" x 3"</span>
+                </div>
+                <Plus :size="16" />
+              </button>
+              <button class="category-card" @click="addCustomPartHandler('l shape horizontal')">
+                <div>
+                  <strong>L Shape Horizontal</strong>
+                  <span>3" x 3"</span>
+                </div>
+                <Plus :size="16" />
+              </button>
+            </template>
           </div>
         </section>
       </aside>
@@ -1160,8 +1241,7 @@ function cancelCustomPartSide() {
             </div>
           </div>
 
-          <template v-if="!isDoorSelected">
-            <div class="dimension-control">
+          <div class="dimension-control">
             <div class="dimension-head">
               <label>Width</label>
               <span>{{ truncTo4(selectedTower.width) }}"</span>
@@ -1332,79 +1412,6 @@ function cancelCustomPartSide() {
               Re-Hinge
             </button>
           </div>
-          </template>
-
-          <!-- Door properties (With Doors only) -->
-          <template v-if="selectedTower.doorMode === 'with_doors' && isDoorSelected">
-            <div class="dimension-control">
-              <div class="dimension-head">
-                <label>Door Width</label>
-                <span>{{ truncTo4(selectedTower.doorWidth ?? selectedTower.width) }}"</span>
-              </div>
-              <input
-                class="number-input"
-                type="number"
-                step="0.0625"
-                min="0"
-                :value="truncTo4(selectedTower.doorWidth ?? selectedTower.width)"
-                @change="onDimensionInput('doorWidth', $event)"
-                @blur="onDimensionInput('doorWidth', $event)"
-                @keyup.enter="onDimensionInput('doorWidth', $event)"
-              />
-            </div>
-            <div class="dimension-control">
-              <div class="dimension-head">
-                <label>Door Height</label>
-                <span>{{ truncTo4(selectedTower.doorHeight ?? selectedTower.height) }}"</span>
-              </div>
-              <input
-                class="number-input"
-                type="number"
-                step="0.0625"
-                min="0"
-                :value="truncTo4(selectedTower.doorHeight ?? selectedTower.height)"
-                @change="onDimensionInput('doorHeight', $event)"
-                @blur="onDimensionInput('doorHeight', $event)"
-                @keyup.enter="onDimensionInput('doorHeight', $event)"
-              />
-            </div>
-            <div class="dimension-control">
-              <div class="dimension-head">
-                <label>Door Gap</label>
-                <span>0.125"</span>
-              </div>
-              <input
-                class="number-input text-muted"
-                type="text"
-                disabled
-                value="0.125"
-              />
-            </div>
-            <div class="dimension-control">
-              <div class="dimension-head">
-                <label>Door Thickness</label>
-                <span>0.75"</span>
-              </div>
-              <input
-                class="number-input text-muted"
-                type="text"
-                disabled
-                value="0.75"
-              />
-            </div>
-            <div class="dimension-control">
-              <div class="dimension-head">
-                <label>Total Door Outset</label>
-                <span>0.875"</span>
-              </div>
-              <input
-                class="number-input text-muted"
-                type="text"
-                disabled
-                value="0.875"
-              />
-            </div>
-          </template>
 
           <!-- Box Count Toggle (Without Doors only) -->
           <div v-if="showBoxToggle" class="box-toggle-section">
@@ -1470,6 +1477,33 @@ function cancelCustomPartSide() {
                 @click="setCornerPosition('right')"
               >
                 Right Corner
+              </button>
+            </div>
+          </div>
+
+          <!-- Orientation Section for L-Shape custom parts -->
+          <div v-if="showOrientationSection" class="box-toggle-section">
+            <div class="dimension-head">
+              <label>Orientation</label>
+            </div>
+            <div class="segmented-control">
+              <button
+                class="segment-btn"
+                :class="{
+                  active: (selectedTower.orientation ?? 'left') === 'left',
+                }"
+                @click="setTowerOrientation('left')"
+              >
+                Left
+              </button>
+              <button
+                class="segment-btn"
+                :class="{
+                  active: selectedTower.orientation === 'right',
+                }"
+                @click="setTowerOrientation('right')"
+              >
+                Right
               </button>
             </div>
           </div>
@@ -1552,7 +1586,7 @@ function cancelCustomPartSide() {
 
     <div v-if="pendingCustomPart" class="modal-overlay">
       <div class="modal-dialog">
-        <h3 class="modal-title">Select position of the part</h3>
+        <h3 class="modal-title">{{ isPendingLShape ? 'Select orientation' : 'Select position of the part' }}</h3>
         <div class="modal-actions">
           <button class="modal-btn" @click="confirmCustomPartSide('left')">
             Left

@@ -856,15 +856,34 @@ function splitHorizontalSegments(
   return segments;
 }
 
+function isCabinet(tower: Tower): boolean {
+  return !tower.partType || tower.partType === "cabinet";
+}
+
+function isCabinetWithDoors(tower: Tower): boolean {
+  return tower.doorMode === "with_doors" && isCabinet(tower);
+}
+
+function formatElevationPartLabel(tower: Tower): string {
+  const match = tower.label.match(/\d+$/);
+  return match ? `#${match[0]}` : tower.label;
+}
+
+function towerBottomGap(tower: Tower): number {
+  if (!isCabinet(tower)) return 0;
+  return tower.doorMode === "with_doors" ? 4.5 : 2;
+}
+
 function getTowerAccessoriesLayout(tower: Tower) {
   const geom = towerElevationGeometryCm(tower);
   const T = closetStore.cabinet?.thickness ?? 2;
+  const gapH = towerBottomGap(tower);
   const innerLeft = geom.leftCm + T;
   const innerRight = geom.leftCm + geom.widthCm - T;
   const innerWidth = geom.widthCm - T * 2;
-  const innerBottom = T;
+  const innerBottom = T + gapH;
   const innerTop = geom.heightCm - T;
-  const innerHeight = geom.heightCm - T * 2;
+  const innerHeight = geom.heightCm - T * 2 - gapH;
 
   // Get opening rects on the current elevation wall
   const openings = elevationOpeningRectsCmForCurrentWall();
@@ -4176,15 +4195,16 @@ function dimLinePoints(wall: {
                   @pointerdown="startElevationTowerDrag(tower.id, $event)"
                   @click.stop="selectionStore.selectTower(tower.id)"
                   style="cursor: grab"
-                >
-                  <!-- Carcass background -->
-                  <rect
-                    :x="towerElevationRect(tower).x + (closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
-                    :y="towerElevationRect(tower).y + (closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
-                    :width="towerElevationRect(tower).width - (closetStore.cabinet?.thickness ?? 2) * 2 * elevationLayout.scale"
-                    :height="towerElevationRect(tower).height - (closetStore.cabinet?.thickness ?? 2) * 2 * elevationLayout.scale"
-                    class="elevation-tower-carcass-bg"
-                  />
+                  <!-- Cabinet interior & carcass -->
+                  <template v-if="isCabinet(tower)">
+                    <!-- Carcass background -->
+                    <rect
+                      :x="towerElevationRect(tower).x + (closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
+                      :y="towerElevationRect(tower).y + (closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
+                      :width="towerElevationRect(tower).width - (closetStore.cabinet?.thickness ?? 2) * 2 * elevationLayout.scale"
+                      :height="towerElevationRect(tower).height - towerBottomGap(tower) * elevationLayout.scale - (closetStore.cabinet?.thickness ?? 2) * 2 * elevationLayout.scale"
+                      class="elevation-tower-carcass-bg"
+                    />
 
                   <!-- Side panels extending to floor -->
                   <!-- Left side -->
@@ -4192,7 +4212,7 @@ function dimLinePoints(wall: {
                     :x="towerElevationRect(tower).x"
                     :y="towerElevationRect(tower).y"
                     :width="(closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
-                    :height="towerElevationRect(tower).height + towerElevationGeometryCm(tower).bottomCm * elevationLayout.scale"
+                    :height="towerElevationRect(tower).height - towerBottomGap(tower) * elevationLayout.scale"
                     class="elevation-carcass-panel"
                   />
                   <!-- Right side -->
@@ -4200,7 +4220,7 @@ function dimLinePoints(wall: {
                     :x="towerElevationRect(tower).x + towerElevationRect(tower).width - (closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
                     :y="towerElevationRect(tower).y"
                     :width="(closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
-                    :height="towerElevationRect(tower).height + towerElevationGeometryCm(tower).bottomCm * elevationLayout.scale"
+                    :height="towerElevationRect(tower).height - towerBottomGap(tower) * elevationLayout.scale"
                     class="elevation-carcass-panel"
                   />
                   <!-- Top panel -->
@@ -4214,11 +4234,31 @@ function dimLinePoints(wall: {
                   <!-- Bottom panel -->
                   <rect
                     :x="towerElevationRect(tower).x"
-                    :y="towerElevationRect(tower).y + towerElevationRect(tower).height - (closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
+                    :y="towerElevationRect(tower).y + towerElevationRect(tower).height - towerBottomGap(tower) * elevationLayout.scale - (closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
                     :width="towerElevationRect(tower).width"
                     :height="(closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
                     class="elevation-carcass-panel"
                   />
+                  
+                  <!-- Legs (Only for cabinets with doors, not without doors or custom parts) -->
+                  <template v-if="isCabinetWithDoors(tower)">
+                    <!-- Left leg -->
+                    <rect
+                      :x="towerElevationRect(tower).x + 2 * elevationLayout.scale"
+                      :y="towerElevationRect(tower).y + towerElevationRect(tower).height - 4.5 * elevationLayout.scale"
+                      :width="2 * elevationLayout.scale"
+                      :height="4.5 * elevationLayout.scale"
+                      class="elevation-carcass-panel"
+                    />
+                    <!-- Right leg -->
+                    <rect
+                      :x="towerElevationRect(tower).x + towerElevationRect(tower).width - 4 * elevationLayout.scale"
+                      :y="towerElevationRect(tower).y + towerElevationRect(tower).height - 4.5 * elevationLayout.scale"
+                      :width="2 * elevationLayout.scale"
+                      :height="4.5 * elevationLayout.scale"
+                      class="elevation-carcass-panel"
+                    />
+                  </template>
 
                   <!-- Shelves -->
                   <g
@@ -4366,15 +4406,15 @@ function dimLinePoints(wall: {
                   </g>
 
                   <!-- Door (if applicable) -->
-                  <g v-if="tower.doorMode === 'with_doors'" class="elevation-door">
+                  <g v-if="isCabinetWithDoors(tower)" class="elevation-door">
                     <rect
-                      :x="towerElevationRect(tower).x + ((tower.doorShift || 0) * elevationLayout.scale)"
-                      :y="towerElevationRect(tower).y + ((tower.height - (tower.doorHeight || tower.height)) * elevationLayout.scale)"
+                      :x="towerElevationRect(tower).x"
+                      :y="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale)"
                       :width="(tower.doorWidth || tower.width) * elevationLayout.scale"
-                      :height="(tower.doorHeight || tower.height) * elevationLayout.scale"
+                      :height="(tower.doorHeight || (tower.height - 4.5)) * elevationLayout.scale"
                       class="elevation-door-face"
-                      :class="{ selected: selectionStore.selectedTowerId === tower.id && selectionStore.selectedTowerSubItem === 'door' }"
-                      @click.stop="selectionStore.selectTower(tower.id); selectionStore.selectTowerSubItem('door')"
+                      :class="{ selected: selectionStore.selectedTowerId === tower.id }"
+                      @click.stop="selectionStore.selectTower(tower.id)"
                     />
                     
                     <!-- Horizontal Dashed Lines for Shelves Behind Door -->
@@ -4395,36 +4435,36 @@ function dimLinePoints(wall: {
                     <!-- Diagonal Dashed Lines (Hinge indicator) -->
                     <template v-if="tower.doorHinge === 'right'">
                       <line
-                        :x1="towerElevationRect(tower).x + ((tower.doorShift || 0) * elevationLayout.scale) + ((tower.doorWidth || tower.width) * elevationLayout.scale)"
-                        :y1="towerElevationRect(tower).y + ((tower.height - (tower.doorHeight || tower.height)) * elevationLayout.scale)"
-                        :x2="towerElevationRect(tower).x + ((tower.doorShift || 0) * elevationLayout.scale)"
-                        :y2="towerElevationRect(tower).y + ((tower.height - (tower.doorHeight || tower.height)) * elevationLayout.scale) + ((tower.doorHeight || tower.height) * elevationLayout.scale / 2)"
+                        :x1="towerElevationRect(tower).x + ((tower.doorWidth || tower.width) * elevationLayout.scale)"
+                        :y1="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale)"
+                        :x2="towerElevationRect(tower).x"
+                        :y2="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale) + ((tower.doorHeight || (tower.height - 4.5)) * elevationLayout.scale / 2)"
                         class="elevation-door-hinge-line"
                         pointer-events="none"
                       />
                       <line
-                        :x1="towerElevationRect(tower).x + ((tower.doorShift || 0) * elevationLayout.scale) + ((tower.doorWidth || tower.width) * elevationLayout.scale)"
-                        :y1="towerElevationRect(tower).y + ((tower.height - (tower.doorHeight || tower.height)) * elevationLayout.scale) + ((tower.doorHeight || tower.height) * elevationLayout.scale)"
-                        :x2="towerElevationRect(tower).x + ((tower.doorShift || 0) * elevationLayout.scale)"
-                        :y2="towerElevationRect(tower).y + ((tower.height - (tower.doorHeight || tower.height)) * elevationLayout.scale) + ((tower.doorHeight || tower.height) * elevationLayout.scale / 2)"
+                        :x1="towerElevationRect(tower).x + ((tower.doorWidth || tower.width) * elevationLayout.scale)"
+                        :y1="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale) + ((tower.doorHeight || (tower.height - 4.5)) * elevationLayout.scale)"
+                        :x2="towerElevationRect(tower).x"
+                        :y2="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale) + ((tower.doorHeight || (tower.height - 4.5)) * elevationLayout.scale / 2)"
                         class="elevation-door-hinge-line"
                         pointer-events="none"
                       />
                     </template>
                     <template v-else>
                       <line
-                        :x1="towerElevationRect(tower).x + ((tower.doorShift || 0) * elevationLayout.scale)"
-                        :y1="towerElevationRect(tower).y + ((tower.height - (tower.doorHeight || tower.height)) * elevationLayout.scale)"
-                        :x2="towerElevationRect(tower).x + ((tower.doorShift || 0) * elevationLayout.scale) + ((tower.doorWidth || tower.width) * elevationLayout.scale)"
-                        :y2="towerElevationRect(tower).y + ((tower.height - (tower.doorHeight || tower.height)) * elevationLayout.scale) + ((tower.doorHeight || tower.height) * elevationLayout.scale / 2)"
+                        :x1="towerElevationRect(tower).x"
+                        :y1="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale)"
+                        :x2="towerElevationRect(tower).x + ((tower.doorWidth || tower.width) * elevationLayout.scale)"
+                        :y2="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale) + ((tower.doorHeight || (tower.height - 4.5)) * elevationLayout.scale / 2)"
                         class="elevation-door-hinge-line"
                         pointer-events="none"
                       />
                       <line
-                        :x1="towerElevationRect(tower).x + ((tower.doorShift || 0) * elevationLayout.scale)"
-                        :y1="towerElevationRect(tower).y + ((tower.height - (tower.doorHeight || tower.height)) * elevationLayout.scale) + ((tower.doorHeight || tower.height) * elevationLayout.scale)"
-                        :x2="towerElevationRect(tower).x + ((tower.doorShift || 0) * elevationLayout.scale) + ((tower.doorWidth || tower.width) * elevationLayout.scale)"
-                        :y2="towerElevationRect(tower).y + ((tower.height - (tower.doorHeight || tower.height)) * elevationLayout.scale) + ((tower.doorHeight || tower.height) * elevationLayout.scale / 2)"
+                        :x1="towerElevationRect(tower).x"
+                        :y1="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale) + ((tower.doorHeight || (tower.height - 4.5)) * elevationLayout.scale)"
+                        :x2="towerElevationRect(tower).x + ((tower.doorWidth || tower.width) * elevationLayout.scale)"
+                        :y2="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale) + ((tower.doorHeight || (tower.height - 4.5)) * elevationLayout.scale / 2)"
                         class="elevation-door-hinge-line"
                         pointer-events="none"
                       />
@@ -4432,27 +4472,49 @@ function dimLinePoints(wall: {
                     
                     <!-- Labels -->
                     <text
-                      :x="towerElevationRect(tower).x + ((tower.doorShift || 0) * elevationLayout.scale) + ((tower.doorWidth || tower.width) * elevationLayout.scale / 2)"
-                      :y="towerElevationRect(tower).y + ((tower.height - (tower.doorHeight || tower.height)) * elevationLayout.scale) + 16"
+                      :x="towerElevationRect(tower).x + ((tower.doorWidth || tower.width) * elevationLayout.scale / 2)"
+                      :y="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale) + 16"
                       class="elevation-door-label-top"
                     >
                       {{ tower.label }}
                     </text>
                     <text
-                      :x="towerElevationRect(tower).x + ((tower.doorShift || 0) * elevationLayout.scale) + ((tower.doorWidth || tower.width) * elevationLayout.scale) - 8"
-                      :y="towerElevationRect(tower).y + ((tower.height - (tower.doorHeight || tower.height)) * elevationLayout.scale) + 16"
+                      :x="towerElevationRect(tower).x + ((tower.doorWidth || tower.width) * elevationLayout.scale) - 8"
+                      :y="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale) + 16"
                       class="elevation-door-label-top-right"
                     >
                       {{ formatLength(tower.width) }}
                     </text>
                     <text
-                      :x="towerElevationRect(tower).x + ((tower.doorShift || 0) * elevationLayout.scale) + ((tower.doorWidth || tower.width) * elevationLayout.scale / 2)"
-                      :y="towerElevationRect(tower).y + ((tower.height - (tower.doorHeight || tower.height)) * elevationLayout.scale) + ((tower.doorHeight || tower.height) * elevationLayout.scale * 0.75)"
+                      :x="towerElevationRect(tower).x + ((tower.doorWidth || tower.width) * elevationLayout.scale / 2)"
+                      :y="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale) + ((tower.doorHeight || (tower.height - 4.5)) * elevationLayout.scale * 0.75)"
                       class="elevation-door-label-middle"
                     >
                       {{ formatLength(tower.doorWidth || tower.width) }}
                     </text>
                   </g>
+                  </template>
+
+                  <!-- Custom Part Solid Block (L-Hor, L-Vert, Toe kick, Panel, Filler) -->
+                  <template v-else>
+                    <rect
+                      :x="towerElevationRect(tower).x"
+                      :y="towerElevationRect(tower).y"
+                      :width="towerElevationRect(tower).width"
+                      :height="towerElevationRect(tower).height"
+                      class="elevation-carcass-panel"
+                    />
+                    <text
+                      :x="towerElevationRect(tower).x + towerElevationRect(tower).width / 2"
+                      :y="towerElevationRect(tower).y + towerElevationRect(tower).height / 2"
+                      class="elevation-door-label-top"
+                      text-anchor="middle"
+                      dominant-baseline="central"
+                      pointer-events="none"
+                    >
+                      {{ formatElevationPartLabel(tower) }}
+                    </text>
+                  </template>
 
                   <!-- Selection Highlight -->
                   <rect

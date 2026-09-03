@@ -79,6 +79,8 @@ export type Tower = {
   isCorner?: boolean
   /** Corner orientation: 'left' | 'right'. */
   cornerOrientation?: 'left' | 'right'
+  /** Orientation for custom parts (e.g. L Shape Vertical): 'left' | 'right'. Defaults to 'left'. */
+  orientation?: 'left' | 'right'
   /** Corner cabinet section mode: 'left' | 'none' | 'right'. Defaults to 'none'. */
   cornerPosition?: CornerPosition
   /**
@@ -94,7 +96,7 @@ export type Tower = {
    */
   cornerBridgeDepth?: number
   /** The type of custom part, if any (defaults to cabinet implicitly). */
-  partType?: 'cabinet' | 'panel' | 'filler'
+  partType?: 'cabinet' | 'panel' | 'filler' | string
   /** For panel/filler: the ID of the cabinet they are attached to. */
   attachedToTowerId?: string
   /** 1-box or 2-box configuration (Without Doors only). Defaults to 2. */
@@ -129,8 +131,6 @@ export type Tower = {
   doorGap?: number
   /** Thickness of the door, used for "with_doors" mode. Default 0.75 inches */
   doorThickness?: number
-  /** Lateral shift of the door relative to the cabinet center, used for "with_doors" mode. Default 0. */
-  doorShift?: number
   /** Width of the door, used for "with_doors" mode. Defaults to tower width if not set. */
   doorWidth?: number
   /** Height of the door, used for "with_doors" mode. Defaults to tower height if not set. */

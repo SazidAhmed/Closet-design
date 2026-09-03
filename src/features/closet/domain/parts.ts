@@ -26,6 +26,7 @@ export type ClosetPartType =
   | 'rod'
   | 'drawer_box'
   | 'shoe_shelf'
+  | 'leg'
 
 export type ClosetPart = Readonly<{
   id: string
