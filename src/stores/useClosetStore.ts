@@ -228,7 +228,7 @@ export const useClosetStore = defineStore('closet', {
         defaultWidth = 30;
         initialDepth = 3;
         initialHeight = 3;
-        initialOutset = 23.875;
+        initialOutset = 20.875;
       } else if (isToeKick) {
         defaultWidth = 30;
         initialDepth = 0.75;
@@ -248,7 +248,7 @@ export const useClosetStore = defineStore('closet', {
         } else if (isLShapeVertical) {
           // Independent defaults: Width 3, Depth 3, Height 84, Outset 20.875
         } else if (isLShapeHorizontal) {
-          initialOutset = 23.875;
+          initialOutset = 20.875;
         } else if (isToeKick) {
           initialOutset = 21;
         } else if (isLShape) {
@@ -263,13 +263,8 @@ export const useClosetStore = defineStore('closet', {
           initialDepth = 0.75;
           initialHeight = attachedTower.height;
           initialOutset = (attachedTower.outset ?? 0) + attachedTower.depth - initialDepth;
-        } else if (isLShapeVertical) {
+        } else if (isLShapeVertical || isLShapeHorizontal) {
           // Independent: properties do not inherit from cabinet
-        } else if (isLShapeHorizontal) {
-          defaultWidth = attachedTower.width ?? 30;
-          initialDepth = 3;
-          initialHeight = 3;
-          initialOutset = 23.875;
         } else if (isToeKick) {
           defaultWidth = attachedTower.width ?? 30;
           initialDepth = 0.75;
@@ -306,7 +301,7 @@ export const useClosetStore = defineStore('closet', {
       }
 
       const initialElevation = isLShapeHorizontal
-        ? (attachedTower ? ((attachedTower.elevation ?? 0) + (attachedTower.height || 84)) : 84)
+        ? 84
         : isLShapeVertical
           ? 0
           : (attachedTower?.elevation ?? 0);
@@ -374,7 +369,7 @@ export const useClosetStore = defineStore('closet', {
       tower.positionAlongWall = newPosition
       
       if (actualDelta !== 0) {
-        this.towers.filter(t => t.attachedToTowerId === towerId).forEach(part => {
+        this.towers.filter(t => t.attachedToTowerId === towerId && t.partType?.toLowerCase() !== 'l shape vertical' && t.partType?.toLowerCase() !== 'l shape horizontal').forEach(part => {
           const partCurrent = part.positionAlongWall ?? 0.5
           const partHalfRatio = wallLengthCm > 0 ? (part.width / 2) / wallLengthCm : 0
           part.positionAlongWall = Math.max(partHalfRatio, Math.min(1 - partHalfRatio, partCurrent + actualDelta))
@@ -392,7 +387,7 @@ export const useClosetStore = defineStore('closet', {
         Object.assign(tower, partial)
 
         if (deltaPos !== 0) {
-          this.towers.filter(t => t.attachedToTowerId === towerId).forEach(part => {
+          this.towers.filter(t => t.attachedToTowerId === towerId && t.partType?.toLowerCase() !== 'l shape vertical' && t.partType?.toLowerCase() !== 'l shape horizontal').forEach(part => {
             if (part.positionAlongWall !== undefined) {
               part.positionAlongWall += deltaPos;
             }
@@ -422,7 +417,7 @@ export const useClosetStore = defineStore('closet', {
         this.towers
           .filter((t) => t.attachedToTowerId === towerId)
           .forEach((part) => {
-            if (part.partType?.toLowerCase() === 'toe kick' || part.partType?.toLowerCase() === 'l shape horizontal') {
+            if (part.partType?.toLowerCase() === 'toe kick') {
               part.width = tower.width;
             }
           });

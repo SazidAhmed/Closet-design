@@ -159,7 +159,9 @@ function getTowerCorners(
   // Apply outset: push tower further into the room by `outset`
   const outset =
     tower.outset ??
-    ((tower as any).partType?.toLowerCase() === "l shape vertical" ? 20.875 : 0);
+    ((tower as any).partType?.toLowerCase() === "l shape vertical"
+      ? 20.875
+      : 0);
   const cx_inner = cx + px * (tHalf + outset);
   const cy_inner = cy + py * (tHalf + outset);
 
