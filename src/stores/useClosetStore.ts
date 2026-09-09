@@ -17,7 +17,6 @@ import {
   clampTowerDepth,
   clampTowerHeight,
   clampTowerWidth,
-  clampBridgeDepth,
   createTowerFromCategory,
   isOneBoxAvailable,
   loadCatalogCategories,
@@ -247,8 +246,7 @@ export const useClosetStore = defineStore('closet', {
           initialDepth = 0.75;
           initialOutset = 14.25;
         } else if (isLShapeVertical) {
-          initialDepth = 24;
-          initialOutset = 0;
+          // Independent defaults: Width 3, Depth 3, Height 84, Outset 20.875
         } else if (isLShapeHorizontal) {
           initialOutset = 23.875;
         } else if (isToeKick) {
@@ -266,11 +264,7 @@ export const useClosetStore = defineStore('closet', {
           initialHeight = attachedTower.height;
           initialOutset = (attachedTower.outset ?? 0) + attachedTower.depth - initialDepth;
         } else if (isLShapeVertical) {
-          initialHeight = attachedTower.height;
-          initialOutset = attachedTower.outset ?? 0;
-          const hasDoors = attachedTower.doorMode === 'with_doors';
-          const doorExtra = hasDoors ? ((attachedTower.doorGap ?? 0.125) + (attachedTower.doorThickness ?? 0.75)) : 0;
-          initialDepth = attachedTower.depth + doorExtra;
+          // Independent: properties do not inherit from cabinet
         } else if (isLShapeHorizontal) {
           defaultWidth = attachedTower.width ?? 30;
           initialDepth = 3;
@@ -466,11 +460,6 @@ export const useClosetStore = defineStore('closet', {
             part.depth = tower.depth
           } else if (part.partType === 'filler') {
             part.outset = snapTo16th((tower.outset ?? 0) + tower.depth)
-          } else if (part.partType?.toLowerCase() === 'l shape vertical') {
-            const hasDoors = tower.doorMode === 'with_doors';
-            const doorExtra = hasDoors ? ((tower.doorGap ?? 0.125) + (tower.doorThickness ?? 0.75)) : 0;
-            part.depth = snapTo16th(tower.depth + doorExtra);
-            part.outset = tower.outset ?? 0;
           }
         })
     },
@@ -489,6 +478,8 @@ export const useClosetStore = defineStore('closet', {
             } else if (part.partType?.toLowerCase() === 'toe kick') {
               part.height = 4.5;
               part.elevation = snapTo16th(tower.elevation ?? 0);
+            } else if (part.partType?.toLowerCase() === 'l shape vertical') {
+              // Independent: do not inherit cabinet height
             } else {
               part.height = tower.height;
             }
@@ -500,12 +491,6 @@ export const useClosetStore = defineStore('closet', {
       const tower = this.towers.find((t) => t.id === towerId)
       if (tower) {
         tower.doorGap = snapTo16th(gap)
-        this.towers
-          .filter((t) => t.attachedToTowerId === towerId && t.partType?.toLowerCase() === 'l shape vertical')
-          .forEach((part) => {
-            const doorExtra = (tower.doorGap ?? 0.125) + (tower.doorThickness ?? 0.75);
-            part.depth = snapTo16th(tower.depth + doorExtra);
-          })
       }
     },
 
@@ -513,12 +498,6 @@ export const useClosetStore = defineStore('closet', {
       const tower = this.towers.find((t) => t.id === towerId)
       if (tower) {
         tower.doorThickness = snapTo16th(thickness)
-        this.towers
-          .filter((t) => t.attachedToTowerId === towerId && t.partType?.toLowerCase() === 'l shape vertical')
-          .forEach((part) => {
-            const doorExtra = (tower.doorGap ?? 0.125) + (tower.doorThickness ?? 0.75);
-            part.depth = snapTo16th(tower.depth + doorExtra);
-          })
       }
     },
 
@@ -624,12 +603,6 @@ export const useClosetStore = defineStore('closet', {
           .filter((t) => t.attachedToTowerId === towerId && t.partType?.toLowerCase() === 'toe kick')
           .forEach((part) => {
             part.outset = snapTo16th(tower.outset! + 21)
-          })
-        // Sync attached l shape vertical parts
-        this.towers
-          .filter((t) => t.attachedToTowerId === towerId && t.partType?.toLowerCase() === 'l shape vertical')
-          .forEach((part) => {
-            part.outset = snapTo16th(tower.outset ?? 0)
           })
       }
     },

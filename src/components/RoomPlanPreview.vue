@@ -156,8 +156,10 @@ function getTowerCorners(
 
   // Offset by half wall thickness so the back edge of the tower sits on the wall's inside face
   const tHalf = (wall.thickness ?? 6) / 2;
-  // Apply outset: push tower further into the room by `outset` cm
-  const outset = tower.outset ?? 0;
+  // Apply outset: push tower further into the room by `outset`
+  const outset =
+    tower.outset ??
+    ((tower as any).partType?.toLowerCase() === "l shape vertical" ? 20.875 : 0);
   const cx_inner = cx + px * (tHalf + outset);
   const cy_inner = cy + py * (tHalf + outset);
 
@@ -285,13 +287,15 @@ const placedTowerPolygons = computed(() => {
       const cx = wall.position[0] + Math.cos(wall.angle) * wall.length * pos;
       const cy = wall.position[1] + Math.sin(wall.angle) * wall.length * pos;
       const tHalf = (wall.thickness ?? 6) / 2;
-      const outset = tower.outset ?? 0;
+      const outset =
+        tower.outset ??
+        (tower.partType?.toLowerCase() === "l shape vertical" ? 20.875 : 0);
       const cx_inner = cx + px * (tHalf + outset);
       const cy_inner = cy + py * (tHalf + outset);
 
       const d = tower.depth;
 
-      let renderCorners = corners;
+      let renderCorners: Array<[number, number]> = corners;
       const isCorner =
         tower.isCorner ??
         (tower.cornerPosition === "left" ||
@@ -337,47 +341,15 @@ const placedTowerPolygons = computed(() => {
       let labelPosY = cy_inner + (py * d) / 2;
 
       if (tower.partType?.toLowerCase() === "l shape vertical") {
-        let attachedTower = tower.attachedToTowerId
-          ? closetStore.towers.find((t) => t.id === tower.attachedToTowerId)
-          : null;
-
-        if (!attachedTower && tower.wallId) {
-          const sameWallCabinets = closetStore.towers.filter(
-            (t) =>
-              t.wallId === tower.wallId &&
-              (!t.partType || t.partType === "cabinet"),
-          );
-          if (sameWallCabinets.length === 1) {
-            attachedTower = sameWallCabinets[0];
-          } else if (sameWallCabinets.length > 1) {
-            attachedTower = sameWallCabinets.reduce((closest, cab) => {
-              const dClosest = Math.abs(
-                (closest.positionAlongWall ?? 0.5) - pos,
-              );
-              const dCab = Math.abs((cab.positionAlongWall ?? 0.5) - pos);
-              return dCab < dClosest ? cab : closest;
-            }, sameWallCabinets[0]);
-          }
-        }
-
         const wx = Math.cos(wall.angle);
         const wy = Math.sin(wall.angle);
-        const thickness = Math.min(0.75, tower.width);
+        const thickness = Math.min(0.75, tower.width, tower.depth);
         const isRight = tower.orientation === "right";
 
-        const backDist = attachedTower
-          ? tHalf + (attachedTower.outset ?? 0)
-          : tHalf + (tower.outset ?? 0);
-
-        let frontDist = attachedTower
-          ? backDist + attachedTower.depth
-          : backDist + tower.depth;
-
-        if (attachedTower && attachedTower.doorMode === "with_doors") {
-          const visualDoorGap = Math.max(attachedTower.doorGap ?? 0.125, 1.5);
-          const doorThickness = attachedTower.doorThickness ?? 0.75;
-          frontDist += visualDoorGap + doorThickness;
-        }
+        // Outset calculation from bottom (Wall)
+        const outset = tower.outset ?? 20.875;
+        const backDist = tHalf + outset;
+        const frontDist = backDist + tower.depth;
 
         const halfW = tower.width / 2;
         const leftEdgeX = cx - wx * halfW;
@@ -455,8 +427,8 @@ const placedTowerPolygons = computed(() => {
 
       let doorPoints: string | null = null;
       if (tower.doorMode === "with_doors") {
-        const doorGap = 0.125;
-        const doorThickness = 0.75;
+        const doorGap = tower.doorGap ?? 0.125;
+        const doorThickness = tower.doorThickness ?? 0.75;
         const dWidth = tower.doorWidth ?? tower.width;
 
         const wx = Math.cos(wall.angle);
@@ -468,17 +440,16 @@ const placedTowerPolygons = computed(() => {
         const doorRightX = corners[2][0] - wx * hwDiff;
         const doorRightY = corners[2][1] - wy * hwDiff;
 
-        const visualDoorGap = Math.max(doorGap, 1.5);
         const doorCorners = [
-          [doorLeftX + px * visualDoorGap, doorLeftY + py * visualDoorGap], // Back left of door
-          [doorRightX + px * visualDoorGap, doorRightY + py * visualDoorGap], // Back right of door
+          [doorLeftX + px * doorGap, doorLeftY + py * doorGap], // Back left of door
+          [doorRightX + px * doorGap, doorRightY + py * doorGap], // Back right of door
           [
-            doorRightX + px * (visualDoorGap + doorThickness),
-            doorRightY + py * (visualDoorGap + doorThickness),
+            doorRightX + px * (doorGap + doorThickness),
+            doorRightY + py * (doorGap + doorThickness),
           ], // Front right
           [
-            doorLeftX + px * (visualDoorGap + doorThickness),
-            doorLeftY + py * (visualDoorGap + doorThickness),
+            doorLeftX + px * (doorGap + doorThickness),
+            doorLeftY + py * (doorGap + doorThickness),
           ], // Front left
         ];
         doorPoints = doorCorners.map((c) => c.join(",")).join(" ");
