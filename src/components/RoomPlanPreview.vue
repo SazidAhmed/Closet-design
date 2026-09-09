@@ -233,6 +233,17 @@ function willTowerOverlapOthers(
 
   for (const other of closetStore.towers) {
     if (other.id === towerId || !other.wallId) continue;
+    // Skip collision between attached parts and their parent cabinet, or between parts on the same cabinet
+    if (
+      other.id === targetTower.attachedToTowerId ||
+      targetTower.id === other.attachedToTowerId
+    )
+      continue;
+    if (
+      targetTower.attachedToTowerId &&
+      targetTower.attachedToTowerId === other.attachedToTowerId
+    )
+      continue;
     const otherWall = roomStore.walls.find((w) => w.id === other.wallId);
     if (!otherWall) continue;
 
@@ -264,7 +275,7 @@ const placedTowerPolygons = computed(() => {
       if (!wall) return null;
 
       const pos = tower.positionAlongWall ?? 0.5;
-      const corners = getTowerCorners(tower, wall, pos, tower.width);
+      let corners = getTowerCorners(tower, wall, pos, tower.width);
 
       // Perpendicular pointing inward (left of wall direction = into room)
       const px = -Math.sin(wall.angle);
@@ -322,51 +333,123 @@ const placedTowerPolygons = computed(() => {
         }
       }
 
+      let labelPosX = cx_inner + (px * d) / 2;
+      let labelPosY = cy_inner + (py * d) / 2;
+
       if (tower.partType?.toLowerCase() === "l shape vertical") {
-        const [BL, BR, FR, FL] = corners;
+        let attachedTower = tower.attachedToTowerId
+          ? closetStore.towers.find((t) => t.id === tower.attachedToTowerId)
+          : null;
+
+        if (!attachedTower && tower.wallId) {
+          const sameWallCabinets = closetStore.towers.filter(
+            (t) =>
+              t.wallId === tower.wallId &&
+              (!t.partType || t.partType === "cabinet"),
+          );
+          if (sameWallCabinets.length === 1) {
+            attachedTower = sameWallCabinets[0];
+          } else if (sameWallCabinets.length > 1) {
+            attachedTower = sameWallCabinets.reduce((closest, cab) => {
+              const dClosest = Math.abs(
+                (closest.positionAlongWall ?? 0.5) - pos,
+              );
+              const dCab = Math.abs((cab.positionAlongWall ?? 0.5) - pos);
+              return dCab < dClosest ? cab : closest;
+            }, sameWallCabinets[0]);
+          }
+        }
+
         const wx = Math.cos(wall.angle);
         const wy = Math.sin(wall.angle);
-        const thickness = Math.min(0.75, tower.width, tower.depth);
+        const thickness = Math.min(0.75, tower.width);
         const isRight = tower.orientation === "right";
 
+        const backDist = attachedTower
+          ? tHalf + (attachedTower.outset ?? 0)
+          : tHalf + (tower.outset ?? 0);
+
+        let frontDist = attachedTower
+          ? backDist + attachedTower.depth
+          : backDist + tower.depth;
+
+        if (attachedTower && attachedTower.doorMode === "with_doors") {
+          const visualDoorGap = Math.max(attachedTower.doorGap ?? 0.125, 1.5);
+          const doorThickness = attachedTower.doorThickness ?? 0.75;
+          frontDist += visualDoorGap + doorThickness;
+        }
+
+        const halfW = tower.width / 2;
+        const leftEdgeX = cx - wx * halfW;
+        const leftEdgeY = cy - wy * halfW;
+        const rightEdgeX = cx + wx * halfW;
+        const rightEdgeY = cy + wy * halfW;
+
+        const blPt: [number, number] = [
+          leftEdgeX + px * backDist,
+          leftEdgeY + py * backDist,
+        ];
+        const brPt: [number, number] = [
+          rightEdgeX + px * backDist,
+          rightEdgeY + py * backDist,
+        ];
+        const frPt: [number, number] = [
+          rightEdgeX + px * frontDist,
+          rightEdgeY + py * frontDist,
+        ];
+        const flPt: [number, number] = [
+          leftEdgeX + px * frontDist,
+          leftEdgeY + py * frontDist,
+        ];
+
+        corners = [blPt, brPt, frPt, flPt];
+        labelPosX = cx + px * ((backDist + frontDist) / 2);
+        labelPosY = cy + py * ((backDist + frontDist) / 2);
+
         if (!isRight) {
-          // Left orientation: vertical leg on the left, horizontal leg at the front
-          const innerTlX = BL[0] + wx * thickness;
-          const innerTlY = BL[1] + wy * thickness;
-
-          const innerX = innerTlX + px * (tower.depth - thickness);
-          const innerY = innerTlY + py * (tower.depth - thickness);
-
-          const innerTrX = BR[0] + px * (tower.depth - thickness);
-          const innerTrY = BR[1] + py * (tower.depth - thickness);
-
-          renderCorners = [
-            BL,
-            [innerTlX, innerTlY],
-            [innerX, innerY],
-            [innerTrX, innerTrY],
-            FR,
-            FL,
+          // Left orientation: attached on LEFT of cabinet.
+          // The cabinet is on the RIGHT.
+          // Leg along the cabinet runs along right edge (brPt to frPt) from wall to door.
+          // Front flange turns left at the door.
+          const p1: [number, number] = brPt;
+          const p2: [number, number] = [
+            brPt[0] - wx * thickness,
+            brPt[1] - wy * thickness,
           ];
+          const p3: [number, number] = [
+            p2[0] + px * (frontDist - backDist - thickness),
+            p2[1] + py * (frontDist - backDist - thickness),
+          ];
+          const p4: [number, number] = [
+            blPt[0] + px * (frontDist - backDist - thickness),
+            blPt[1] + py * (frontDist - backDist - thickness),
+          ];
+          const p5: [number, number] = flPt;
+          const p6: [number, number] = frPt;
+
+          renderCorners = [p1, p2, p3, p4, p5, p6];
         } else {
-          // Right orientation: vertical leg on the right, horizontal leg at the front
-          const innerBackX = BR[0] - wx * thickness;
-          const innerBackY = BR[1] - wy * thickness;
-
-          const innerX = innerBackX + px * (tower.depth - thickness);
-          const innerY = innerBackY + py * (tower.depth - thickness);
-
-          const innerLeftX = BL[0] + px * (tower.depth - thickness);
-          const innerLeftY = BL[1] + py * (tower.depth - thickness);
-
-          renderCorners = [
-            BR,
-            [innerBackX, innerBackY],
-            [innerX, innerY],
-            [innerLeftX, innerLeftY],
-            FL,
-            FR,
+          // Right orientation: attached on RIGHT of cabinet.
+          // The cabinet is on the LEFT.
+          // Leg along the cabinet runs along left edge (blPt to flPt) from wall to door.
+          // Front flange turns right at the door.
+          const p1: [number, number] = blPt;
+          const p2: [number, number] = [
+            blPt[0] + wx * thickness,
+            blPt[1] + wy * thickness,
           ];
+          const p3: [number, number] = [
+            p2[0] + px * (frontDist - backDist - thickness),
+            p2[1] + py * (frontDist - backDist - thickness),
+          ];
+          const p4: [number, number] = [
+            brPt[0] + px * (frontDist - backDist - thickness),
+            brPt[1] + py * (frontDist - backDist - thickness),
+          ];
+          const p5: [number, number] = frPt;
+          const p6: [number, number] = flPt;
+
+          renderCorners = [p1, p2, p3, p4, p5, p6];
         }
       }
 
@@ -407,8 +490,8 @@ const placedTowerPolygons = computed(() => {
         partType: tower.partType,
         points: renderCorners.map((c) => c.join(",")).join(" "),
         doorPoints,
-        labelX: cx_inner + (px * d) / 2,
-        labelY: cy_inner + (py * d) / 2,
+        labelX: labelPosX,
+        labelY: labelPosY,
         selected: selectionStore.selectedTowerId === tower.id,
         corners,
       };
@@ -1128,7 +1211,10 @@ function sanitizeAllTowerPositionsInPlan() {
 
           <!-- Depth Edge Handle (Front) -->
           <line
-            v-if="tower.partType !== 'filler'"
+            v-if="
+              tower.partType !== 'filler' &&
+              tower.partType?.toLowerCase() !== 'toe kick'
+            "
             :x1="tower.corners[3][0]"
             :y1="tower.corners[3][1]"
             :x2="tower.corners[2][0]"

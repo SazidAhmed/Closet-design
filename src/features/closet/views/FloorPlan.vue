@@ -39,6 +39,7 @@ import type {
   PlacedItemCategory,
   PlacedItem,
 } from "../domain/types/room";
+import { snapTo16th, parseFractionInput } from "../domain/snapUtils";
 
 const props = defineProps<{
   elevationOnly?: boolean;
@@ -167,7 +168,6 @@ onMounted(() => {
   }
 });
 
-import { snapTo16th, parseFractionInput } from "../domain/snapUtils";
 
 // ───── Change Room Height dialog ───────────────────────────────────────────
 function formatInches(valIn: number): string {
@@ -562,7 +562,16 @@ const elevationTowerDrag = reactive({
 
 const activeElevationTowers = computed(() => {
   if (!elevationWallId.value) return [];
-  return closetStore.towers.filter((t) => t.wallId === elevationWallId.value);
+  return closetStore.towers
+    .filter((t) => t.wallId === elevationWallId.value)
+    .slice()
+    .sort((a, b) => {
+      const aIsCabinet = !a.partType || a.partType === "cabinet";
+      const bIsCabinet = !b.partType || b.partType === "cabinet";
+      if (aIsCabinet && !bIsCabinet) return -1;
+      if (!aIsCabinet && bIsCabinet) return 1;
+      return (a.outset ?? 0) - (b.outset ?? 0);
+    });
 });
 
 /**
@@ -864,7 +873,19 @@ function isCabinetWithDoors(tower: Tower): boolean {
   return tower.doorMode === "with_doors" && isCabinet(tower);
 }
 
+function hasAttachedToeKick(tower: Tower): boolean {
+  return closetStore.towers.some(
+    (t) =>
+      t.attachedToTowerId === tower.id &&
+      t.partType?.toLowerCase() === "toe kick",
+  );
+}
+
 function formatElevationPartLabel(tower: Tower): string {
+  if (tower.partType?.toLowerCase() === "toe kick") {
+    const match = tower.label.match(/\d+$/);
+    return match ? `TK #${match[0]}` : "Toe Kick";
+  }
   const match = tower.label.match(/\d+$/);
   return match ? `#${match[0]}` : tower.label;
 }
@@ -2141,6 +2162,8 @@ function clampTowerCenter(towerId: string, targetCenterCm: number): number {
     (t) => t.wallId === wall.id && t.id !== towerId,
   );
   for (const other of otherTowers) {
+    if (other.id === tower.attachedToTowerId || tower.id === other.attachedToTowerId) continue;
+    if (tower.attachedToTowerId && tower.attachedToTowerId === other.attachedToTowerId) continue;
     const otherWidth = Number(other.width) || 0;
     const otherHeight = Number(other.height) || 0;
     const otherPos =
@@ -4241,7 +4264,7 @@ function dimLinePoints(wall: {
                   />
                   
                   <!-- Legs (Only for cabinets with doors, not without doors or custom parts) -->
-                  <template v-if="isCabinetWithDoors(tower)">
+                  <template v-if="isCabinetWithDoors(tower) && !hasAttachedToeKick(tower)">
                     <!-- Left leg -->
                     <rect
                       :x="towerElevationRect(tower).x + 2 * elevationLayout.scale"

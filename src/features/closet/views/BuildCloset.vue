@@ -699,7 +699,7 @@ const oneBoxAvailable = computed(() => {
 const showBoxToggle = computed(() => {
   const tower = selectedTower.value;
   if (!tower?.doorMode || !tower.categoryCode) return false;
-  if (tower.partType === "panel" || tower.partType === "filler") return false;
+  if (tower.partType && tower.partType !== "cabinet") return false;
   return tower.doorMode === "without_doors";
 });
 
@@ -713,7 +713,7 @@ function toggleBoxCount(boxCount: 1 | 2) {
 const showCornerSection = computed(() => {
   const tower = selectedTower.value;
   if (!tower) return false;
-  if (tower.partType === "panel" || tower.partType === "filler") return false;
+  if (tower.partType && tower.partType !== "cabinet") return false;
   return tower.doorMode === "without_doors";
 });
 
@@ -959,6 +959,7 @@ function towerSubtitle(tower: {
 }): string {
   if (tower.partType === "panel") return "Panel";
   if (tower.partType === "filler") return "Filler";
+  if (tower.partType?.toLowerCase() === "toe kick") return "Toe Kick";
   if (tower.partType?.toLowerCase() === "l shape vertical") return "L Shape Vertical";
   if (tower.partType?.toLowerCase() === "l shape horizontal") return "L Shape Horizontal";
   if (tower.partType) return tower.partType;
@@ -991,6 +992,23 @@ function addCustomPartHandler(type: string) {
 
   const isLShapeHorizontal = type.toLowerCase() === "l shape horizontal";
   if (isLShapeHorizontal) {
+    const tower = selectedTower.value;
+    const attachedId = (tower && (!tower.partType || tower.partType === "cabinet")) ? tower.id : undefined;
+    const wallId = tower?.wallId ?? selection.selectedWallId ?? room.closetWall?.id ?? null;
+    const newPart = closet.addCustomPart(
+      type,
+      attachedId,
+      selectedTowerWall.value?.length,
+    );
+    selection.selectTower(newPart.id);
+    if (!attachedId && wallId) {
+      closet.setTowerWall(newPart.id, wallId, 0.5);
+    }
+    return;
+  }
+
+  const isToeKick = type.toLowerCase() === "toe kick";
+  if (isToeKick) {
     const tower = selectedTower.value;
     const attachedId = (tower && (!tower.partType || tower.partType === "cabinet")) ? tower.id : undefined;
     const wallId = tower?.wallId ?? selection.selectedWallId ?? room.closetWall?.id ?? null;
@@ -1105,6 +1123,7 @@ function cancelCustomPartSide() {
                   <strong>{{ part.title }}</strong>
                   <span v-if="part.title.toLowerCase() === 'panel'">W: 0.7500"</span>
                   <span v-else-if="part.title.toLowerCase() === 'filler'">D: 0.7500"</span>
+                  <span v-else-if="part.title.toLowerCase() === 'toe kick'">D: 0.7500"</span>
                   <span v-else-if="part.title.toLowerCase() === 'l shape vertical' || part.title.toLowerCase() === 'l shape horizontal'">3" x 3"</span>
                   <span v-else-if="part.has_width">W: 0.7500"</span>
                   <span v-else-if="part.has_depth">D: 0.7500"</span>
@@ -1123,6 +1142,13 @@ function cancelCustomPartSide() {
               <button class="category-card" @click="addCustomPartHandler('filler')">
                 <div>
                   <strong>Filler</strong>
+                  <span>D: 0.7500"</span>
+                </div>
+                <Plus :size="16" />
+              </button>
+              <button class="category-card" @click="addCustomPartHandler('toe kick')">
+                <div>
+                  <strong>Toe Kick</strong>
                   <span>D: 0.7500"</span>
                 </div>
                 <Plus :size="16" />
@@ -1251,7 +1277,7 @@ function cancelCustomPartSide() {
               type="number"
               step="0.0625"
               :min="
-                selectedTower.partType === 'filler'
+                selectedTower.partType === 'filler' || selectedTower.partType?.toLowerCase() === 'toe kick'
                   ? 1.5
                   : selectedTower.isCorner ||
                       selectedTower.cornerPosition === 'left' ||
@@ -1280,15 +1306,17 @@ function cancelCustomPartSide() {
               type="number"
               step="0.0625"
               :min="
-                selectedTower.isCorner ||
-                selectedTower.cornerPosition === 'left' ||
-                selectedTower.cornerPosition === 'right'
-                  ? selectedTowerLimits
-                    ? Math.max(selectedTowerLimits.minH, 84)
-                    : 84
-                  : selectedTowerLimits
-                    ? selectedTowerLimits.minH
-                    : 0
+                selectedTower.partType?.toLowerCase() === 'toe kick'
+                  ? 1
+                  : selectedTower.isCorner ||
+                      selectedTower.cornerPosition === 'left' ||
+                      selectedTower.cornerPosition === 'right'
+                    ? selectedTowerLimits
+                      ? Math.max(selectedTowerLimits.minH, 84)
+                      : 84
+                    : selectedTowerLimits
+                      ? selectedTowerLimits.minH
+                      : 0
               "
               :max="
                 Math.min(selectedTowerLimits?.maxH ?? Infinity, maxHeightIn)
@@ -1313,7 +1341,7 @@ function cancelCustomPartSide() {
               :min="selectedTowerLimits ? selectedTowerLimits.minD : 0"
               :max="selectedTowerLimits ? selectedTowerLimits.maxD : undefined"
               :value="truncTo4(selectedTower.depth)"
-              :disabled="selectedTower.partType === 'filler'"
+              :disabled="selectedTower.partType === 'filler' || selectedTower.partType?.toLowerCase() === 'toe kick'"
               @change="onDimensionInput('depth', $event)"
               @blur="onDimensionInput('depth', $event)"
               @keyup.enter="onDimensionInput('depth', $event)"

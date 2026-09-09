@@ -219,6 +219,7 @@ export const useClosetStore = defineStore('closet', {
       const isLShapeVertical = partType.toLowerCase() === 'l shape vertical';
       const isLShapeHorizontal = partType.toLowerCase() === 'l shape horizontal';
       const isLShape = partType.toLowerCase().includes('l shape');
+      const isToeKick = partType.toLowerCase() === 'toe kick';
       if (isLShapeVertical) {
         defaultWidth = 3;
         initialDepth = 3;
@@ -229,6 +230,11 @@ export const useClosetStore = defineStore('closet', {
         initialDepth = 3;
         initialHeight = 3;
         initialOutset = 23.875;
+      } else if (isToeKick) {
+        defaultWidth = 30;
+        initialDepth = 0.75;
+        initialHeight = 4.5;
+        initialOutset = 21;
       } else if (isLShape) {
         defaultWidth = 5;
         initialDepth = 5;
@@ -241,9 +247,12 @@ export const useClosetStore = defineStore('closet', {
           initialDepth = 0.75;
           initialOutset = 14.25;
         } else if (isLShapeVertical) {
-          initialOutset = 20.875;
+          initialDepth = 24;
+          initialOutset = 0;
         } else if (isLShapeHorizontal) {
           initialOutset = 23.875;
+        } else if (isToeKick) {
+          initialOutset = 21;
         } else if (isLShape) {
           initialOutset = 10;
         }
@@ -257,13 +266,21 @@ export const useClosetStore = defineStore('closet', {
           initialHeight = attachedTower.height;
           initialOutset = (attachedTower.outset ?? 0) + attachedTower.depth - initialDepth;
         } else if (isLShapeVertical) {
-          initialHeight = 84;
-          initialOutset = 20.875;
+          initialHeight = attachedTower.height;
+          initialOutset = attachedTower.outset ?? 0;
+          const hasDoors = attachedTower.doorMode === 'with_doors';
+          const doorExtra = hasDoors ? ((attachedTower.doorGap ?? 0.125) + (attachedTower.doorThickness ?? 0.75)) : 0;
+          initialDepth = attachedTower.depth + doorExtra;
         } else if (isLShapeHorizontal) {
           defaultWidth = attachedTower.width ?? 30;
           initialDepth = 3;
           initialHeight = 3;
           initialOutset = 23.875;
+        } else if (isToeKick) {
+          defaultWidth = attachedTower.width ?? 30;
+          initialDepth = 0.75;
+          initialHeight = 4.5;
+          initialOutset = (attachedTower.outset ?? 0) + 21;
         } else if (isLShape) {
           initialHeight = attachedTower.height;
           initialOutset = (attachedTower.outset ?? 0) + attachedTower.depth - initialDepth;
@@ -272,7 +289,7 @@ export const useClosetStore = defineStore('closet', {
       
       let initialPosition = attachedTower?.positionAlongWall;
       if (attachedTower && initialPosition !== undefined && wallLength) {
-        if (isLShapeHorizontal) {
+        if (isLShapeHorizontal || isToeKick) {
           initialPosition = attachedTower.positionAlongWall;
         } else {
           const centerCm = initialPosition * wallLength;
@@ -307,7 +324,7 @@ export const useClosetStore = defineStore('closet', {
         depth: initialDepth,
         height: initialHeight,
         partType,
-        attachedToTowerId: (partType === 'panel' || partType === 'filler') ? undefined : attachedTower?.id,
+        attachedToTowerId: (partType.toLowerCase() === 'panel' || partType.toLowerCase() === 'filler') ? undefined : attachedTower?.id,
         accessories: [],
         wallId: attachedTower?.wallId, // Place on same wall by default
         positionAlongWall: initialPosition,
@@ -407,6 +424,15 @@ export const useClosetStore = defineStore('closet', {
           }
         }
 
+        // Sync attached parts with cabinet width
+        this.towers
+          .filter((t) => t.attachedToTowerId === towerId)
+          .forEach((part) => {
+            if (part.partType?.toLowerCase() === 'toe kick' || part.partType?.toLowerCase() === 'l shape horizontal') {
+              part.width = tower.width;
+            }
+          });
+
         // Refresh cabinet after width change (also auto-forces 2-box if needed)
         refreshTowerCabinet(tower)
       }
@@ -440,6 +466,11 @@ export const useClosetStore = defineStore('closet', {
             part.depth = tower.depth
           } else if (part.partType === 'filler') {
             part.outset = snapTo16th((tower.outset ?? 0) + tower.depth)
+          } else if (part.partType?.toLowerCase() === 'l shape vertical') {
+            const hasDoors = tower.doorMode === 'with_doors';
+            const doorExtra = hasDoors ? ((tower.doorGap ?? 0.125) + (tower.doorThickness ?? 0.75)) : 0;
+            part.depth = snapTo16th(tower.depth + doorExtra);
+            part.outset = tower.outset ?? 0;
           }
         })
     },
@@ -455,6 +486,9 @@ export const useClosetStore = defineStore('closet', {
           .forEach((part) => {
             if (part.partType?.toLowerCase() === 'l shape horizontal') {
               part.elevation = snapTo16th((tower.elevation ?? 0) + tower.height);
+            } else if (part.partType?.toLowerCase() === 'toe kick') {
+              part.height = 4.5;
+              part.elevation = snapTo16th(tower.elevation ?? 0);
             } else {
               part.height = tower.height;
             }
@@ -466,6 +500,12 @@ export const useClosetStore = defineStore('closet', {
       const tower = this.towers.find((t) => t.id === towerId)
       if (tower) {
         tower.doorGap = snapTo16th(gap)
+        this.towers
+          .filter((t) => t.attachedToTowerId === towerId && t.partType?.toLowerCase() === 'l shape vertical')
+          .forEach((part) => {
+            const doorExtra = (tower.doorGap ?? 0.125) + (tower.doorThickness ?? 0.75);
+            part.depth = snapTo16th(tower.depth + doorExtra);
+          })
       }
     },
 
@@ -473,6 +513,12 @@ export const useClosetStore = defineStore('closet', {
       const tower = this.towers.find((t) => t.id === towerId)
       if (tower) {
         tower.doorThickness = snapTo16th(thickness)
+        this.towers
+          .filter((t) => t.attachedToTowerId === towerId && t.partType?.toLowerCase() === 'l shape vertical')
+          .forEach((part) => {
+            const doorExtra = (tower.doorGap ?? 0.125) + (tower.doorThickness ?? 0.75);
+            part.depth = snapTo16th(tower.depth + doorExtra);
+          })
       }
     },
 
@@ -573,6 +619,18 @@ export const useClosetStore = defineStore('closet', {
           .forEach((part) => {
             part.outset = snapTo16th(tower.outset! + tower.depth)
           })
+        // Sync attached toe kick parts
+        this.towers
+          .filter((t) => t.attachedToTowerId === towerId && t.partType?.toLowerCase() === 'toe kick')
+          .forEach((part) => {
+            part.outset = snapTo16th(tower.outset! + 21)
+          })
+        // Sync attached l shape vertical parts
+        this.towers
+          .filter((t) => t.attachedToTowerId === towerId && t.partType?.toLowerCase() === 'l shape vertical')
+          .forEach((part) => {
+            part.outset = snapTo16th(tower.outset ?? 0)
+          })
       }
     },
 
@@ -587,6 +645,8 @@ export const useClosetStore = defineStore('closet', {
             .filter((t) => t.attachedToTowerId === towerId)
             .forEach((part) => {
               if (part.partType?.toLowerCase() === 'l shape horizontal') {
+                part.elevation = snapTo16th((part.elevation ?? 0) + delta)
+              } else if (part.partType?.toLowerCase() === 'toe kick') {
                 part.elevation = snapTo16th((part.elevation ?? 0) + delta)
               }
             })
