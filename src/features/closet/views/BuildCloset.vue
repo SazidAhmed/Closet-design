@@ -255,6 +255,11 @@ const clearances = computed(() => {
   for (const otherTower of closet.towers) {
     if (otherTower.id === tower.id) continue;
 
+    const targetIsToeKick = tower.partType?.toLowerCase() === 'toe kick';
+    const otherIsToeKick = otherTower.partType?.toLowerCase() === 'toe kick';
+    if (targetIsToeKick && !otherIsToeKick) continue;
+    if (otherIsToeKick && !targetIsToeKick) continue;
+
     const isAtStart = startConnectedWalls.some(
       (w) => w.id === otherTower.wallId,
     );
@@ -437,6 +442,11 @@ const clearances = computed(() => {
   for (const otherTower of closet.towers) {
     if (otherTower.id === tower.id) continue;
     if (otherTower.wallId !== wall.id) continue;
+
+    const targetIsToeKick = tower.partType?.toLowerCase() === 'toe kick';
+    const otherIsToeKick = otherTower.partType?.toLowerCase() === 'toe kick';
+    if (targetIsToeKick && !otherIsToeKick) continue;
+    if (otherIsToeKick && !targetIsToeKick) continue;
 
     const otherElevationIn =
       typeof otherTower.elevation === "number" && !isNaN(otherTower.elevation)

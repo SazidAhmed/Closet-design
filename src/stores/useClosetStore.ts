@@ -266,10 +266,10 @@ export const useClosetStore = defineStore('closet', {
         } else if (isLShapeVertical || isLShapeHorizontal) {
           // Independent: properties do not inherit from cabinet
         } else if (isToeKick) {
-          defaultWidth = attachedTower.width ?? 30;
+          defaultWidth = 30;
           initialDepth = 0.75;
           initialHeight = 4.5;
-          initialOutset = (attachedTower.outset ?? 0) + 21;
+          initialOutset = 21;
         } else if (isLShape) {
           initialHeight = attachedTower.height;
           initialOutset = (attachedTower.outset ?? 0) + attachedTower.depth - initialDepth;
@@ -313,7 +313,7 @@ export const useClosetStore = defineStore('closet', {
         depth: initialDepth,
         height: initialHeight,
         partType,
-        attachedToTowerId: (partType.toLowerCase() === 'panel' || partType.toLowerCase() === 'filler') ? undefined : attachedTower?.id,
+        attachedToTowerId: (partType.toLowerCase() === 'panel' || partType.toLowerCase() === 'filler' || isToeKick) ? undefined : attachedTower?.id,
         accessories: [],
         wallId: attachedTower?.wallId, // Place on same wall by default
         positionAlongWall: initialPosition,
@@ -369,7 +369,7 @@ export const useClosetStore = defineStore('closet', {
       tower.positionAlongWall = newPosition
       
       if (actualDelta !== 0) {
-        this.towers.filter(t => t.attachedToTowerId === towerId && t.partType?.toLowerCase() !== 'l shape vertical' && t.partType?.toLowerCase() !== 'l shape horizontal').forEach(part => {
+        this.towers.filter(t => t.attachedToTowerId === towerId && t.partType?.toLowerCase() !== 'l shape vertical' && t.partType?.toLowerCase() !== 'l shape horizontal' && t.partType?.toLowerCase() !== 'toe kick').forEach(part => {
           const partCurrent = part.positionAlongWall ?? 0.5
           const partHalfRatio = wallLengthCm > 0 ? (part.width / 2) / wallLengthCm : 0
           part.positionAlongWall = Math.max(partHalfRatio, Math.min(1 - partHalfRatio, partCurrent + actualDelta))
@@ -387,7 +387,7 @@ export const useClosetStore = defineStore('closet', {
         Object.assign(tower, partial)
 
         if (deltaPos !== 0) {
-          this.towers.filter(t => t.attachedToTowerId === towerId && t.partType?.toLowerCase() !== 'l shape vertical' && t.partType?.toLowerCase() !== 'l shape horizontal').forEach(part => {
+          this.towers.filter(t => t.attachedToTowerId === towerId && t.partType?.toLowerCase() !== 'l shape vertical' && t.partType?.toLowerCase() !== 'l shape horizontal' && t.partType?.toLowerCase() !== 'toe kick').forEach(part => {
             if (part.positionAlongWall !== undefined) {
               part.positionAlongWall += deltaPos;
             }
@@ -416,10 +416,8 @@ export const useClosetStore = defineStore('closet', {
         // Sync attached parts with cabinet width
         this.towers
           .filter((t) => t.attachedToTowerId === towerId)
-          .forEach((part) => {
-            if (part.partType?.toLowerCase() === 'toe kick') {
-              part.width = tower.width;
-            }
+          .forEach(() => {
+            // (other synced parts logic goes here if any)
           });
 
         // Refresh cabinet after width change (also auto-forces 2-box if needed)
@@ -470,9 +468,6 @@ export const useClosetStore = defineStore('closet', {
           .forEach((part) => {
             if (part.partType?.toLowerCase() === 'l shape horizontal') {
               part.elevation = snapTo16th((tower.elevation ?? 0) + tower.height);
-            } else if (part.partType?.toLowerCase() === 'toe kick') {
-              part.height = 4.5;
-              part.elevation = snapTo16th(tower.elevation ?? 0);
             } else if (part.partType?.toLowerCase() === 'l shape vertical') {
               // Independent: do not inherit cabinet height
             } else {
@@ -593,12 +588,6 @@ export const useClosetStore = defineStore('closet', {
           .forEach((part) => {
             part.outset = snapTo16th(tower.outset! + tower.depth)
           })
-        // Sync attached toe kick parts
-        this.towers
-          .filter((t) => t.attachedToTowerId === towerId && t.partType?.toLowerCase() === 'toe kick')
-          .forEach((part) => {
-            part.outset = snapTo16th(tower.outset! + 21)
-          })
       }
     },
 
@@ -613,8 +602,6 @@ export const useClosetStore = defineStore('closet', {
             .filter((t) => t.attachedToTowerId === towerId)
             .forEach((part) => {
               if (part.partType?.toLowerCase() === 'l shape horizontal') {
-                part.elevation = snapTo16th((part.elevation ?? 0) + delta)
-              } else if (part.partType?.toLowerCase() === 'toe kick') {
                 part.elevation = snapTo16th((part.elevation ?? 0) + delta)
               }
             })

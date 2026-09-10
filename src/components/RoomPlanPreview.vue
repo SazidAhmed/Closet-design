@@ -248,6 +248,12 @@ function willTowerOverlapOthers(
       targetTower.attachedToTowerId === other.attachedToTowerId
     )
       continue;
+      
+    const targetIsToeKick = targetTower.partType?.toLowerCase() === 'toe kick';
+    const otherIsToeKick = other.partType?.toLowerCase() === 'toe kick';
+    if (targetIsToeKick && !otherIsToeKick) continue;
+    if (otherIsToeKick && !targetIsToeKick) continue;
+
     const otherWall = roomStore.walls.find((w) => w.id === other.wallId);
     if (!otherWall) continue;
 

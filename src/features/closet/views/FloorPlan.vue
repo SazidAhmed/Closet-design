@@ -2164,6 +2164,13 @@ function clampTowerCenter(towerId: string, targetCenterCm: number): number {
   for (const other of otherTowers) {
     if (other.id === tower.attachedToTowerId || tower.id === other.attachedToTowerId) continue;
     if (tower.attachedToTowerId && tower.attachedToTowerId === other.attachedToTowerId) continue;
+
+    const towerIsToeKick = tower.partType?.toLowerCase() === 'toe kick';
+    const otherIsToeKick = other.partType?.toLowerCase() === 'toe kick';
+    
+    // Toe kicks only collide with other toe kicks (among towers)
+    if (towerIsToeKick && !otherIsToeKick) continue;
+    if (otherIsToeKick && !towerIsToeKick) continue;
     const otherWidth = Number(other.width) || 0;
     const otherHeight = Number(other.height) || 0;
     const otherPos =

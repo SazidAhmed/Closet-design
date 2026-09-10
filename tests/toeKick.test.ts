@@ -20,7 +20,7 @@ describe('Toe Kick custom part', () => {
     expect(part.attachedToTowerId).toBeUndefined()
   })
 
-  it('places Toe Kick at bottom of attached cabinet and inherits width & position', () => {
+  it('places Toe Kick at bottom of cabinet but remains independent in width & position', () => {
     const closet = useClosetStore()
     closet.towers.push({
       id: 'tower-1',
@@ -28,9 +28,9 @@ describe('Toe Kick custom part', () => {
       width: 36,
       depth: 24,
       height: 84,
-      elevation: 6,
-      outset: 2,
-      positionAlongWall: 0.4,
+      elevation: 0,
+      outset: 3,
+      positionAlongWall: 0.5,
       accessories: [],
       wallId: 'wall-1',
     })
@@ -38,16 +38,16 @@ describe('Toe Kick custom part', () => {
     const part = closet.addCustomPart('toe kick', 'tower-1', 100)
 
     expect(part.partType).toBe('toe kick')
-    expect(part.width).toBe(36)
+    expect(part.width).toBe(30) // Independent default
     expect(part.depth).toBe(0.75)
     expect(part.height).toBe(4.5)
-    expect(part.outset).toBe(23) // 2 + 21
-    expect(part.elevation).toBe(6) // bottom of cabinet
-    expect(part.positionAlongWall).toBe(0.4)
-    expect(part.attachedToTowerId).toBe('tower-1')
+    expect(part.outset).toBe(21) // Independent default
+    expect(part.elevation).toBe(0)
+    expect(part.positionAlongWall).toBe(0.5)
+    expect(part.attachedToTowerId).toBeUndefined() // Completely independent
   })
 
-  it('tracks cabinet width change by updating Toe Kick width', () => {
+  it('ignores cabinet width change', () => {
     const closet = useClosetStore()
     closet.towers.push({
       id: 'tower-1',
@@ -62,13 +62,13 @@ describe('Toe Kick custom part', () => {
     })
 
     const part = closet.addCustomPart('toe kick', 'tower-1', 100)
-    expect(part.width).toBe(36)
+    expect(part.width).toBe(30)
 
     // Cabinet width changes to 40
-    closet.setTowerWidth('tower-1', 40)
+    closet.setTowerWidth('tower-1', 40, 100)
 
     const updatedPart = closet.towers.find((t) => t.id === part.id)!
-    expect(updatedPart.width).toBe(40)
+    expect(updatedPart.width).toBe(30) // Remains unchanged
   })
 
   it('preserves Toe Kick height at 4.5 and elevation at bottom on cabinet height change', () => {
@@ -95,7 +95,7 @@ describe('Toe Kick custom part', () => {
     expect(updatedPart.elevation).toBe(0)
   })
 
-  it('tracks cabinet elevation change by updating Toe Kick elevation', () => {
+  it('ignores cabinet elevation change', () => {
     const closet = useClosetStore()
     closet.towers.push({
       id: 'tower-1',
@@ -112,14 +112,14 @@ describe('Toe Kick custom part', () => {
     const part = closet.addCustomPart('toe kick', 'tower-1', 100)
     expect(part.elevation).toBe(0)
 
-    // Cabinet elevated to 10
+    // Cabinet elevation changes by +10
     closet.setTowerElevation('tower-1', 10)
 
     const updatedPart = closet.towers.find((t) => t.id === part.id)!
-    expect(updatedPart.elevation).toBe(10)
+    expect(updatedPart.elevation).toBe(0) // Remains unchanged
   })
 
-  it('tracks cabinet outset change by updating Toe Kick outset', () => {
+  it('ignores cabinet outset change', () => {
     const closet = useClosetStore()
     closet.towers.push({
       id: 'tower-1',
@@ -137,10 +137,10 @@ describe('Toe Kick custom part', () => {
     const part = closet.addCustomPart('toe kick', 'tower-1', 100)
     expect(part.outset).toBe(21)
 
-    // Cabinet outset set to 3
+    // Cabinet outset changes to 3
     closet.setTowerOutset('tower-1', 3)
 
     const updatedPart = closet.towers.find((t) => t.id === part.id)!
-    expect(updatedPart.outset).toBe(24) // 3 + 21
+    expect(updatedPart.outset).toBe(21) // Remains unchanged
   })
 })
