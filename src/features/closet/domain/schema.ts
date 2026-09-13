@@ -48,7 +48,7 @@ export function createDefaultClosetState(): ClosetStateV2 {
       width: 244,
       height: 213,
       depth: 61,
-      thickness: 2,
+      thickness: 0.75,
     },
     towers: [
       createDefaultTower(61, 61, 213, 1),
@@ -79,7 +79,7 @@ export function exportForBackend(state: ClosetStateV2) {
       width: clamp(Number(state.cabinet.width) || 0, 30, 600),
       height: clamp(Number(state.cabinet.height) || 0, 100, 300),
       depth: clamp(Number(state.cabinet.depth) || 0, 30, 100),
-      thickness: clamp(Number(state.cabinet.thickness) || 0, 1, 6),
+      thickness: clamp(Number(state.cabinet.thickness) || 0, 0.5, 6),
     },
     towers: state.towers.map((t) => ({
       id: t.id,

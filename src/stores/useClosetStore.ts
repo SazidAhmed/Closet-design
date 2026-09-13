@@ -75,6 +75,11 @@ export const useClosetStore = defineStore('closet', {
      * Subsequent calls load from memory/localStorage and make 0 network requests.
      */
     async loadCatalogs(forceRefresh = false) {
+      // Force all cabinet thicknesses to 0.75 as per requested design constraint.
+      if (this.cabinet) {
+        this.cabinet.thickness = 0.75
+      }
+
       const CACHE_KEY = 'closet-catalog-categories-cache-v5'
 
       // 1. If already in Pinia memory state and not forcing refresh -> skip network request completely

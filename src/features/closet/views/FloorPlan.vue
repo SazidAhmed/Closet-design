@@ -897,7 +897,7 @@ function towerBottomGap(tower: Tower): number {
 
 function getTowerAccessoriesLayout(tower: Tower) {
   const geom = towerElevationGeometryCm(tower);
-  const T = closetStore.cabinet?.thickness ?? 2;
+  const T = closetStore.cabinet?.thickness ?? 0.75;
   const gapH = towerBottomGap(tower);
   const innerLeft = geom.leftCm + T;
   const innerRight = geom.leftCm + geom.widthCm - T;
@@ -4229,10 +4229,10 @@ function dimLinePoints(wall: {
                   <template v-if="isCabinet(tower)">
                     <!-- Carcass background -->
                     <rect
-                      :x="towerElevationRect(tower).x + (closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
-                      :y="towerElevationRect(tower).y + (closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
-                      :width="towerElevationRect(tower).width - (closetStore.cabinet?.thickness ?? 2) * 2 * elevationLayout.scale"
-                      :height="towerElevationRect(tower).height - towerBottomGap(tower) * elevationLayout.scale - (closetStore.cabinet?.thickness ?? 2) * 2 * elevationLayout.scale"
+                      :x="towerElevationRect(tower).x + (closetStore.cabinet?.thickness ?? 0.75) * elevationLayout.scale"
+                      :y="towerElevationRect(tower).y + (closetStore.cabinet?.thickness ?? 0.75) * elevationLayout.scale"
+                      :width="towerElevationRect(tower).width - (closetStore.cabinet?.thickness ?? 0.75) * 2 * elevationLayout.scale"
+                      :height="towerElevationRect(tower).height - towerBottomGap(tower) * elevationLayout.scale - (closetStore.cabinet?.thickness ?? 0.75) * 2 * elevationLayout.scale"
                       class="elevation-tower-carcass-bg"
                     />
 
@@ -4241,32 +4241,32 @@ function dimLinePoints(wall: {
                   <rect
                     :x="towerElevationRect(tower).x"
                     :y="towerElevationRect(tower).y"
-                    :width="(closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
-                    :height="towerElevationRect(tower).height - towerBottomGap(tower) * elevationLayout.scale"
+                    :width="(closetStore.cabinet?.thickness ?? 0.75) * elevationLayout.scale"
+                    :height="towerElevationRect(tower).height - (isCabinetWithDoors(tower) ? towerBottomGap(tower) * elevationLayout.scale : 0)"
                     class="elevation-carcass-panel"
                   />
                   <!-- Right side -->
                   <rect
-                    :x="towerElevationRect(tower).x + towerElevationRect(tower).width - (closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
+                    :x="towerElevationRect(tower).x + towerElevationRect(tower).width - (closetStore.cabinet?.thickness ?? 0.75) * elevationLayout.scale"
                     :y="towerElevationRect(tower).y"
-                    :width="(closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
-                    :height="towerElevationRect(tower).height - towerBottomGap(tower) * elevationLayout.scale"
+                    :width="(closetStore.cabinet?.thickness ?? 0.75) * elevationLayout.scale"
+                    :height="towerElevationRect(tower).height - (isCabinetWithDoors(tower) ? towerBottomGap(tower) * elevationLayout.scale : 0)"
                     class="elevation-carcass-panel"
                   />
                   <!-- Top panel -->
                   <rect
-                    :x="towerElevationRect(tower).x"
+                    :x="towerElevationRect(tower).x + (closetStore.cabinet?.thickness ?? 0.75) * elevationLayout.scale"
                     :y="towerElevationRect(tower).y"
-                    :width="towerElevationRect(tower).width"
-                    :height="(closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
+                    :width="towerElevationRect(tower).width - (closetStore.cabinet?.thickness ?? 0.75) * 2 * elevationLayout.scale"
+                    :height="(closetStore.cabinet?.thickness ?? 0.75) * elevationLayout.scale"
                     class="elevation-carcass-panel"
                   />
                   <!-- Bottom panel -->
                   <rect
-                    :x="towerElevationRect(tower).x"
-                    :y="towerElevationRect(tower).y + towerElevationRect(tower).height - towerBottomGap(tower) * elevationLayout.scale - (closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
-                    :width="towerElevationRect(tower).width"
-                    :height="(closetStore.cabinet?.thickness ?? 2) * elevationLayout.scale"
+                    :x="towerElevationRect(tower).x + (closetStore.cabinet?.thickness ?? 0.75) * elevationLayout.scale"
+                    :y="towerElevationRect(tower).y + towerElevationRect(tower).height - towerBottomGap(tower) * elevationLayout.scale - (closetStore.cabinet?.thickness ?? 0.75) * elevationLayout.scale"
+                    :width="towerElevationRect(tower).width - (closetStore.cabinet?.thickness ?? 0.75) * 2 * elevationLayout.scale"
+                    :height="(closetStore.cabinet?.thickness ?? 0.75) * elevationLayout.scale"
                     class="elevation-carcass-panel"
                   />
                   
@@ -4546,15 +4546,6 @@ function dimLinePoints(wall: {
                     </text>
                   </template>
 
-                  <!-- Selection Highlight -->
-                  <rect
-                    v-if="selectionStore.selectedTowerId === tower.id"
-                    :x="towerElevationRect(tower).x - 2"
-                    :y="towerElevationRect(tower).y - 2"
-                    :width="towerElevationRect(tower).width + 4"
-                    :height="towerElevationRect(tower).height + 4"
-                    class="elevation-tower-selection-highlight"
-                  />
                 </g>
 
                 <!-- Cross-section zones: areas blocked by towers on adjacent walls -->
@@ -6263,24 +6254,12 @@ function dimLinePoints(wall: {
 /* Selection Highlight */
 .elevation-tower-selection-highlight {
   fill: none;
-  stroke: #fbbf24;
-  stroke-width: 2.5px;
-  stroke-dasharray: 4, 3;
-  rx: 5px;
-  animation: elevation-highlight-pulse 2s infinite ease-in-out;
+  stroke: #3b82f6;
+  stroke-width: 2px;
+  rx: 2px;
 }
 
-@keyframes elevation-highlight-pulse {
-  0% {
-    stroke-opacity: 0.6;
-  }
-  50% {
-    stroke-opacity: 1;
-  }
-  100% {
-    stroke-opacity: 0.6;
-  }
-}
+
 
 /* Labels */
 .elevation-tower-label {
