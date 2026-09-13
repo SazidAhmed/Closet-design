@@ -6210,11 +6210,6 @@ function dimLinePoints(wall: {
 }
 .elevation-door-face:hover {
   fill: #fdf6e3;
-  stroke: #3b82f6;
-}
-.elevation-door-face.selected {
-  stroke: #3b82f6;
-  stroke-width: 2.5px;
 }
 
 .elevation-door-shelf-line {
