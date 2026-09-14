@@ -154,8 +154,15 @@ export function getCategoryLimits(
   categoryCode: ClosetCatalogCategoryCode,
 ): ClosetCatalogLimits {
   const category = getCategoryByCode(doorMode, categoryCode);
+  
+  let minW = Math.min(...category.catalogs.map((catalog) => catalog.minW));
+  // Enforce a minimum width of 12 for CDH and CLH
+  if (categoryCode === 'CDH' || categoryCode === 'CLH') {
+    minW = Math.max(minW, 12);
+  }
+
   return {
-    minW: Math.min(...category.catalogs.map((catalog) => catalog.minW)),
+    minW,
     maxW: Math.max(...category.catalogs.map((catalog) => catalog.maxW)),
     minD: Math.min(...category.catalogs.map((catalog) => catalog.minD)),
     maxD: Math.max(...category.catalogs.map((catalog) => catalog.maxD)),
@@ -323,7 +330,7 @@ export function selectCabinet(
       height <= c.maxH,
   );
 
-  if (inRange.length === 1) return inRange[0];
+  if (inRange.length === 1) return inRange[0] ?? null;
 
   if (inRange.length > 1) {
     // Step 3: multiple matches — prefer tightest width range
@@ -676,10 +683,16 @@ export function createTowerFromCategory(
     isCorner,
   );
 
+  let initialWidth = cabinet ? cabinet.width : limits.minW;
+  // Enforce the default initial width to be 12 for CDH and CLH
+  if (categoryCode === 'CDH' || categoryCode === 'CLH') {
+    initialWidth = 12;
+  }
+
   return {
     id: createTowerId(),
     label: `${category.categoryName} ${index}`,
-    width: cabinet ? cabinet.width : limits.minW,
+    width: initialWidth,
     depth: cabinet ? cabinet.depth : limits.minD,
     height: cabinet ? cabinet.height : limits.minH,
     doorMode,
