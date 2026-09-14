@@ -137,6 +137,12 @@ export type Tower = {
   doorHeight?: number
   /** Hinge side for the door. Defaults to 'left'. */
   doorHinge?: 'left' | 'right'
+  /** Number of doors for this cabinet. Defaults to 1 (or 2 based on width). */
+  doorCount?: 1 | 2
+  /** Does the cabinet support 1 door? (from database) */
+  oneDoor?: number
+  /** Does the cabinet support 2 doors? (from database) */
+  twoDoors?: number
 }
 
 // ---- Factory helpers ------------------------------------------------------

@@ -535,7 +535,7 @@ const selectedTowerWall = computed(() => {
 onMounted(async () => {
   appStore.setStep("design");
 
-  await closet.loadCatalogs();
+  await closet.loadCatalogs(true);
   await closet.loadCustomParts();
 
   if (
@@ -1071,6 +1071,38 @@ function confirmCustomPartSide(side: "left" | "right") {
 function cancelCustomPartSide() {
   pendingCustomPart.value = null;
 }
+
+const towerOneDoor = computed(() => {
+  const tower = selectedTower.value;
+  if (!tower?.catalogId || !tower.cabinetId) return 0;
+  
+  // Always query the live catalog first to prevent stale '0' values stored on the tower
+  for (const cat of closet.catalogCategories) {
+    for (const catalog of cat.catalogs) {
+      if (catalog.catalogId === tower.catalogId) {
+        const cab = catalog.cabinets.find(c => c.id === tower.cabinetId);
+        if (cab && cab.oneDoor !== undefined) return cab.oneDoor;
+      }
+    }
+  }
+  return tower.oneDoor ?? 0;
+});
+
+const towerTwoDoors = computed(() => {
+  const tower = selectedTower.value;
+  if (!tower?.catalogId || !tower.cabinetId) return 0;
+  
+  // Always query the live catalog first to prevent stale '0' values stored on the tower
+  for (const cat of closet.catalogCategories) {
+    for (const catalog of cat.catalogs) {
+      if (catalog.catalogId === tower.catalogId) {
+        const cab = catalog.cabinets.find(c => c.id === tower.cabinetId);
+        if (cab && cab.twoDoors !== undefined) return cab.twoDoors;
+      }
+    }
+  }
+  return tower.twoDoors ?? 0;
+});
 </script>
 
 <template>
@@ -1442,13 +1474,47 @@ function cancelCustomPartSide() {
           </div>
 
           <div v-if="selectedTower.doorMode === 'with_doors'" class="box-toggle-section" style="margin-top: 16px;">
-            <button 
-              class="segment-btn active"
-              style="width: 100%; justify-content: center;"
-              @click="closet.updateTower(selectedTower.id, { doorHinge: selectedTower.doorHinge === 'right' ? 'left' : 'right' })"
-            >
-              Re-Hinge
-            </button>
+            <div class="dimension-head">
+              <label>Door Hinge</label>
+            </div>
+            
+            <div style="font-size: 10px; color: #ff9999; margin-top: 4px; padding-bottom: 8px;">
+              Debug Doors: one={{ towerOneDoor }}, two={{ towerTwoDoors }}, cabId={{ selectedTower?.cabinetId }}, catId={{ selectedTower?.catalogId }}
+            </div>
+            
+            <div v-if="towerOneDoor === 1 && towerTwoDoors === 1" class="segmented-control box-toggle" style="margin-bottom: 8px;">
+              <button
+                class="segment-btn"
+                :class="{ active: selectedTower.doorCount !== 2 }"
+                @click="closet.updateTower(selectedTower.id, { doorCount: 1 })"
+              >
+                1 Door
+              </button>
+              <button
+                class="segment-btn"
+                :class="{ active: selectedTower.doorCount === 2 }"
+                @click="closet.updateTower(selectedTower.id, { doorCount: 2 })"
+              >
+                2 Doors
+              </button>
+            </div>
+
+            <div v-if="selectedTower.doorCount !== 2" class="segmented-control box-toggle">
+              <button
+                class="segment-btn"
+                :class="{ active: selectedTower.doorHinge !== 'right' }"
+                @click="closet.updateTower(selectedTower.id, { doorHinge: 'left' })"
+              >
+                Left-Hinge
+              </button>
+              <button
+                class="segment-btn"
+                :class="{ active: selectedTower.doorHinge === 'right' }"
+                @click="closet.updateTower(selectedTower.id, { doorHinge: 'right' })"
+              >
+                Right-Hinge
+              </button>
+            </div>
           </div>
 
           <!-- Box Count Toggle (Without Doors only) -->

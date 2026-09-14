@@ -3,7 +3,6 @@
 // ---------------------------------------------------------------------------
 
 import {
-  CLOSET_CATALOG_CATEGORIES,
   type ClosetCabinetEntry,
   type ClosetCatalogCategory,
   type ClosetDoorMode,

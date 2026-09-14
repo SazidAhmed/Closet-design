@@ -1,0 +1,44 @@
+# 24-inch Cabinet Door and Hinge Configuration
+
+Implement a new UI section to configure door counts (1 or 2 doors) and hinge directions (Left or Right) for cabinets with doors, specifically adding a toggle for 24-inch cabinets.
+
+## User Review Required
+
+- **Default Door Counts**: Currently, I plan to only show the "1 Door / 2 Doors" toggle for exactly 24-inch wide cabinets as requested. For other widths, I will default to 1 door for widths < 24", and 2 doors for widths > 24" (or keep the existing behavior). Let me know if you want the door count toggle to appear for other sizes as well.
+- **2D Floor Plan Rendering**: I will update the 2D `FloorPlan.vue` SVG rendering to draw double doors (two sets of diagonal lines) when `doorCount === 2`. Let me know if you want it drawn differently.
+
+## Open Questions
+
+- What should be the default `doorCount` for a 24-inch cabinet when it is first created? (I will assume 2 doors by default unless specified).
+- Do we need to update the `DesignCloset.vue` property panel as well? Currently, the "Re-Hinge" button and "Box configuration" section only exist in `BuildCloset.vue`.
+
+## Proposed Changes
+
+### Domain Models
+
+#### [MODIFY] `tower.ts`
+- Add `doorCount?: 1 | 2` property to the `Tower` type definition to store the user's selection.
+
+### Views
+
+#### [MODIFY] `BuildCloset.vue`
+- Locate the existing `with_doors` "Re-Hinge" button (around line 1444).
+- Replace it with a new `box-toggle-section` named "Door Hinge".
+- Inside this section, if `selectedTower.width === 24`, render a segmented control to select "1 Door" or "2 Doors".
+- Render a second segmented control for "Left-Hinge" and "Right-Hinge". This control will only be visible if the cabinet is a 1-door cabinet (i.e. `selectedTower.doorCount !== 2`).
+- Bind these controls to `closet.updateTower` to update `doorCount` and `doorHinge` respectively.
+
+#### [MODIFY] `FloorPlan.vue`
+- Update the SVG drawing logic for the door hinge (around line 4465).
+- If `tower.doorCount === 2`, draw two French doors: one hinged on the left (spanning half the width) and one hinged on the right (spanning the other half).
+- If `tower.doorCount === 1` (or undefined), retain the existing single-door drawing logic, utilizing the `doorHinge` ('left' or 'right') property.
+
+## Verification Plan
+
+### Manual Verification
+1. Open the app and navigate to the "Build" step (`/closet/build`).
+2. Add a cabinet and switch its door mode to "With Doors".
+3. Verify that for a 24-inch cabinet, the "Door Hinge" section shows options for "1 Door / 2 Doors".
+4. Select "2 Doors" and verify that the hinge direction buttons ("Left-Hinge" / "Right-Hinge") are hidden.
+5. Select "1 Door" and verify that the hinge direction buttons appear and update the state correctly.
+6. Check `FloorPlan.vue` to ensure the 2D elevation drawing correctly displays double doors or single doors based on the selection.

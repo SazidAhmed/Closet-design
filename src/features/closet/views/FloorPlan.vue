@@ -4463,7 +4463,43 @@ function dimLinePoints(wall: {
                     </g>
                     
                     <!-- Diagonal Dashed Lines (Hinge indicator) -->
-                    <template v-if="tower.doorHinge === 'right'">
+                    <template v-if="tower.doorCount === 2">
+                      <!-- Left Door -->
+                      <line
+                        :x1="towerElevationRect(tower).x"
+                        :y1="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale)"
+                        :x2="towerElevationRect(tower).x + (((tower.doorWidth || tower.width) / 2) * elevationLayout.scale)"
+                        :y2="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale) + ((tower.doorHeight || (tower.height - 4.5)) * elevationLayout.scale / 2)"
+                        class="elevation-door-hinge-line"
+                        pointer-events="none"
+                      />
+                      <line
+                        :x1="towerElevationRect(tower).x"
+                        :y1="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale) + ((tower.doorHeight || (tower.height - 4.5)) * elevationLayout.scale)"
+                        :x2="towerElevationRect(tower).x + (((tower.doorWidth || tower.width) / 2) * elevationLayout.scale)"
+                        :y2="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale) + ((tower.doorHeight || (tower.height - 4.5)) * elevationLayout.scale / 2)"
+                        class="elevation-door-hinge-line"
+                        pointer-events="none"
+                      />
+                      <!-- Right Door -->
+                      <line
+                        :x1="towerElevationRect(tower).x + ((tower.doorWidth || tower.width) * elevationLayout.scale)"
+                        :y1="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale)"
+                        :x2="towerElevationRect(tower).x + (((tower.doorWidth || tower.width) / 2) * elevationLayout.scale)"
+                        :y2="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale) + ((tower.doorHeight || (tower.height - 4.5)) * elevationLayout.scale / 2)"
+                        class="elevation-door-hinge-line"
+                        pointer-events="none"
+                      />
+                      <line
+                        :x1="towerElevationRect(tower).x + ((tower.doorWidth || tower.width) * elevationLayout.scale)"
+                        :y1="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale) + ((tower.doorHeight || (tower.height - 4.5)) * elevationLayout.scale)"
+                        :x2="towerElevationRect(tower).x + (((tower.doorWidth || tower.width) / 2) * elevationLayout.scale)"
+                        :y2="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale) + ((tower.doorHeight || (tower.height - 4.5)) * elevationLayout.scale / 2)"
+                        class="elevation-door-hinge-line"
+                        pointer-events="none"
+                      />
+                    </template>
+                    <template v-else-if="tower.doorHinge === 'right'">
                       <line
                         :x1="towerElevationRect(tower).x + ((tower.doorWidth || tower.width) * elevationLayout.scale)"
                         :y1="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale)"

@@ -80,7 +80,7 @@ export const useClosetStore = defineStore('closet', {
         this.cabinet.thickness = 0.75
       }
 
-      const CACHE_KEY = 'closet-catalog-categories-cache-v5'
+      const CACHE_KEY = 'closet-catalog-categories-cache-v6'
 
       // 1. If already in Pinia memory state and not forcing refresh -> skip network request completely
       if (this.catalogCategories.length > 0 && !forceRefresh) {

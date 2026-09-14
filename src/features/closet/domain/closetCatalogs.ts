@@ -1,4 +1,4 @@
-import type { Accessory, Tower } from "./types/tower";
+import type { Accessory, Tower, CornerPosition } from "./types/tower";
 import { createTowerId } from "./types/tower";
 
 // No longer converting to cm, internal units are now inches.
@@ -43,6 +43,8 @@ export type ClosetCabinetEntry = {
   numOfDrawers: number;
   numOfRollouts: number;
   basePrice: string;
+  oneDoor?: number;
+  twoDoors?: number;
 };
 
 export type ClosetCatalogEntry = {
@@ -461,6 +463,18 @@ export function refreshTowerCabinet(
   const baseCabinet = selectCabinet(baseCatalog, baseCatalog.cabinets, baseSearchWidth, tower.height, tower.boxCount ?? 2);
   tower.cabinetId = baseCabinet?.id;
   tower.cabinetCode = baseCabinet?.code;
+  tower.oneDoor = baseCabinet?.oneDoor;
+  tower.twoDoors = baseCabinet?.twoDoors;
+
+  // Auto-correct doorCount if it is unsupported by the new cabinet
+  if (tower.doorMode === 'with_doors') {
+    if (tower.doorCount === 1 && tower.oneDoor === 0 && tower.twoDoors === 1) {
+      tower.doorCount = 2;
+    } else if (tower.doorCount === 2 && tower.twoDoors === 0 && tower.oneDoor === 1) {
+      tower.doorCount = 1;
+    }
+  }
+
   // @ts-ignore
   tower.__debugInfo = baseCatalog.__debugInfo ?? 'Base resolved';
 
@@ -677,6 +691,8 @@ export function createTowerFromCategory(
     boxCount,
     cabinetId: cabinet?.id,
     cabinetCode: cabinet?.code,
+    oneDoor: cabinet?.oneDoor,
+    twoDoors: cabinet?.twoDoors,
     accessories: accessoriesForCategory(categoryCode),
   };
 }
@@ -731,6 +747,8 @@ export async function loadCatalogCategories(
               numOfDrawers: Number(raw.num_of_drawers ?? raw.numOfDrawers ?? 0),
               numOfRollouts: Number(raw.num_of_rollouts ?? raw.numOfRollouts ?? 0),
               basePrice: String(raw.base_price ?? raw.basePrice ?? '0'),
+              oneDoor: Number(raw.one_door ?? raw.oneDoor ?? 0),
+              twoDoors: Number(raw.two_doors ?? raw.twoDoors ?? 0),
             }));
             
             const catMinW = Number((catalog as any).min_w ?? (catalog as any).minW ?? 0);
