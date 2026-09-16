@@ -242,6 +242,8 @@ export const useClosetStore = defineStore('closet', {
       } else if (isLShape) {
         defaultWidth = 5;
         initialDepth = 5;
+      } else if (partType.toLowerCase() === 'filler') {
+        defaultWidth = 3;
       }
 
       if (!attachedTower) {

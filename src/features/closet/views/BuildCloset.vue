@@ -1185,7 +1185,7 @@ const towerTwoDoors = computed(() => {
                 <div>
                   <strong>{{ part.title }}</strong>
                   <span v-if="part.title.toLowerCase() === 'panel'">W: 0.7500"</span>
-                  <span v-else-if="part.title.toLowerCase() === 'filler'">D: 0.7500"</span>
+                  <span v-else-if="part.title.toLowerCase() === 'filler'">W: 3" D: 0.7500"</span>
                   <span v-else-if="part.title.toLowerCase() === 'toe kick'">D: 0.7500"</span>
                   <span v-else-if="part.title.toLowerCase() === 'l shape vertical' || part.title.toLowerCase() === 'l shape horizontal'">3" x 3"</span>
                   <span v-else-if="part.has_width">W: 0.7500"</span>
@@ -1205,7 +1205,7 @@ const towerTwoDoors = computed(() => {
               <button class="category-card" @click="addCustomPartHandler('filler')">
                 <div>
                   <strong>Filler</strong>
-                  <span>D: 0.7500"</span>
+                  <span>W: 3" D: 0.7500"</span>
                 </div>
                 <Plus :size="16" />
               </button>
