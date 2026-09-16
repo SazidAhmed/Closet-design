@@ -142,10 +142,25 @@ function getTowerCorners(
   positionAlongWall: number,
   width: number,
 ): [[number, number], [number, number], [number, number], [number, number]] {
-  const halfW = width / 2;
-  const pos = positionAlongWall;
-  const cx = wall.position[0] + Math.cos(wall.angle) * wall.length * pos;
-  const cy = wall.position[1] + Math.sin(wall.angle) * wall.length * pos;
+  const isToeKick = (tower as any).partType?.toLowerCase() === 'toe kick';
+  let minPos = positionAlongWall - (width / 2) / wall.length;
+  let maxPos = positionAlongWall + (width / 2) / wall.length;
+
+  if (isToeKick) {
+    const bounds = wallUsableBoundsPos(wall as any, 0, false);
+    minPos = Math.max(minPos, bounds.min);
+    maxPos = Math.min(maxPos, bounds.max);
+    if (minPos > maxPos) {
+      minPos = positionAlongWall;
+      maxPos = positionAlongWall;
+    }
+  }
+
+  const renderPos = (minPos + maxPos) / 2;
+  const renderHalfW = ((maxPos - minPos) * wall.length) / 2;
+
+  const cx = wall.position[0] + Math.cos(wall.angle) * wall.length * renderPos;
+  const cy = wall.position[1] + Math.sin(wall.angle) * wall.length * renderPos;
 
   // Wall direction unit vector
   const wx = Math.cos(wall.angle);
@@ -167,10 +182,10 @@ function getTowerCorners(
 
   const d = tower.depth;
   return [
-    [cx_inner - wx * halfW, cy_inner - wy * halfW],
-    [cx_inner + wx * halfW, cy_inner + wy * halfW],
-    [cx_inner + wx * halfW + px * d, cy_inner + wy * halfW + py * d],
-    [cx_inner - wx * halfW + px * d, cy_inner - wy * halfW + py * d],
+    [cx_inner - wx * renderHalfW, cy_inner - wy * renderHalfW],
+    [cx_inner + wx * renderHalfW, cy_inner + wy * renderHalfW],
+    [cx_inner + wx * renderHalfW + px * d, cy_inner + wy * renderHalfW + py * d],
+    [cx_inner - wx * renderHalfW + px * d, cy_inner - wy * renderHalfW + py * d],
   ];
 }
 
@@ -568,6 +583,7 @@ function wallUsableBoundsPos(
     thickness: number;
   },
   halfW: number,
+  isToeKick: boolean = false,
 ): { min: number; max: number } {
   if (wall.length <= 0) return { min: 0, max: 1 };
 
@@ -600,10 +616,10 @@ function wallUsableBoundsPos(
     if (startConnected && endConnected) break;
   }
 
-  const startMargin = startConnected
+  const startMargin = isToeKick ? 0 : (startConnected
     ? Math.min(wallThickness / 2, wall.length)
-    : 0;
-  const endMargin = endConnected ? Math.min(wallThickness / 2, wall.length) : 0;
+    : 0);
+  const endMargin = isToeKick ? 0 : (endConnected ? Math.min(wallThickness / 2, wall.length) : 0);
   const usableLeft = startMargin;
   const usableRight = Math.max(startMargin, wall.length - endMargin);
 
@@ -779,7 +795,8 @@ function onSvgPointerMove(e: PointerEvent) {
     const delta = projected / dragState.wallLength;
 
     const halfW = tower.width / 2;
-    const { min, max } = wallUsableBoundsPos(wall, halfW);
+    const isToeKick = tower.partType?.toLowerCase() === 'toe kick';
+    const { min, max } = wallUsableBoundsPos(wall, halfW, isToeKick);
     const rawPos = Math.max(min, Math.min(max, dragState.startPos + delta));
     const prevPos = tower.positionAlongWall ?? 0.5;
     let clampedPos = clampTowerAwayFromObstructions(

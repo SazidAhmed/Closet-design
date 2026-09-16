@@ -2114,10 +2114,14 @@ function clampTowerCenter(towerId: string, targetCenterCm: number): number {
       : 0;
   const towerTopCm = towerElevationCm + heightCm;
   const bounds = elevationHorizontalBounds.value;
+  const isToeKick = tower.partType?.toLowerCase() === 'toe kick';
 
   // Initial allowed range for the tower center
-  const minCenter = bounds.minLeftCm + widthCm / 2;
-  const maxCenter = Math.max(minCenter, bounds.maxRightCm - widthCm / 2);
+  const minLeft = isToeKick ? 0 : bounds.minLeftCm;
+  const maxRight = isToeKick ? wall.length : bounds.maxRightCm;
+
+  const minCenter = minLeft + widthCm / 2;
+  const maxCenter = Math.max(minCenter, maxRight - widthCm / 2);
   let clampedCenter = Math.max(minCenter, Math.min(maxCenter, targetCenterCm));
 
   // Get all vertically overlapping openings
@@ -2143,17 +2147,19 @@ function clampTowerCenter(towerId: string, targetCenterCm: number): number {
   // An 'end' zone blocks [wallLength - depthCm, wallLength]; the tower center
   // must stay below wallLength - depthCm - halfW.
   const halfW = widthCm / 2;
-  for (const zone of adjacentTowerBlockedZones.value) {
-    if (zone.side === "start") {
-      forbiddenIntervals.push({
-        min: -Infinity,
-        max: zone.depthCm + halfW,
-      });
-    } else {
-      forbiddenIntervals.push({
-        min: wall.length - zone.depthCm - halfW,
-        max: Infinity,
-      });
+  if (!isToeKick) {
+    for (const zone of adjacentTowerBlockedZones.value) {
+      if (zone.side === "start") {
+        forbiddenIntervals.push({
+          min: -Infinity,
+          max: zone.depthCm + halfW,
+        });
+      } else {
+        forbiddenIntervals.push({
+          min: wall.length - zone.depthCm - halfW,
+          max: Infinity,
+        });
+      }
     }
   }
 

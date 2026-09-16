@@ -203,8 +203,11 @@ const clearances = computed(() => {
   }
 
   const halfThickness = wallThickness / 2;
-  const startMargin = startConnected ? Math.min(halfThickness, wall.length) : 0;
-  const endMargin = endConnected ? Math.min(halfThickness, wall.length) : 0;
+  const isToeKick = tower.partType?.toLowerCase() === 'toe kick';
+  const startMargin = isToeKick ? 0 : (startConnected
+    ? Math.min(wallThickness / 2, wall.length)
+    : 0);
+  const endMargin = isToeKick ? 0 : (endConnected ? Math.min(wallThickness / 2, wall.length) : 0);
 
   // Usable wall boundaries (matches elevationHorizontalBoundsForWall with wall.thickness/2)
   let effectiveLeft = startMargin;
@@ -481,7 +484,7 @@ const clearances = computed(() => {
   // The physical usable range considers corner margins and corner blockages.
   // We satisfy the user invariant: LeftClearance + TowerWidth + RightClearance = WallDisplayWidth
   const totalTowerWidthIn = closet.towers
-    .filter((t) => t.wallId === wall.id)
+    .filter((t) => t.wallId === wall.id && t.partType?.toLowerCase() !== 'toe kick' && !t.partType?.toLowerCase().includes('l shape'))
     .reduce((sum, t) => sum + t.width, 0);
 
   const isLeftWallOnly =
@@ -506,7 +509,9 @@ const clearances = computed(() => {
       (t) =>
         t.wallId === wall.id &&
         t.partType !== "panel" &&
-        t.partType !== "filler",
+        t.partType !== "filler" &&
+        t.partType?.toLowerCase() !== "toe kick" &&
+        !t.partType?.toLowerCase().includes('l shape'),
     )
     .reduce((sum, t) => sum + t.width, 0);
   const totalNominalGap = Math.max(0, nominalUsable - nominalTowerWidthIn);
@@ -523,6 +528,15 @@ const clearances = computed(() => {
     effectiveRight,
     gapScale,
   };
+});
+
+const maxAllowedWidth = computed(() => {
+  let maxW = selectedTowerLimits.value ? selectedTowerLimits.value.maxW : Infinity;
+  const c = clearances.value;
+  if (c) {
+    maxW = Math.min(maxW, c.effectiveRight - c.effectiveLeft);
+  }
+  return maxW === Infinity ? undefined : maxW;
 });
 
 /** Wall the selected tower is placed on */
@@ -600,11 +614,12 @@ function sanitizeAllTowerPositions() {
       if (startConnected && endConnected) break;
     }
 
+    const isToeKick = tower.partType?.toLowerCase() === 'toe kick';
     const halfThickness = wallThickness / 2;
-    const startMargin = startConnected
+    const startMargin = isToeKick ? 0 : (startConnected
       ? Math.min(halfThickness, wall.length)
-      : 0;
-    const endMargin = endConnected ? Math.min(halfThickness, wall.length) : 0;
+      : 0);
+    const endMargin = isToeKick ? 0 : (endConnected ? Math.min(halfThickness, wall.length) : 0);
     const usableLeft = startMargin;
     const usableRight = Math.max(startMargin, wall.length - endMargin);
 
@@ -816,7 +831,13 @@ function onDimensionInput(
 
   if (dimension === "width") {
     const wall = selectedTowerWall.value;
-    closet.setTowerWidth(tower.id, value, wall?.length);
+    let finalValue = value;
+    const c = clearances.value;
+    if (c) {
+      const maxAvailableWidthIn = c.effectiveRight - c.effectiveLeft;
+      finalValue = Math.min(finalValue, snapTo16th(maxAvailableWidthIn));
+    }
+    closet.setTowerWidth(tower.id, finalValue, wall?.length);
   } else if (dimension === "depth") {
     closet.setTowerDepth(tower.id, value);
   } else if (dimension === "outset") {
@@ -1329,7 +1350,7 @@ const towerTwoDoors = computed(() => {
                       ? selectedTowerLimits.minW
                       : 0
               "
-              :max="selectedTowerLimits ? selectedTowerLimits.maxW : undefined"
+              :max="maxAllowedWidth"
               :value="truncTo4(selectedTower.width)"
               :disabled="selectedTower.partType === 'panel'"
               @change="onDimensionInput('width', $event)"
