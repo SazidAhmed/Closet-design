@@ -203,7 +203,7 @@ const clearances = computed(() => {
   }
 
   const halfThickness = wallThickness / 2;
-  const isToeKick = tower.partType?.toLowerCase() === 'toe kick';
+  const isToeKick = tower.partType?.toLowerCase() === 'toe kick' || tower.partType?.toLowerCase() === 'l shape horizontal';
   const startMargin = isToeKick ? 0 : (startConnected
     ? Math.min(wallThickness / 2, wall.length)
     : 0);
@@ -614,7 +614,7 @@ function sanitizeAllTowerPositions() {
       if (startConnected && endConnected) break;
     }
 
-    const isToeKick = tower.partType?.toLowerCase() === 'toe kick';
+    const isToeKick = tower.partType?.toLowerCase() === 'toe kick' || tower.partType?.toLowerCase() === 'l shape horizontal';
     const halfThickness = wallThickness / 2;
     const startMargin = isToeKick ? 0 : (startConnected
       ? Math.min(halfThickness, wall.length)

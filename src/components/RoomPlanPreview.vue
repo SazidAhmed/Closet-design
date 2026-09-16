@@ -142,7 +142,7 @@ function getTowerCorners(
   positionAlongWall: number,
   width: number,
 ): [[number, number], [number, number], [number, number], [number, number]] {
-  const isToeKick = (tower as any).partType?.toLowerCase() === 'toe kick';
+  const isToeKick = (tower as any).partType?.toLowerCase() === 'toe kick' || (tower as any).partType?.toLowerCase() === 'l shape horizontal';
   let minPos = positionAlongWall - (width / 2) / wall.length;
   let maxPos = positionAlongWall + (width / 2) / wall.length;
 
@@ -795,7 +795,7 @@ function onSvgPointerMove(e: PointerEvent) {
     const delta = projected / dragState.wallLength;
 
     const halfW = tower.width / 2;
-    const isToeKick = tower.partType?.toLowerCase() === 'toe kick';
+    const isToeKick = tower.partType?.toLowerCase() === 'toe kick' || tower.partType?.toLowerCase() === 'l shape horizontal';
     const { min, max } = wallUsableBoundsPos(wall, halfW, isToeKick);
     const rawPos = Math.max(min, Math.min(max, dragState.startPos + delta));
     const prevPos = tower.positionAlongWall ?? 0.5;

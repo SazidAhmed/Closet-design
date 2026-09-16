@@ -2114,7 +2114,7 @@ function clampTowerCenter(towerId: string, targetCenterCm: number): number {
       : 0;
   const towerTopCm = towerElevationCm + heightCm;
   const bounds = elevationHorizontalBounds.value;
-  const isToeKick = tower.partType?.toLowerCase() === 'toe kick';
+  const isToeKick = tower.partType?.toLowerCase() === 'toe kick' || tower.partType?.toLowerCase() === 'l shape horizontal';
 
   // Initial allowed range for the tower center
   const minLeft = isToeKick ? 0 : bounds.minLeftCm;
