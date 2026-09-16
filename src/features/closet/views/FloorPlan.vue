@@ -2171,12 +2171,6 @@ function clampTowerCenter(towerId: string, targetCenterCm: number): number {
     if (other.id === tower.attachedToTowerId || tower.id === other.attachedToTowerId) continue;
     if (tower.attachedToTowerId && tower.attachedToTowerId === other.attachedToTowerId) continue;
 
-    const towerIsToeKick = tower.partType?.toLowerCase() === 'toe kick';
-    const otherIsToeKick = other.partType?.toLowerCase() === 'toe kick';
-    
-    // Toe kicks only collide with other toe kicks (among towers)
-    if (towerIsToeKick && !otherIsToeKick) continue;
-    if (otherIsToeKick && !towerIsToeKick) continue;
     const otherWidth = Number(other.width) || 0;
     const otherHeight = Number(other.height) || 0;
     const otherPos =
@@ -2194,8 +2188,11 @@ function clampTowerCenter(towerId: string, targetCenterCm: number): number {
         : 0;
     const otherTopCm = otherElevationCm + otherHeight;
 
-    const verticalOverlap =
-      otherElevationCm < towerTopCm && otherTopCm > towerElevationCm;
+    const isCustom = tower.partType?.toLowerCase() === 'toe kick' || tower.partType?.toLowerCase() === 'l shape horizontal' || tower.partType?.toLowerCase() === 'filler';
+    const isOtherCustom = other.partType?.toLowerCase() === 'toe kick' || other.partType?.toLowerCase() === 'l shape horizontal' || other.partType?.toLowerCase() === 'filler';
+    const verticalOverlap = (isCustom || isOtherCustom)
+      ? otherElevationCm <= towerTopCm && otherTopCm >= towerElevationCm
+      : otherElevationCm < towerTopCm && otherTopCm > towerElevationCm;
     if (verticalOverlap) {
       forbiddenIntervals.push({
         min: otherLeft - widthCm / 2,

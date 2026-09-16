@@ -263,11 +263,7 @@ function willTowerOverlapOthers(
       targetTower.attachedToTowerId === other.attachedToTowerId
     )
       continue;
-      
-    const targetIsToeKick = targetTower.partType?.toLowerCase() === 'toe kick';
-    const otherIsToeKick = other.partType?.toLowerCase() === 'toe kick';
-    if (targetIsToeKick && !otherIsToeKick) continue;
-    if (otherIsToeKick && !targetIsToeKick) continue;
+
 
     const otherWall = roomStore.walls.find((w) => w.id === other.wallId);
     if (!otherWall) continue;
@@ -276,7 +272,11 @@ function willTowerOverlapOthers(
     const targetTop = targetElev + targetTower.height;
     const otherElev = other.elevation ?? 0;
     const otherTop = otherElev + other.height;
-    const verticalOverlap = targetElev < otherTop && targetTop > otherElev;
+    const isCustom = targetTower.partType?.toLowerCase() === 'toe kick' || targetTower.partType?.toLowerCase() === 'l shape horizontal' || targetTower.partType?.toLowerCase() === 'filler';
+    const isOtherCustom = other.partType?.toLowerCase() === 'toe kick' || other.partType?.toLowerCase() === 'l shape horizontal' || other.partType?.toLowerCase() === 'filler';
+    const verticalOverlap = (isCustom || isOtherCustom)
+      ? targetElev <= otherTop && targetTop >= otherElev
+      : targetElev < otherTop && targetTop > otherElev;
     if (!verticalOverlap) continue;
 
     const otherPoly = getTowerCorners(

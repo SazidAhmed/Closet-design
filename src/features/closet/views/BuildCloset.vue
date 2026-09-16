@@ -258,10 +258,6 @@ const clearances = computed(() => {
   for (const otherTower of closet.towers) {
     if (otherTower.id === tower.id) continue;
 
-    const targetIsToeKick = tower.partType?.toLowerCase() === 'toe kick';
-    const otherIsToeKick = otherTower.partType?.toLowerCase() === 'toe kick';
-    if (targetIsToeKick && !otherIsToeKick) continue;
-    if (otherIsToeKick && !targetIsToeKick) continue;
 
     const isAtStart = startConnectedWalls.some(
       (w) => w.id === otherTower.wallId,
@@ -278,8 +274,11 @@ const clearances = computed(() => {
         : 0;
     const otherTopIn = otherElevationIn + otherTower.height;
 
-    const verticalOverlap =
-      otherElevationIn < towerTopIn && otherTopIn > towerElevationIn;
+    const isCustom = tower.partType?.toLowerCase() === 'toe kick' || tower.partType?.toLowerCase() === 'l shape horizontal' || tower.partType?.toLowerCase() === 'filler';
+    const isOtherCustom = otherTower.partType?.toLowerCase() === 'toe kick' || otherTower.partType?.toLowerCase() === 'l shape horizontal' || otherTower.partType?.toLowerCase() === 'filler';
+    const verticalOverlap = (isCustom || isOtherCustom)
+      ? otherElevationIn <= towerTopIn && otherTopIn >= towerElevationIn
+      : otherElevationIn < towerTopIn && otherTopIn > towerElevationIn;
     if (!verticalOverlap) continue;
 
     const otherPos = otherTower.positionAlongWall ?? 0.5;
@@ -446,10 +445,6 @@ const clearances = computed(() => {
     if (otherTower.id === tower.id) continue;
     if (otherTower.wallId !== wall.id) continue;
 
-    const targetIsToeKick = tower.partType?.toLowerCase() === 'toe kick';
-    const otherIsToeKick = otherTower.partType?.toLowerCase() === 'toe kick';
-    if (targetIsToeKick && !otherIsToeKick) continue;
-    if (otherIsToeKick && !targetIsToeKick) continue;
 
     const otherElevationIn =
       typeof otherTower.elevation === "number" && !isNaN(otherTower.elevation)
@@ -457,8 +452,11 @@ const clearances = computed(() => {
         : 0;
     const otherTopIn = otherElevationIn + otherTower.height;
 
-    const verticalOverlap =
-      otherElevationIn < towerTopIn && otherTopIn > towerElevationIn;
+    const isCustom = tower.partType?.toLowerCase() === 'toe kick' || tower.partType?.toLowerCase() === 'l shape horizontal' || tower.partType?.toLowerCase() === 'filler';
+    const isOtherCustom = otherTower.partType?.toLowerCase() === 'toe kick' || otherTower.partType?.toLowerCase() === 'l shape horizontal' || otherTower.partType?.toLowerCase() === 'filler';
+    const verticalOverlap = (isCustom || isOtherCustom)
+      ? otherElevationIn <= towerTopIn && otherTopIn >= towerElevationIn
+      : otherElevationIn < towerTopIn && otherTopIn > towerElevationIn;
     if (!verticalOverlap) continue;
 
     const otherPos = otherTower.positionAlongWall ?? 0.5;
