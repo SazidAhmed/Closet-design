@@ -477,9 +477,9 @@ export function refreshTowerCabinet(
 
   // Auto-correct doorCount if it is unsupported by the new cabinet
   if (tower.doorMode === 'with_doors') {
-    if (tower.doorCount === 1 && tower.oneDoor === 0 && tower.twoDoors === 1) {
+    if ((!tower.doorCount || tower.doorCount === 1) && tower.oneDoor === 0 && tower.twoDoors === 1) {
       tower.doorCount = 2;
-    } else if (tower.doorCount === 2 && tower.twoDoors === 0 && tower.oneDoor === 1) {
+    } else if ((!tower.doorCount || tower.doorCount === 2) && tower.twoDoors === 0 && tower.oneDoor === 1) {
       tower.doorCount = 1;
     }
   }
@@ -704,6 +704,7 @@ export function createTowerFromCategory(
     cabinetCode: cabinet?.code,
     oneDoor: cabinet?.oneDoor,
     twoDoors: cabinet?.twoDoors,
+    doorCount: (cabinet?.twoDoors === 1 && cabinet?.oneDoor === 0) ? 2 : 1,
     accessories: accessoriesForCategory(categoryCode),
   };
 }
