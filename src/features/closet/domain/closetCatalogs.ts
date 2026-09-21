@@ -156,10 +156,6 @@ export function getCategoryLimits(
   const category = getCategoryByCode(doorMode, categoryCode);
   
   let minW = Math.min(...category.catalogs.map((catalog) => catalog.minW));
-  // Enforce a minimum width of 12 for CDH and CLH
-  if (categoryCode === 'CDH' || categoryCode === 'CLH') {
-    minW = Math.max(minW, 12);
-  }
 
   return {
     minW,
@@ -219,10 +215,14 @@ export function resolveCatalogForTower(
 
 export function clampTowerWidth(tower: Tower, width: number): number {
   if (!tower.doorMode || !tower.categoryCode) return width;
-  const limits = getCategoryLimits(tower.doorMode, tower.categoryCode);
   const isCorner = tower.isCorner ?? (tower.cornerPosition === 'left' || tower.cornerPosition === 'right' || tower.cornerOrientation === 'left' || tower.cornerOrientation === 'right');
-  const minW = isCorner ? Math.max(limits.minW, 30) : limits.minW;
-  return clamp(width, minW, limits.maxW);
+  const position = tower.cornerPosition ?? tower.cornerOrientation ?? (isCorner ? 'left' : 'none');
+  const catalog = resolveCatalogForTower(tower.doorMode, tower.categoryCode, tower.depth, isCorner, position);
+  
+  let minW = catalog.minW;
+  minW = isCorner ? Math.max(minW, 30) : minW;
+  
+  return clamp(width, minW, catalog.maxW);
 }
 
 export function clampTowerDepth(tower: Tower, depth: number): number {
@@ -233,8 +233,10 @@ export function clampTowerDepth(tower: Tower, depth: number): number {
 
 export function clampTowerHeight(tower: Tower, height: number): number {
   if (!tower.doorMode || !tower.categoryCode) return height;
-  const limits = getCategoryLimits(tower.doorMode, tower.categoryCode);
-  return clamp(height, limits.minH, limits.maxH);
+  const isCorner = tower.isCorner ?? (tower.cornerPosition === 'left' || tower.cornerPosition === 'right' || tower.cornerOrientation === 'left' || tower.cornerOrientation === 'right');
+  const position = tower.cornerPosition ?? tower.cornerOrientation ?? (isCorner ? 'left' : 'none');
+  const catalog = resolveCatalogForTower(tower.doorMode, tower.categoryCode, tower.depth, isCorner, position);
+  return clamp(height, catalog.minH, catalog.maxH);
 }
 
 export function refreshTowerCatalog(tower: Tower): { switched: boolean; catalog: ClosetCatalogEntry } | null {
@@ -666,11 +668,11 @@ export function createTowerFromCategory(
   const boxCount: 1 | 2 = 2; // default to 2-box
   const isCorner = categoryCode === "CCS" || categoryCode === "CCH" || categoryCode === "CCL";
   
-  let searchWidth = limits.minW;
+  let searchWidth = Math.max(12, limits.minW);
   let searchDepth = limits.minD;
   
   if (isCorner) {
-    searchWidth = Math.max(0, limits.minW - limits.minD);
+    searchWidth = Math.max(40, limits.minW);
   }
 
   const cabinet = resolveCabinetForTower(
@@ -683,11 +685,7 @@ export function createTowerFromCategory(
     isCorner,
   );
 
-  let initialWidth = cabinet ? cabinet.width : limits.minW;
-  // Enforce the default initial width to be 12 for CDH and CLH
-  if (categoryCode === 'CDH' || categoryCode === 'CLH') {
-    initialWidth = 12;
-  }
+  let initialWidth = searchWidth;
 
   return {
     id: createTowerId(),

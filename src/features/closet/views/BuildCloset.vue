@@ -14,6 +14,7 @@ import {
   getCategoryLimits,
   getCornerTotalDepth,
   isOneBoxAvailable,
+  resolveCatalogForTower,
   type ClosetCatalogCategory,
   type ClosetCatalogCategoryCode,
   type ClosetCatalogLimits,
@@ -75,7 +76,27 @@ const selectedTower = computed(
 const selectedTowerLimits = computed<ClosetCatalogLimits | null>(() => {
   const tower = selectedTower.value;
   if (!tower?.doorMode || !tower.categoryCode) return null;
-  return getCategoryLimits(tower.doorMode, tower.categoryCode);
+  const isCorner = tower.isCorner ?? (tower.cornerPosition === 'left' || tower.cornerPosition === 'right' || tower.cornerOrientation === 'left' || tower.cornerOrientation === 'right');
+  const position = tower.cornerPosition ?? tower.cornerOrientation ?? (isCorner ? 'left' : 'none');
+  
+  // Use the specific catalog for the tower's depth, not the whole category
+  const catalog = resolveCatalogForTower(tower.doorMode, tower.categoryCode, tower.depth, isCorner, position);
+
+  if (!catalog) {
+    return getCategoryLimits(tower.doorMode, tower.categoryCode);
+  }
+
+  let minW = catalog.minW;
+  minW = isCorner ? Math.max(minW, 30) : minW;
+
+  return {
+    minW,
+    maxW: catalog.maxW,
+    minH: catalog.minH,
+    maxH: catalog.maxH,
+    minD: catalog.minD, // Not strictly true for category, but safe for display limits of current catalog
+    maxD: catalog.maxD,
+  };
 });
 
 /**
