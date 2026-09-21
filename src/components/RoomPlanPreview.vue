@@ -142,11 +142,15 @@ function getTowerCorners(
   positionAlongWall: number,
   width: number,
 ): [[number, number], [number, number], [number, number], [number, number]] {
-  const isToeKick = (tower as any).partType?.toLowerCase() === 'toe kick' || (tower as any).partType?.toLowerCase() === 'l shape horizontal';
+  const isCustomPart = (tower as any).partType?.toLowerCase() === 'toe kick' || 
+                       (tower as any).partType?.toLowerCase() === 'l shape horizontal' ||
+                       (tower as any).partType?.toLowerCase() === 'filler' ||
+                       (tower as any).partType?.toLowerCase() === 'panel' ||
+                       (tower as any).partType?.toLowerCase() === 'l shape vertical';
   let minPos = positionAlongWall - (width / 2) / wall.length;
   let maxPos = positionAlongWall + (width / 2) / wall.length;
 
-  if (isToeKick) {
+  if (isCustomPart) {
     const bounds = wallUsableBoundsPos(wall as any, 0, false);
     minPos = Math.max(minPos, bounds.min);
     maxPos = Math.min(maxPos, bounds.max);
@@ -379,11 +383,21 @@ const placedTowerPolygons = computed(() => {
         const backDist = tHalf + outset;
         const frontDist = backDist + tower.depth;
 
-        const halfW = tower.width / 2;
-        const leftEdgeX = cx - wx * halfW;
-        const leftEdgeY = cy - wy * halfW;
-        const rightEdgeX = cx + wx * halfW;
-        const rightEdgeY = cy + wy * halfW;
+        let minPos = pos - (tower.width / 2) / wall.length;
+        let maxPos = pos + (tower.width / 2) / wall.length;
+        const bounds = wallUsableBoundsPos(wall as any, 0, false);
+        minPos = Math.max(minPos, bounds.min);
+        maxPos = Math.min(maxPos, bounds.max);
+        if (minPos > maxPos) { minPos = pos; maxPos = pos; }
+        const renderPos = (minPos + maxPos) / 2;
+        const renderHalfW = ((maxPos - minPos) * wall.length) / 2;
+        const clampedCx = wall.position[0] + wx * wall.length * renderPos;
+        const clampedCy = wall.position[1] + wy * wall.length * renderPos;
+
+        const leftEdgeX = clampedCx - wx * renderHalfW;
+        const leftEdgeY = clampedCy - wy * renderHalfW;
+        const rightEdgeX = clampedCx + wx * renderHalfW;
+        const rightEdgeY = clampedCy + wy * renderHalfW;
 
         const blPt: [number, number] = [
           leftEdgeX + px * backDist,
@@ -403,8 +417,8 @@ const placedTowerPolygons = computed(() => {
         ];
 
         corners = [blPt, brPt, frPt, flPt];
-        labelPosX = cx + px * ((backDist + frontDist) / 2);
-        labelPosY = cy + py * ((backDist + frontDist) / 2);
+        labelPosX = clampedCx + px * ((backDist + frontDist) / 2);
+        labelPosY = clampedCy + py * ((backDist + frontDist) / 2);
 
         if (!isRight) {
           // Left orientation: attached on LEFT of cabinet.

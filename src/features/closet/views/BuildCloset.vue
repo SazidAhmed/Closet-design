@@ -224,11 +224,15 @@ const clearances = computed(() => {
   }
 
   const halfThickness = wallThickness / 2;
-  const isToeKick = tower.partType?.toLowerCase() === 'toe kick' || tower.partType?.toLowerCase() === 'l shape horizontal';
-  const startMargin = isToeKick ? 0 : (startConnected
+  const isCustomPart = tower.partType?.toLowerCase() === 'toe kick' || 
+                       tower.partType?.toLowerCase() === 'l shape horizontal' ||
+                       tower.partType?.toLowerCase() === 'filler' ||
+                       tower.partType?.toLowerCase() === 'panel' ||
+                       tower.partType?.toLowerCase() === 'l shape vertical';
+  const startMargin = isCustomPart ? 0 : (startConnected
     ? Math.min(halfThickness, wall.length)
     : 0);
-  const endMargin = isToeKick ? 0 : (endConnected ? Math.min(halfThickness, wall.length) : 0);
+  const endMargin = isCustomPart ? 0 : (endConnected ? Math.min(halfThickness, wall.length) : 0);
 
   // Usable wall boundaries (matches elevationHorizontalBoundsForWall with wall.thickness/2)
   let effectiveLeft = startMargin;
@@ -645,12 +649,16 @@ function sanitizeAllTowerPositions() {
       if (startConnected && endConnected) break;
     }
 
-    const isToeKick = tower.partType?.toLowerCase() === 'toe kick' || tower.partType?.toLowerCase() === 'l shape horizontal';
+    const isCustomPart = tower.partType?.toLowerCase() === 'toe kick' || 
+                         tower.partType?.toLowerCase() === 'l shape horizontal' ||
+                         tower.partType?.toLowerCase() === 'filler' ||
+                         tower.partType?.toLowerCase() === 'panel' ||
+                         tower.partType?.toLowerCase() === 'l shape vertical';
     const halfThickness = wallThickness / 2;
-    const startMargin = isToeKick ? 0 : (startConnected
+    const startMargin = isCustomPart ? 0 : (startConnected
       ? Math.min(halfThickness, wall.length)
       : 0);
-    const endMargin = isToeKick ? 0 : (endConnected ? Math.min(halfThickness, wall.length) : 0);
+    const endMargin = isCustomPart ? 0 : (endConnected ? Math.min(halfThickness, wall.length) : 0);
     const usableLeft = startMargin;
     const usableRight = Math.max(startMargin, wall.length - endMargin);
 
