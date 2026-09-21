@@ -226,9 +226,9 @@ const clearances = computed(() => {
   const halfThickness = wallThickness / 2;
   const isToeKick = tower.partType?.toLowerCase() === 'toe kick' || tower.partType?.toLowerCase() === 'l shape horizontal';
   const startMargin = isToeKick ? 0 : (startConnected
-    ? Math.min(wallThickness / 2, wall.length)
+    ? Math.min(halfThickness, wall.length)
     : 0);
-  const endMargin = isToeKick ? 0 : (endConnected ? Math.min(wallThickness / 2, wall.length) : 0);
+  const endMargin = isToeKick ? 0 : (endConnected ? Math.min(halfThickness, wall.length) : 0);
 
   // Usable wall boundaries (matches elevationHorizontalBoundsForWall with wall.thickness/2)
   let effectiveLeft = startMargin;
@@ -295,8 +295,12 @@ const clearances = computed(() => {
         : 0;
     const otherTopIn = otherElevationIn + otherTower.height;
 
-    const isCustom = tower.partType?.toLowerCase() === 'toe kick' || tower.partType?.toLowerCase() === 'l shape horizontal' || tower.partType?.toLowerCase() === 'filler';
-    const isOtherCustom = otherTower.partType?.toLowerCase() === 'toe kick' || otherTower.partType?.toLowerCase() === 'l shape horizontal' || otherTower.partType?.toLowerCase() === 'filler';
+    const isToeKick = tower.partType?.toLowerCase() === 'toe kick';
+    const isOtherToeKick = otherTower.partType?.toLowerCase() === 'toe kick';
+    if (isToeKick !== isOtherToeKick) continue;
+
+    const isCustom = isToeKick || tower.partType?.toLowerCase() === 'l shape horizontal' || tower.partType?.toLowerCase() === 'filler';
+    const isOtherCustom = isOtherToeKick || otherTower.partType?.toLowerCase() === 'l shape horizontal' || otherTower.partType?.toLowerCase() === 'filler';
     const verticalOverlap = (isCustom || isOtherCustom)
       ? otherElevationIn <= towerTopIn && otherTopIn >= towerElevationIn
       : otherElevationIn < towerTopIn && otherTopIn > towerElevationIn;
@@ -473,8 +477,12 @@ const clearances = computed(() => {
         : 0;
     const otherTopIn = otherElevationIn + otherTower.height;
 
-    const isCustom = tower.partType?.toLowerCase() === 'toe kick' || tower.partType?.toLowerCase() === 'l shape horizontal' || tower.partType?.toLowerCase() === 'filler';
-    const isOtherCustom = otherTower.partType?.toLowerCase() === 'toe kick' || otherTower.partType?.toLowerCase() === 'l shape horizontal' || otherTower.partType?.toLowerCase() === 'filler';
+    const isToeKick = tower.partType?.toLowerCase() === 'toe kick';
+    const isOtherToeKick = otherTower.partType?.toLowerCase() === 'toe kick';
+    if (isToeKick !== isOtherToeKick) continue;
+
+    const isCustom = isToeKick || tower.partType?.toLowerCase() === 'l shape horizontal' || tower.partType?.toLowerCase() === 'filler';
+    const isOtherCustom = isOtherToeKick || otherTower.partType?.toLowerCase() === 'l shape horizontal' || otherTower.partType?.toLowerCase() === 'filler';
     const verticalOverlap = (isCustom || isOtherCustom)
       ? otherElevationIn <= towerTopIn && otherTopIn >= towerElevationIn
       : otherElevationIn < towerTopIn && otherTopIn > towerElevationIn;
@@ -534,8 +542,12 @@ const clearances = computed(() => {
     )
     .reduce((sum, t) => sum + t.width, 0);
   const totalNominalGap = Math.max(0, nominalUsable - nominalTowerWidthIn);
-  const gapScale =
+  let gapScale =
     totalPhysicalGap > 0.1 ? totalNominalGap / totalPhysicalGap : 1;
+
+  if (tower.partType?.toLowerCase() === 'toe kick') {
+    gapScale = 1;
+  }
 
   let uiLeft = rawLeft * gapScale;
   let uiRight = rawRight * gapScale;

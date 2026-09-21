@@ -2188,8 +2188,11 @@ function clampTowerCenter(towerId: string, targetCenterCm: number): number {
         : 0;
     const otherTopCm = otherElevationCm + otherHeight;
 
-    const isCustom = tower.partType?.toLowerCase() === 'toe kick' || tower.partType?.toLowerCase() === 'l shape horizontal' || tower.partType?.toLowerCase() === 'filler';
-    const isOtherCustom = other.partType?.toLowerCase() === 'toe kick' || other.partType?.toLowerCase() === 'l shape horizontal' || other.partType?.toLowerCase() === 'filler';
+    const isOtherToeKick = other.partType?.toLowerCase() === 'toe kick' || other.partType?.toLowerCase() === 'l shape horizontal';
+    if (isToeKick !== isOtherToeKick) continue;
+
+    const isCustom = isToeKick || tower.partType?.toLowerCase() === 'l shape horizontal' || tower.partType?.toLowerCase() === 'filler';
+    const isOtherCustom = isOtherToeKick || other.partType?.toLowerCase() === 'l shape horizontal' || other.partType?.toLowerCase() === 'filler';
     const verticalOverlap = (isCustom || isOtherCustom)
       ? otherElevationCm <= towerTopCm && otherTopCm >= towerElevationCm
       : otherElevationCm < towerTopCm && otherTopCm > towerElevationCm;
@@ -2258,17 +2261,21 @@ function onElevationPointerMove(e: PointerEvent) {
       return;
     }
 
+    const isToeKick = tower.partType?.toLowerCase() === 'toe kick' || tower.partType?.toLowerCase() === 'l shape horizontal';
+    const effMinLeftCm = isToeKick ? 0 : horizontalBounds.minLeftCm;
+    const effMaxRightCm = isToeKick ? layout.wallLengthCm : horizontalBounds.maxRightCm;
+
     const pointerPoint = screenToSvg(
       elevationSvgRef.value,
       e.clientX,
       e.clientY,
     );
-    const minX = layout.wallX + horizontalBounds.minLeftCm * layout.scale;
+    const minX = layout.wallX + effMinLeftCm * layout.scale;
     const maxX =
       layout.wallX +
       Math.max(
-        horizontalBounds.minLeftCm,
-        horizontalBounds.maxRightCm - tower.width,
+        effMinLeftCm,
+        effMaxRightCm - tower.width,
       ) *
         layout.scale;
 

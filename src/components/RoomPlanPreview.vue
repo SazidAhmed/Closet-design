@@ -272,8 +272,13 @@ function willTowerOverlapOthers(
     const targetTop = targetElev + targetTower.height;
     const otherElev = other.elevation ?? 0;
     const otherTop = otherElev + other.height;
-    const isCustom = targetTower.partType?.toLowerCase() === 'toe kick' || targetTower.partType?.toLowerCase() === 'l shape horizontal' || targetTower.partType?.toLowerCase() === 'filler';
-    const isOtherCustom = other.partType?.toLowerCase() === 'toe kick' || other.partType?.toLowerCase() === 'l shape horizontal' || other.partType?.toLowerCase() === 'filler';
+
+    const isToeKick = targetTower.partType?.toLowerCase() === 'toe kick';
+    const isOtherToeKick = other.partType?.toLowerCase() === 'toe kick';
+    if (isToeKick !== isOtherToeKick) continue;
+
+    const isCustom = isToeKick || targetTower.partType?.toLowerCase() === 'l shape horizontal' || targetTower.partType?.toLowerCase() === 'filler';
+    const isOtherCustom = isOtherToeKick || other.partType?.toLowerCase() === 'l shape horizontal' || other.partType?.toLowerCase() === 'filler';
     const verticalOverlap = (isCustom || isOtherCustom)
       ? targetElev <= otherTop && targetTop >= otherElev
       : targetElev < otherTop && targetTop > otherElev;
