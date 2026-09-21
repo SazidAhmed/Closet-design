@@ -515,7 +515,7 @@ const clearances = computed(() => {
   // The physical usable range considers corner margins and corner blockages.
   // We satisfy the user invariant: LeftClearance + TowerWidth + RightClearance = WallDisplayWidth
   const totalTowerWidthIn = closet.towers
-    .filter((t) => t.wallId === wall.id && t.partType?.toLowerCase() !== 'toe kick' && !t.partType?.toLowerCase().includes('l shape'))
+    .filter((t) => t.wallId === wall.id && t.partType?.toLowerCase() !== 'toe kick' && t.partType?.toLowerCase() !== 'l shape horizontal')
     .reduce((sum, t) => sum + t.width, 0);
 
   const isLeftWallOnly =
@@ -542,7 +542,7 @@ const clearances = computed(() => {
         t.partType !== "panel" &&
         t.partType !== "filler" &&
         t.partType?.toLowerCase() !== "toe kick" &&
-        !t.partType?.toLowerCase().includes('l shape'),
+        t.partType?.toLowerCase() !== 'l shape horizontal',
     )
     .reduce((sum, t) => sum + t.width, 0);
   const totalNominalGap = Math.max(0, nominalUsable - nominalTowerWidthIn);
