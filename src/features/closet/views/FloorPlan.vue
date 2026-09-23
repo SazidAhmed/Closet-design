@@ -1339,12 +1339,12 @@ function elevationHorizontalBoundsForWall(
     endAdjacentDepth > 0 ? endAdjacentDepth + rawEndMargin : rawEndMargin,
   );
 
-  const minLeftCm = effectiveStartMargin;
-  const maxRightCm = Math.max(minLeftCm, minLength - effectiveEndMargin);
+  const minLeftCm = startAdjacentDepth;
+  const maxRightCm = Math.max(minLeftCm, minLength - endAdjacentDepth);
 
   return {
-    startMarginCm: effectiveStartMargin,
-    endMarginCm: effectiveEndMargin,
+    startMarginCm: rawStartMargin,
+    endMarginCm: rawEndMargin,
     minLeftCm,
     maxRightCm,
     usableSpanCm: Math.max(0, maxRightCm - minLeftCm),
@@ -2114,11 +2114,9 @@ function clampTowerCenter(towerId: string, targetCenterCm: number): number {
       : 0;
   const towerTopCm = towerElevationCm + heightCm;
   const bounds = elevationHorizontalBounds.value;
-  const isToeKick = tower.partType?.toLowerCase() === 'toe kick' || tower.partType?.toLowerCase() === 'l shape horizontal';
-
   // Initial allowed range for the tower center
-  const minLeft = isToeKick ? 0 : bounds.minLeftCm;
-  const maxRight = isToeKick ? wall.length : bounds.maxRightCm;
+  const minLeft = bounds.minLeftCm;
+  const maxRight = bounds.maxRightCm;
 
   const minCenter = minLeft + widthCm / 2;
   const maxCenter = Math.max(minCenter, maxRight - widthCm / 2);
@@ -2147,19 +2145,17 @@ function clampTowerCenter(towerId: string, targetCenterCm: number): number {
   // An 'end' zone blocks [wallLength - depthCm, wallLength]; the tower center
   // must stay below wallLength - depthCm - halfW.
   const halfW = widthCm / 2;
-  if (!isToeKick) {
-    for (const zone of adjacentTowerBlockedZones.value) {
-      if (zone.side === "start") {
-        forbiddenIntervals.push({
-          min: -Infinity,
-          max: zone.depthCm + halfW,
-        });
-      } else {
-        forbiddenIntervals.push({
-          min: wall.length - zone.depthCm - halfW,
-          max: Infinity,
-        });
-      }
+  for (const zone of adjacentTowerBlockedZones.value) {
+    if (zone.side === "start") {
+      forbiddenIntervals.push({
+        min: -Infinity,
+        max: zone.depthCm + halfW,
+      });
+    } else {
+      forbiddenIntervals.push({
+        min: wall.length - zone.depthCm - halfW,
+        max: Infinity,
+      });
     }
   }
 
@@ -2188,10 +2184,11 @@ function clampTowerCenter(towerId: string, targetCenterCm: number): number {
         : 0;
     const otherTopCm = otherElevationCm + otherHeight;
 
+    const isToeKick = tower.partType?.toLowerCase() === 'toe kick' || tower.partType?.toLowerCase() === 'l shape horizontal';
     const isOtherToeKick = other.partType?.toLowerCase() === 'toe kick' || other.partType?.toLowerCase() === 'l shape horizontal';
     if (isToeKick !== isOtherToeKick) continue;
 
-    const isCustom = isToeKick || tower.partType?.toLowerCase() === 'l shape horizontal' || tower.partType?.toLowerCase() === 'filler';
+    const isCustom = isToeKick || tower.partType?.toLowerCase() === 'filler';
     const isOtherCustom = isOtherToeKick || other.partType?.toLowerCase() === 'l shape horizontal' || other.partType?.toLowerCase() === 'filler';
     const verticalOverlap = (isCustom || isOtherCustom)
       ? otherElevationCm <= towerTopCm && otherTopCm >= towerElevationCm
@@ -2261,9 +2258,8 @@ function onElevationPointerMove(e: PointerEvent) {
       return;
     }
 
-    const isToeKick = tower.partType?.toLowerCase() === 'toe kick' || tower.partType?.toLowerCase() === 'l shape horizontal';
-    const effMinLeftCm = isToeKick ? 0 : horizontalBounds.minLeftCm;
-    const effMaxRightCm = isToeKick ? layout.wallLengthCm : horizontalBounds.maxRightCm;
+    const effMinLeftCm = horizontalBounds.minLeftCm;
+    const effMaxRightCm = horizontalBounds.maxRightCm;
 
     const pointerPoint = screenToSvg(
       elevationSvgRef.value,
@@ -3979,7 +3975,7 @@ function dimLinePoints(wall: {
 
                 <rect
                   v-if="elevationWallConnectivity.startConnected"
-                  :x="elevationLayout.wallX"
+                  :x="elevationLayout.wallX - elevationConnectedBandWidthsPx.start"
                   :y="elevationLayout.wallY"
                   :width="elevationConnectedBandWidthsPx.start"
                   :height="elevationLayout.wallHeightPx"
@@ -3990,8 +3986,7 @@ function dimLinePoints(wall: {
                   v-if="elevationWallConnectivity.endConnected"
                   :x="
                     elevationLayout.wallX +
-                    elevationLayout.wallWidthPx -
-                    elevationConnectedBandWidthsPx.end
+                    elevationLayout.wallWidthPx
                   "
                   :y="elevationLayout.wallY"
                   :width="elevationConnectedBandWidthsPx.end"

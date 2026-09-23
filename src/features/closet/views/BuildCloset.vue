@@ -223,16 +223,8 @@ const clearances = computed(() => {
     }
   }
 
-  const halfThickness = wallThickness / 2;
-  const isCustomPart = tower.partType?.toLowerCase() === 'toe kick' || 
-                       tower.partType?.toLowerCase() === 'l shape horizontal' ||
-                       tower.partType?.toLowerCase() === 'filler' ||
-                       tower.partType?.toLowerCase() === 'panel' ||
-                       tower.partType?.toLowerCase() === 'l shape vertical';
-  const startMargin = isCustomPart ? 0 : (startConnected
-    ? Math.min(halfThickness, wall.length)
-    : 0);
-  const endMargin = isCustomPart ? 0 : (endConnected ? Math.min(halfThickness, wall.length) : 0);
+  const startMargin = 0;
+  const endMargin = 0;
 
   // Usable wall boundaries (matches elevationHorizontalBoundsForWall with wall.thickness/2)
   let effectiveLeft = startMargin;
@@ -549,10 +541,6 @@ const clearances = computed(() => {
   let gapScale =
     totalPhysicalGap > 0.1 ? totalNominalGap / totalPhysicalGap : 1;
 
-  if (tower.partType?.toLowerCase() === 'toe kick') {
-    gapScale = 1;
-  }
-
   let uiLeft = rawLeft * gapScale;
   let uiRight = rawRight * gapScale;
 
@@ -654,11 +642,8 @@ function sanitizeAllTowerPositions() {
                          tower.partType?.toLowerCase() === 'filler' ||
                          tower.partType?.toLowerCase() === 'panel' ||
                          tower.partType?.toLowerCase() === 'l shape vertical';
-    const halfThickness = wallThickness / 2;
-    const startMargin = isCustomPart ? 0 : (startConnected
-      ? Math.min(halfThickness, wall.length)
-      : 0);
-    const endMargin = isCustomPart ? 0 : (endConnected ? Math.min(halfThickness, wall.length) : 0);
+    const startMargin = 0;
+    const endMargin = 0;
     const usableLeft = startMargin;
     const usableRight = Math.max(startMargin, wall.length - endMargin);
 

@@ -1,0 +1,38 @@
+# Fix Custom Part Widths and Wall Geometry Semantics
+
+The core issue stems from a conflict between how the application draws walls geometrically and how you expect the dimensions to behave in the real world.
+
+### The Conflict
+
+1. **Application Geometry**: Currently, the application draws walls from **center-line to center-line**. When you draw a 100" wall, the 5" thick intersecting walls at the corners eat into that space (2.5" on each side). This leaves exactly **95" of physical usable space** inside the room.
+2. **Your Expectation**: You stated, *"100 inch wall means inside the room. This 100 inch doesnt include the wall thickness."* You expect a 100" wall to provide exactly 100" of usable space.
+
+Because the physical space is only 95", when you try to expand a custom Toe Kick to fill the wall, the application correctly clamps it to its maximum physical size: 95". 
+
+The reason "the cabinet measurement is correct" is because the application uses a `gapScale` feature that artificially inflates the display clearances. For a cabinet, it takes the 95" physical space and scales the numbers up so they *appear* to add up to 100" on the screen. However, this trick doesn't work for a Toe Kick that spans the entire wall, because its width is physical (95") and its clearance is 0, so the numbers expose the 95" reality.
+
+## Proposed Changes
+
+To fix this so that a 100" wall behaves exactly like a 100" internal space, we will change how the application calculates corner blockages for tower placement and elevation views. We will stop subtracting the 2.5" corners.
+
+### [Component: BuildCloset & FloorPlan]
+
+We will remove the geometric corner margins entirely so that `wall.length` directly represents the internal usable space.
+
+#### [MODIFY] `BuildCloset.vue`
+- Change `startMargin` and `endMargin` in the `clearances` and `sanitizeAllTowerPositions` functions to `0` (instead of `wallThickness / 2`). 
+- This will increase the physical usable space from 95" to exactly 100".
+- Cabinets will now have exactly 100" of physical space, and `gapScale` will naturally become `1` (no more artificial number scaling).
+- Custom parts (like Toe Kicks) will now be allowed to reach 100" wide without being artificially clamped to 95".
+
+#### [MODIFY] `FloorPlan.vue`
+- Update `elevationHorizontalBoundsForWall` so that `minLeftCm` is `0` and `maxRightCm` is `wall.length`.
+- This removes the light-gray corner blockages from the elevation view entirely. The elevation view will show a pure 100" canvas, so a 100" Toe Kick will fit perfectly without "going through the wall".
+
+> [!WARNING]
+> **3D View / Overhead View Impact**
+> Because the walls in the 3D room and overhead SVG are still drawn using the center-line geometry, a 100" Toe Kick might visually appear to clip slightly into the adjacent walls in the overhead and 3D views (overlapping by 2.5" on each side). The elevation view and numeric inputs will be completely fixed, but the 3D representation will still reflect the center-line geometry. Is this acceptable?
+
+## User Review Required
+
+Does this approach perfectly align with your expectation that a "100 inch wall" should grant exactly 100 inches of usable space for cabinets and custom parts? Let me know if you approve this approach!
