@@ -76,6 +76,7 @@ function wallMidpoint(wall: {
 }
 
 function wallPolygonPoints(wall: {
+  id: string;
   position: [number, number];
   angle: number;
   length: number;
@@ -87,9 +88,34 @@ function wallPolygonPoints(wall: {
   const cos = Math.cos(perpAngle) * t;
   const sin = Math.sin(perpAngle) * t;
   const end = wallEndPoint(wall);
+
+  const CONN_TOL = 1;
+  let startConnected = false;
+  let endConnected = false;
+  for (const other of roomStore.walls) {
+    if (other.id === wall.id) continue;
+    const oStart: [number, number] = [other.position[0], other.position[1]];
+    const oEnd: [number, number] = [
+      other.position[0] + Math.cos(other.angle) * other.length,
+      other.position[1] + Math.sin(other.angle) * other.length,
+    ];
+    const hit = (a: [number, number], b: [number, number]) =>
+      Math.hypot(a[0] - b[0], a[1] - b[1]) <= CONN_TOL;
+    if (!startConnected && (hit(wall.position, oStart) || hit(wall.position, oEnd)))
+      startConnected = true;
+    if (!endConnected && (hit(end, oStart) || hit(end, oEnd)))
+      endConnected = true;
+    if (startConnected && endConnected) break;
+  }
+
+  const wx = Math.cos(wall.angle);
+  const wy = Math.sin(wall.angle);
+  const startExt = startConnected ? t : 0;
+  const endExt = endConnected ? t : 0;
+
   const p1 = [wall.position[0], wall.position[1]];
-  const p2 = [wall.position[0] + cos, wall.position[1] + sin];
-  const p3 = [end[0] + cos, end[1] + sin];
+  const p2 = [wall.position[0] + cos - wx * startExt, wall.position[1] + sin - wy * startExt];
+  const p3 = [end[0] + cos + wx * endExt, end[1] + sin + wy * endExt];
   const p4 = [end[0], end[1]];
   return `${p1[0]},${p1[1]} ${p2[0]},${p2[1]} ${p3[0]},${p3[1]} ${p4[0]},${p4[1]}`;
 }
@@ -1242,10 +1268,10 @@ function sanitizeAllTowerPositionsInPlan() {
         class="vertex-dot"
         :cx="v[0]"
         :cy="v[1]"
-        :r="4"
+        :r="1.5"
         fill="#fbbf24"
         stroke="#0f172a"
-        stroke-width="1.5"
+        stroke-width="0.5"
       />
     </svg>
     <div v-if="!selectionStore.selectedWallId" class="select-hint">
