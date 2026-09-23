@@ -81,15 +81,16 @@ function wallPolygonPoints(wall: {
   length: number;
   thickness: number;
 }) {
-  const t = wall.thickness / 2;
-  const perpAngle = wall.angle + Math.PI / 2;
+  const t = wall.thickness;
+  // Outward direction (right of wall direction)
+  const perpAngle = wall.angle - Math.PI / 2;
   const cos = Math.cos(perpAngle) * t;
   const sin = Math.sin(perpAngle) * t;
   const end = wallEndPoint(wall);
-  const p1 = [wall.position[0] + cos, wall.position[1] + sin];
-  const p2 = [wall.position[0] - cos, wall.position[1] - sin];
-  const p3 = [end[0] - cos, end[1] - sin];
-  const p4 = [end[0] + cos, end[1] + sin];
+  const p1 = [wall.position[0], wall.position[1]];
+  const p2 = [wall.position[0] + cos, wall.position[1] + sin];
+  const p3 = [end[0] + cos, end[1] + sin];
+  const p4 = [end[0], end[1]];
   return `${p1[0]},${p1[1]} ${p2[0]},${p2[1]} ${p3[0]},${p3[1]} ${p4[0]},${p4[1]}`;
 }
 
@@ -151,7 +152,7 @@ function getTowerCorners(
   let maxPos = positionAlongWall + (width / 2) / wall.length;
 
   if (isCustomPart) {
-    const bounds = wallUsableBoundsPos(wall as any, 0, false);
+    const bounds = wallUsableBoundsPos(wall as any, 0);
     minPos = Math.max(minPos, bounds.min);
     maxPos = Math.min(maxPos, bounds.max);
     if (minPos > maxPos) {
@@ -174,7 +175,8 @@ function getTowerCorners(
   const py = Math.cos(wall.angle);
 
   // Offset by half wall thickness so the back edge of the tower sits on the wall's inside face
-  const tHalf = (wall.thickness ?? 6) / 2;
+  // (Note: The wall line segment now IS the inside face, so tHalf is 0)
+  const tHalf = 0;
   // Apply outset: push tower further into the room by `outset`
   const outset =
     tower.outset ??
@@ -315,10 +317,11 @@ const placedTowerPolygons = computed(() => {
       const px = -Math.sin(wall.angle);
       const py = Math.cos(wall.angle);
 
-      // Offset by half wall thickness + outset for label centre
       const cx = wall.position[0] + Math.cos(wall.angle) * wall.length * pos;
       const cy = wall.position[1] + Math.sin(wall.angle) * wall.length * pos;
-      const tHalf = (wall.thickness ?? 6) / 2;
+      // Offset by half wall thickness + outset for label centre
+      // (Note: The wall line segment now IS the inside face, so tHalf is 0)
+      const tHalf = 0;
       const outset =
         tower.outset ??
         (tower.partType?.toLowerCase() === "l shape vertical" ? 20.875 : 0);
@@ -385,7 +388,7 @@ const placedTowerPolygons = computed(() => {
 
         let minPos = pos - (tower.width / 2) / wall.length;
         let maxPos = pos + (tower.width / 2) / wall.length;
-        const bounds = wallUsableBoundsPos(wall as any, 0, false);
+        const bounds = wallUsableBoundsPos(wall as any, 0);
         minPos = Math.max(minPos, bounds.min);
         maxPos = Math.min(maxPos, bounds.max);
         if (minPos > maxPos) { minPos = pos; maxPos = pos; }
@@ -602,15 +605,10 @@ function wallUsableBoundsPos(
     thickness: number;
   },
   halfW: number,
-  isToeKick: boolean = false,
 ): { min: number; max: number } {
   if (wall.length <= 0) return { min: 0, max: 1 };
 
   const CONN_TOL = 1;
-  const wallThickness =
-    typeof wall.thickness === "number" && wall.thickness > 0
-      ? wall.thickness
-      : 0;
   const wallStartPt: [number, number] = [wall.position[0], wall.position[1]];
   const wallEndPt: [number, number] = [
     wall.position[0] + Math.cos(wall.angle) * wall.length,
@@ -635,10 +633,8 @@ function wallUsableBoundsPos(
     if (startConnected && endConnected) break;
   }
 
-  const startMargin = isToeKick ? 0 : (startConnected
-    ? Math.min(wallThickness / 2, wall.length)
-    : 0);
-  const endMargin = isToeKick ? 0 : (endConnected ? Math.min(wallThickness / 2, wall.length) : 0);
+  const startMargin = 0;
+  const endMargin = 0;
   const usableLeft = startMargin;
   const usableRight = Math.max(startMargin, wall.length - endMargin);
 
@@ -814,8 +810,7 @@ function onSvgPointerMove(e: PointerEvent) {
     const delta = projected / dragState.wallLength;
 
     const halfW = tower.width / 2;
-    const isToeKick = tower.partType?.toLowerCase() === 'toe kick' || tower.partType?.toLowerCase() === 'l shape horizontal';
-    const { min, max } = wallUsableBoundsPos(wall, halfW, isToeKick);
+    const { min, max } = wallUsableBoundsPos(wall, halfW);
     const rawPos = Math.max(min, Math.min(max, dragState.startPos + delta));
     const prevPos = tower.positionAlongWall ?? 0.5;
     let clampedPos = clampTowerAwayFromObstructions(

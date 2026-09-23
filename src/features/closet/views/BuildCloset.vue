@@ -179,14 +179,6 @@ const clearances = computed(() => {
   const towerLeft = centerIn - halfW;
   const towerRight = centerIn + halfW;
 
-  // ── 1. Corner margins — wall thickness consumed by perpendicular connected walls.
-  //    Walls are drawn on centerlines, so the perpendicular wall's inner face is
-  //    at wall.thickness/2 from the corner — use half-thickness as the margin.
-  const wallThickness =
-    typeof wall.thickness === "number" && wall.thickness > 0
-      ? wall.thickness
-      : 0;
-
   const CONN_TOL = 1; // cm — same tolerance used in FloorPlan wallConnectivityForWall
   const wallStartPt: [number, number] = [wall.position[0], wall.position[1]];
   const wallEndPt: [number, number] = [
@@ -194,8 +186,6 @@ const clearances = computed(() => {
     wall.position[1] + Math.sin(wall.angle) * wall.length,
   ];
 
-  let startConnected = false;
-  let endConnected = false;
   const startConnectedWalls: typeof room.walls = [];
   const endConnectedWalls: typeof room.walls = [];
   // Track the depth of any adjacent-corner tower blocking start/end.
@@ -214,11 +204,9 @@ const clearances = computed(() => {
       Math.hypot(a[0] - b[0], a[1] - b[1]) <= CONN_TOL;
 
     if (hit(wallStartPt, oStart) || hit(wallStartPt, oEnd)) {
-      startConnected = true;
       startConnectedWalls.push(other);
     }
     if (hit(wallEndPt, oStart) || hit(wallEndPt, oEnd)) {
-      endConnected = true;
       endConnectedWalls.push(other);
     }
   }
