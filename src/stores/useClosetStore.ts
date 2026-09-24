@@ -320,7 +320,7 @@ export const useClosetStore = defineStore('closet', {
         depth: initialDepth,
         height: initialHeight,
         partType,
-        attachedToTowerId: (partType.toLowerCase() === 'panel' || partType.toLowerCase() === 'filler' || isToeKick) ? undefined : attachedTower?.id,
+        attachedToTowerId: (partType.toLowerCase() === 'panel' || partType.toLowerCase() === 'filler' || isToeKick || isLShape) ? undefined : attachedTower?.id,
         accessories: [],
         wallId: attachedTower?.wallId, // Place on same wall by default
         positionAlongWall: initialPosition,

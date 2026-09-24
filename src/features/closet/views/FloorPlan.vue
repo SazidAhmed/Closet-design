@@ -2164,8 +2164,15 @@ function clampTowerCenter(towerId: string, targetCenterCm: number): number {
     (t) => t.wallId === wall.id && t.id !== towerId,
   );
   for (const other of otherTowers) {
-    if (other.id === tower.attachedToTowerId || tower.id === other.attachedToTowerId) continue;
-    if (tower.attachedToTowerId && tower.attachedToTowerId === other.attachedToTowerId) continue;
+    const isToeKick = tower.partType?.toLowerCase() === 'toe kick';
+    const isOtherToeKick = other.partType?.toLowerCase() === 'toe kick';
+    const isCustom = isToeKick || tower.partType?.toLowerCase() === 'l shape horizontal' || tower.partType?.toLowerCase() === 'filler';
+    const isOtherCustom = isOtherToeKick || other.partType?.toLowerCase() === 'l shape horizontal' || other.partType?.toLowerCase() === 'filler';
+
+    if (!isCustom && !isOtherCustom) {
+      if (other.id === tower.attachedToTowerId || tower.id === other.attachedToTowerId) continue;
+      if (tower.attachedToTowerId && tower.attachedToTowerId === other.attachedToTowerId) continue;
+    }
 
     const otherWidth = Number(other.width) || 0;
     const otherHeight = Number(other.height) || 0;
@@ -2184,12 +2191,7 @@ function clampTowerCenter(towerId: string, targetCenterCm: number): number {
         : 0;
     const otherTopCm = otherElevationCm + otherHeight;
 
-    const isToeKick = tower.partType?.toLowerCase() === 'toe kick' || tower.partType?.toLowerCase() === 'l shape horizontal';
-    const isOtherToeKick = other.partType?.toLowerCase() === 'toe kick' || other.partType?.toLowerCase() === 'l shape horizontal';
     if (isToeKick !== isOtherToeKick) continue;
-
-    const isCustom = isToeKick || tower.partType?.toLowerCase() === 'filler';
-    const isOtherCustom = isOtherToeKick || other.partType?.toLowerCase() === 'l shape horizontal' || other.partType?.toLowerCase() === 'filler';
     const verticalOverlap = otherElevationCm < towerTopCm && otherTopCm > towerElevationCm;
     if (verticalOverlap) {
       forbiddenIntervals.push({
