@@ -355,14 +355,7 @@ const clearances = computed(() => {
         ) * oGapScale;
 
       if (uiClearance < tower.depth - epsilon) {
-        // The adjacent wall's tower footprint starts at otherWall.thickness/2
-        // from the centerline and extends otherTower.depth into the room.
-        // Both offsets consume space along our wall's axis from the corner.
-        const otherHalfThickness =
-          typeof otherWall.thickness === "number" && otherWall.thickness > 0
-            ? otherWall.thickness / 2
-            : 0;
-        const newEffLeft = otherTower.depth + otherHalfThickness;
+        const newEffLeft = otherTower.depth;
         if (newEffLeft > effectiveLeft) {
           effectiveLeft = newEffLeft;
           // Track the depth that should appear in the nominal display
@@ -429,13 +422,7 @@ const clearances = computed(() => {
         ) * oGapScale;
 
       if (uiClearance < tower.depth - epsilon) {
-        // Symmetric: account for the adjacent wall's half-thickness on the right.
-        const otherHalfThickness =
-          typeof otherWall.thickness === "number" && otherWall.thickness > 0
-            ? otherWall.thickness / 2
-            : 0;
-        const newEffRight =
-          wall.length - (otherTower.depth + otherHalfThickness);
+        const newEffRight = wall.length - otherTower.depth;
         if (newEffRight < effectiveRight) {
           effectiveRight = newEffRight;
           // Track the depth that should appear in the nominal display

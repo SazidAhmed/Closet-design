@@ -36,3 +36,18 @@ We will remove the geometric corner margins entirely so that `wall.length` direc
 ## User Review Required
 
 Does this approach perfectly align with your expectation that a "100 inch wall" should grant exactly 100 inches of usable space for cabinets and custom parts? Let me know if you approve this approach!
+
+## Update: Visual Gap Between Adjacent Cabinets Fixed
+
+### The Problem
+After updating the wall lengths to represent internal usable space, a new issue arose: when placing a cabinet on one wall and another cabinet on an adjacent perpendicular wall, the UI reported a correct `0` clearance, but the 3D visualization showed a physical gap between them. 
+
+### The Root Cause
+This was a remnant of the old corner calculations. In `BuildCloset.vue`, when checking for collisions with a tower on an adjacent wall, the system still added `otherHalfThickness` (e.g., 2.5") to the adjacent tower's depth when computing `newEffLeft` and `newEffRight`. Since the walls and towers are now drawn exactly from their centerlines without corner margins, this extra 2.5" artificially pushed the current wall's cabinet away from the adjacent cabinet by exactly half a wall's thickness, creating the visual gap.
+
+### The Fix
+We removed the `otherHalfThickness` addition from the adjacent collision calculations in `BuildCloset.vue`. 
+- **Before:** `const newEffLeft = otherTower.depth + otherHalfThickness;`
+- **After:** `const newEffLeft = otherTower.depth;`
+
+Now, cabinets on adjoining walls are placed precisely flush against the other cabinet's exact depth, with no physical gap in the 3D visualizer, while correctly maintaining the `0` numerical clearance in the UI.
