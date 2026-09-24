@@ -311,9 +311,7 @@ function willTowerOverlapOthers(
 
     const isCustom = isToeKick || targetTower.partType?.toLowerCase() === 'l shape horizontal' || targetTower.partType?.toLowerCase() === 'filler';
     const isOtherCustom = isOtherToeKick || other.partType?.toLowerCase() === 'l shape horizontal' || other.partType?.toLowerCase() === 'filler';
-    const verticalOverlap = (isCustom || isOtherCustom)
-      ? targetElev <= otherTop && targetTop >= otherElev
-      : targetElev < otherTop && targetTop > otherElev;
+    const verticalOverlap = targetElev < otherTop && targetTop > otherElev;
     if (!verticalOverlap) continue;
 
     const otherPoly = getTowerCorners(

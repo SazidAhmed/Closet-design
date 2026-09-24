@@ -285,9 +285,7 @@ const clearances = computed(() => {
 
     const isCustom = isToeKick || tower.partType?.toLowerCase() === 'l shape horizontal' || tower.partType?.toLowerCase() === 'filler';
     const isOtherCustom = isOtherToeKick || otherTower.partType?.toLowerCase() === 'l shape horizontal' || otherTower.partType?.toLowerCase() === 'filler';
-    const verticalOverlap = (isCustom || isOtherCustom)
-      ? otherElevationIn <= towerTopIn && otherTopIn >= towerElevationIn
-      : otherElevationIn < towerTopIn && otherTopIn > towerElevationIn;
+    const verticalOverlap = otherElevationIn < towerTopIn && otherTopIn > towerElevationIn;
     if (!verticalOverlap) continue;
 
     const otherPos = otherTower.positionAlongWall ?? 0.5;
@@ -454,9 +452,7 @@ const clearances = computed(() => {
 
     const isCustom = isToeKick || tower.partType?.toLowerCase() === 'l shape horizontal' || tower.partType?.toLowerCase() === 'filler';
     const isOtherCustom = isOtherToeKick || otherTower.partType?.toLowerCase() === 'l shape horizontal' || otherTower.partType?.toLowerCase() === 'filler';
-    const verticalOverlap = (isCustom || isOtherCustom)
-      ? otherElevationIn <= towerTopIn && otherTopIn >= towerElevationIn
-      : otherElevationIn < towerTopIn && otherTopIn > towerElevationIn;
+    const verticalOverlap = otherElevationIn < towerTopIn && otherTopIn > towerElevationIn;
     if (!verticalOverlap) continue;
 
     const otherPos = otherTower.positionAlongWall ?? 0.5;

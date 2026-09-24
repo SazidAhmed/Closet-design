@@ -2190,9 +2190,7 @@ function clampTowerCenter(towerId: string, targetCenterCm: number): number {
 
     const isCustom = isToeKick || tower.partType?.toLowerCase() === 'filler';
     const isOtherCustom = isOtherToeKick || other.partType?.toLowerCase() === 'l shape horizontal' || other.partType?.toLowerCase() === 'filler';
-    const verticalOverlap = (isCustom || isOtherCustom)
-      ? otherElevationCm <= towerTopCm && otherTopCm >= towerElevationCm
-      : otherElevationCm < towerTopCm && otherTopCm > towerElevationCm;
+    const verticalOverlap = otherElevationCm < towerTopCm && otherTopCm > towerElevationCm;
     if (verticalOverlap) {
       forbiddenIntervals.push({
         min: otherLeft - widthCm / 2,
