@@ -618,9 +618,12 @@ const adjacentTowerBlockedZones = computed<
   }
 
   const zones: Array<{
+    id: string;
     side: "start" | "end";
     depthCm: number;
     labelCm: number;
+    bottomCm: number;
+    heightCm: number;
   }> = [];
 
   // Determine the threshold depth to check against.
@@ -658,6 +661,8 @@ const adjacentTowerBlockedZones = computed<
   ) => {
     let maxBlockedDepth = 0;
     let maxLabelDepth = 0;
+    let minBottom = Infinity;
+    let maxTop = -Infinity;
 
     for (const adjWall of connectedWalls) {
       const adjStart: [number, number] = [
@@ -742,21 +747,32 @@ const adjacentTowerBlockedZones = computed<
         const uiClearance =
           Math.max(0, distFromCorner - cornerMargin) * gapScale;
 
-        // The adjacent tower protrudes into current wall's space if it sits close enough
-        // to the corner that it overlaps with the current tower's depth.
-        // We evaluate this in UI clearance space to match exactly what the user inputs.
-        if (uiClearance < thresholdDepth - epsilon) {
+        if (distFromCorner < thresholdDepth - epsilon) {
+          const adjOutset = typeof adjTower.outset === "number" && !isNaN(adjTower.outset) ? adjTower.outset : 0;
+          const adjElevation = typeof adjTower.elevation === "number" && !isNaN(adjTower.elevation) ? adjTower.elevation : 0;
+          const adjHeight = typeof adjTower.height === "number" && !isNaN(adjTower.height) ? adjTower.height : 0;
+          const totalAdjDepth = adjDepth + adjOutset;
+
           maxBlockedDepth = Math.max(
             maxBlockedDepth,
-            adjDepth + adjWallHalfThickness,
+            totalAdjDepth + adjWallHalfThickness,
           );
-          maxLabelDepth = Math.max(maxLabelDepth, adjDepth);
+          maxLabelDepth = Math.max(maxLabelDepth, totalAdjDepth);
+          minBottom = Math.min(minBottom, adjElevation);
+          maxTop = Math.max(maxTop, adjElevation + adjHeight);
         }
       }
     }
 
     if (maxBlockedDepth > 0) {
-      zones.push({ side, depthCm: maxBlockedDepth, labelCm: maxLabelDepth });
+      zones.push({
+        id: side,
+        side,
+        depthCm: maxBlockedDepth,
+        labelCm: maxLabelDepth,
+        bottomCm: minBottom === Infinity ? 0 : minBottom,
+        heightCm: maxTop === -Infinity ? 0 : maxTop - minBottom
+      });
     }
   };
 
@@ -1273,7 +1289,7 @@ function elevationHorizontalBoundsForWall(
           distFromCorner - (hit(wallStartPt, oStart) ? startMargin : endMargin),
         ) * gapScale;
       // Tower is close enough to the corner to protrude into our wall's space
-      if (uiClearance < thresholdDepth - 0.0001) {
+      if (distFromCorner < thresholdDepth - 0.0001) {
         startAdjacentDepth = Math.max(startAdjacentDepth, tower.depth);
       }
     }
@@ -1319,7 +1335,7 @@ function elevationHorizontalBoundsForWall(
           0,
           distFromCorner - (hit(wallEndPt, oStart) ? startMargin : endMargin),
         ) * gapScale;
-      if (uiClearance < thresholdDepth - 0.0001) {
+      if (distFromCorner < thresholdDepth - 0.0001) {
         endAdjacentDepth = Math.max(endAdjacentDepth, tower.depth);
       }
     }
@@ -4614,9 +4630,9 @@ function dimLinePoints(wall: {
                           elevationLayout.wallWidthPx -
                           zone.depthCm * elevationLayout.scale
                     "
-                    :y="elevationLayout.wallY"
+                    :y="elevationLayout.wallY + elevationLayout.wallHeightPx - (zone.bottomCm + zone.heightCm) * elevationLayout.scale"
                     :width="zone.depthCm * elevationLayout.scale"
-                    :height="elevationLayout.wallHeightPx"
+                    :height="zone.heightCm * elevationLayout.scale"
                     fill="url(#adj-tower-hatch)"
                     opacity="0.55"
                   />
@@ -4630,7 +4646,7 @@ function dimLinePoints(wall: {
                           elevationLayout.wallWidthPx -
                           zone.depthCm * elevationLayout.scale
                     "
-                    :y1="elevationLayout.wallY"
+                    :y1="elevationLayout.wallY + elevationLayout.wallHeightPx - (zone.bottomCm + zone.heightCm) * elevationLayout.scale"
                     :x2="
                       zone.side === 'start'
                         ? elevationLayout.wallX +
@@ -4639,7 +4655,7 @@ function dimLinePoints(wall: {
                           elevationLayout.wallWidthPx -
                           zone.depthCm * elevationLayout.scale
                     "
-                    :y2="elevationLayout.wallY + elevationLayout.wallHeightPx"
+                    :y2="elevationLayout.wallY + elevationLayout.wallHeightPx - zone.bottomCm * elevationLayout.scale"
                     stroke="rgba(239,68,68,0.9)"
                     stroke-width="2"
                     stroke-dasharray="6,3"
@@ -4655,8 +4671,7 @@ function dimLinePoints(wall: {
                           (zone.depthCm * elevationLayout.scale) / 2
                     "
                     :y="
-                      elevationLayout.wallY +
-                      elevationLayout.wallHeightPx / 2 -
+                      elevationLayout.wallY + elevationLayout.wallHeightPx - (zone.bottomCm + zone.heightCm / 2) * elevationLayout.scale -
                       12
                     "
                     text-anchor="middle"
@@ -4678,8 +4693,7 @@ function dimLinePoints(wall: {
                           (zone.depthCm * elevationLayout.scale) / 2
                     "
                     :y="
-                      elevationLayout.wallY +
-                      elevationLayout.wallHeightPx / 2 +
+                      elevationLayout.wallY + elevationLayout.wallHeightPx - (zone.bottomCm + zone.heightCm / 2) * elevationLayout.scale +
                       4
                     "
                     text-anchor="middle"

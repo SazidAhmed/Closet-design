@@ -40,10 +40,18 @@ const selectedDoorMode = ref<ClosetDoorMode>("without_doors");
 const showElevation = ref(false);
 const pendingCustomPart = ref<string | null>(null);
 
-const allowedCustomParts = ['panel', 'filler', 'toe kick', 'l shape vertical', 'l shape horizontal'];
+const allowedCustomParts = [
+  "panel",
+  "filler",
+  "toe kick",
+  "l shape vertical",
+  "l shape horizontal",
+];
 
 const filteredCustomParts = computed(() => {
-  return closet.customParts.filter(part => allowedCustomParts.includes(part.title.toLowerCase()));
+  return closet.customParts.filter((part) =>
+    allowedCustomParts.includes(part.title.toLowerCase()),
+  );
 });
 
 const visibleCategories = computed(() => {
@@ -76,11 +84,25 @@ const selectedTower = computed(
 const selectedTowerLimits = computed<ClosetCatalogLimits | null>(() => {
   const tower = selectedTower.value;
   if (!tower?.doorMode || !tower.categoryCode) return null;
-  const isCorner = tower.isCorner ?? (tower.cornerPosition === 'left' || tower.cornerPosition === 'right' || tower.cornerOrientation === 'left' || tower.cornerOrientation === 'right');
-  const position = tower.cornerPosition ?? tower.cornerOrientation ?? (isCorner ? 'left' : 'none');
-  
+  const isCorner =
+    tower.isCorner ??
+    (tower.cornerPosition === "left" ||
+      tower.cornerPosition === "right" ||
+      tower.cornerOrientation === "left" ||
+      tower.cornerOrientation === "right");
+  const position =
+    tower.cornerPosition ??
+    tower.cornerOrientation ??
+    (isCorner ? "left" : "none");
+
   // Use the specific catalog for the tower's depth, not the whole category
-  const catalog = resolveCatalogForTower(tower.doorMode, tower.categoryCode, tower.depth, isCorner, position);
+  const catalog = resolveCatalogForTower(
+    tower.doorMode,
+    tower.categoryCode,
+    tower.depth,
+    isCorner,
+    position,
+  );
 
   if (!catalog) {
     return getCategoryLimits(tower.doorMode, tower.categoryCode);
@@ -263,7 +285,6 @@ const clearances = computed(() => {
   for (const otherTower of closet.towers) {
     if (otherTower.id === tower.id) continue;
 
-
     const isAtStart = startConnectedWalls.some(
       (w) => w.id === otherTower.wallId,
     );
@@ -279,13 +300,20 @@ const clearances = computed(() => {
         : 0;
     const otherTopIn = otherElevationIn + otherTower.height;
 
-    const isToeKick = tower.partType?.toLowerCase() === 'toe kick';
-    const isOtherToeKick = otherTower.partType?.toLowerCase() === 'toe kick';
+    const isToeKick = tower.partType?.toLowerCase() === "toe kick";
+    const isOtherToeKick = otherTower.partType?.toLowerCase() === "toe kick";
     if (isToeKick !== isOtherToeKick) continue;
 
-    const isCustom = isToeKick || tower.partType?.toLowerCase() === 'l shape horizontal' || tower.partType?.toLowerCase() === 'filler';
-    const isOtherCustom = isOtherToeKick || otherTower.partType?.toLowerCase() === 'l shape horizontal' || otherTower.partType?.toLowerCase() === 'filler';
-    const verticalOverlap = otherElevationIn < towerTopIn && otherTopIn > towerElevationIn;
+    const isCustom =
+      isToeKick ||
+      tower.partType?.toLowerCase() === "l shape horizontal" ||
+      tower.partType?.toLowerCase() === "filler";
+    const isOtherCustom =
+      isOtherToeKick ||
+      otherTower.partType?.toLowerCase() === "l shape horizontal" ||
+      otherTower.partType?.toLowerCase() === "filler";
+    const verticalOverlap =
+      otherElevationIn < towerTopIn && otherTopIn > towerElevationIn;
     if (!verticalOverlap) continue;
 
     const otherPos = otherTower.positionAlongWall ?? 0.5;
@@ -353,12 +381,13 @@ const clearances = computed(() => {
         ) * oGapScale;
 
       if (uiClearance < tower.depth - epsilon) {
-        const newEffLeft = otherTower.depth;
-        if (newEffLeft > effectiveLeft) {
-          effectiveLeft = newEffLeft;
-          // Track the depth that should appear in the nominal display
-          startAdjacentDepth = Math.max(startAdjacentDepth, otherTower.depth);
-        }
+        const otherOutset =
+          typeof otherTower.outset === "number" && !isNaN(otherTower.outset)
+            ? otherTower.outset
+            : 0;
+        const newEffLeft = otherTower.depth + otherOutset;
+        // Track the depth that should appear in the nominal display
+        startAdjacentDepth = Math.max(startAdjacentDepth, newEffLeft);
       }
     }
 
@@ -420,12 +449,16 @@ const clearances = computed(() => {
         ) * oGapScale;
 
       if (uiClearance < tower.depth - epsilon) {
-        const newEffRight = wall.length - otherTower.depth;
-        if (newEffRight < effectiveRight) {
-          effectiveRight = newEffRight;
-          // Track the depth that should appear in the nominal display
-          endAdjacentDepth = Math.max(endAdjacentDepth, otherTower.depth);
-        }
+        const otherOutset =
+          typeof otherTower.outset === "number" && !isNaN(otherTower.outset)
+            ? otherTower.outset
+            : 0;
+        const newEffRight = wall.length - (otherTower.depth + otherOutset);
+        // Track the depth that should appear in the nominal display
+        endAdjacentDepth = Math.max(
+          endAdjacentDepth,
+          otherTower.depth + otherOutset,
+        );
       }
     }
   }
@@ -439,20 +472,26 @@ const clearances = computed(() => {
     if (otherTower.id === tower.id) continue;
     if (otherTower.wallId !== wall.id) continue;
 
-
     const otherElevationIn =
       typeof otherTower.elevation === "number" && !isNaN(otherTower.elevation)
         ? Math.max(0, otherTower.elevation)
         : 0;
     const otherTopIn = otherElevationIn + otherTower.height;
 
-    const isToeKick = tower.partType?.toLowerCase() === 'toe kick';
-    const isOtherToeKick = otherTower.partType?.toLowerCase() === 'toe kick';
+    const isToeKick = tower.partType?.toLowerCase() === "toe kick";
+    const isOtherToeKick = otherTower.partType?.toLowerCase() === "toe kick";
     if (isToeKick !== isOtherToeKick) continue;
 
-    const isCustom = isToeKick || tower.partType?.toLowerCase() === 'l shape horizontal' || tower.partType?.toLowerCase() === 'filler';
-    const isOtherCustom = isOtherToeKick || otherTower.partType?.toLowerCase() === 'l shape horizontal' || otherTower.partType?.toLowerCase() === 'filler';
-    const verticalOverlap = otherElevationIn < towerTopIn && otherTopIn > towerElevationIn;
+    const isCustom =
+      isToeKick ||
+      tower.partType?.toLowerCase() === "l shape horizontal" ||
+      tower.partType?.toLowerCase() === "filler";
+    const isOtherCustom =
+      isOtherToeKick ||
+      otherTower.partType?.toLowerCase() === "l shape horizontal" ||
+      otherTower.partType?.toLowerCase() === "filler";
+    const verticalOverlap =
+      otherElevationIn < towerTopIn && otherTopIn > towerElevationIn;
     if (!verticalOverlap) continue;
 
     const otherPos = otherTower.positionAlongWall ?? 0.5;
@@ -478,7 +517,12 @@ const clearances = computed(() => {
   // The physical usable range considers corner margins and corner blockages.
   // We satisfy the user invariant: LeftClearance + TowerWidth + RightClearance = WallDisplayWidth
   const totalTowerWidthIn = closet.towers
-    .filter((t) => t.wallId === wall.id && t.partType?.toLowerCase() !== 'toe kick' && t.partType?.toLowerCase() !== 'l shape horizontal')
+    .filter(
+      (t) =>
+        t.wallId === wall.id &&
+        t.partType?.toLowerCase() !== "toe kick" &&
+        t.partType?.toLowerCase() !== "l shape horizontal",
+    )
     .reduce((sum, t) => sum + t.width, 0);
 
   const isLeftWallOnly =
@@ -488,13 +532,10 @@ const clearances = computed(() => {
     Math.abs(globalEffectiveRight - (wall.length - endMargin)) < 0.1 &&
     endAdjacentDepth === 0;
 
-  const nominalGlobalLeft = isLeftWallOnly ? 0 : startAdjacentDepth;
-  const nominalGlobalRight = isRightWallOnly
-    ? wall.length
-    : wall.length - endAdjacentDepth;
-
   const physicalUsable = globalEffectiveRight - globalEffectiveLeft;
-  const nominalUsable = nominalGlobalRight - nominalGlobalLeft;
+  // We no longer compress the nominal usable space based on adjacent cabinets
+  // so the user can drag/input all the way to the corner.
+  const nominalUsable = wall.length;
 
   const totalPhysicalGap = Math.max(0, physicalUsable - totalTowerWidthIn);
 
@@ -505,7 +546,7 @@ const clearances = computed(() => {
         t.partType !== "panel" &&
         t.partType !== "filler" &&
         t.partType?.toLowerCase() !== "toe kick" &&
-        t.partType?.toLowerCase() !== 'l shape horizontal',
+        t.partType?.toLowerCase() !== "l shape horizontal",
     )
     .reduce((sum, t) => sum + t.width, 0);
   const totalNominalGap = Math.max(0, nominalUsable - nominalTowerWidthIn);
@@ -525,7 +566,9 @@ const clearances = computed(() => {
 });
 
 const maxAllowedWidth = computed(() => {
-  let maxW = selectedTowerLimits.value ? selectedTowerLimits.value.maxW : Infinity;
+  let maxW = selectedTowerLimits.value
+    ? selectedTowerLimits.value.maxW
+    : Infinity;
   const c = clearances.value;
   if (c) {
     maxW = Math.min(maxW, c.effectiveRight - c.effectiveLeft);
@@ -608,11 +651,12 @@ function sanitizeAllTowerPositions() {
       if (startConnected && endConnected) break;
     }
 
-    const isCustomPart = tower.partType?.toLowerCase() === 'toe kick' || 
-                         tower.partType?.toLowerCase() === 'l shape horizontal' ||
-                         tower.partType?.toLowerCase() === 'filler' ||
-                         tower.partType?.toLowerCase() === 'panel' ||
-                         tower.partType?.toLowerCase() === 'l shape vertical';
+    const isCustomPart =
+      tower.partType?.toLowerCase() === "toe kick" ||
+      tower.partType?.toLowerCase() === "l shape horizontal" ||
+      tower.partType?.toLowerCase() === "filler" ||
+      tower.partType?.toLowerCase() === "panel" ||
+      tower.partType?.toLowerCase() === "l shape vertical";
     const startMargin = 0;
     const endMargin = 0;
     const usableLeft = startMargin;
@@ -814,7 +858,14 @@ function onBridgeDimensionInput(
 }
 
 function onDimensionInput(
-  dimension: "width" | "depth" | "height" | "outset" | "elevation" | "doorWidth" | "doorHeight",
+  dimension:
+    | "width"
+    | "depth"
+    | "height"
+    | "outset"
+    | "elevation"
+    | "doorWidth"
+    | "doorHeight",
   event: Event,
 ) {
   const tower = selectedTower.value;
@@ -986,8 +1037,10 @@ function towerSubtitle(tower: {
   if (tower.partType === "panel") return "Panel";
   if (tower.partType === "filler") return "Filler";
   if (tower.partType?.toLowerCase() === "toe kick") return "Toe Kick";
-  if (tower.partType?.toLowerCase() === "l shape vertical") return "L Shape Vertical";
-  if (tower.partType?.toLowerCase() === "l shape horizontal") return "L Shape Horizontal";
+  if (tower.partType?.toLowerCase() === "l shape vertical")
+    return "L Shape Vertical";
+  if (tower.partType?.toLowerCase() === "l shape horizontal")
+    return "L Shape Horizontal";
   if (tower.partType) return tower.partType;
   if (!tower.categoryName || !tower.categoryCode) return "Legacy tower";
   const base = `${tower.categoryName} (${tower.categoryCode})`;
@@ -1019,8 +1072,12 @@ function addCustomPartHandler(type: string) {
   const isLShapeHorizontal = type.toLowerCase() === "l shape horizontal";
   if (isLShapeHorizontal) {
     const tower = selectedTower.value;
-    const attachedId = (tower && (!tower.partType || tower.partType === "cabinet")) ? tower.id : undefined;
-    const wallId = tower?.wallId ?? selection.selectedWallId ?? room.closetWall?.id ?? null;
+    const attachedId =
+      tower && (!tower.partType || tower.partType === "cabinet")
+        ? tower.id
+        : undefined;
+    const wallId =
+      tower?.wallId ?? selection.selectedWallId ?? room.closetWall?.id ?? null;
     const newPart = closet.addCustomPart(
       type,
       attachedId,
@@ -1036,8 +1093,12 @@ function addCustomPartHandler(type: string) {
   const isToeKick = type.toLowerCase() === "toe kick";
   if (isToeKick) {
     const tower = selectedTower.value;
-    const attachedId = (tower && (!tower.partType || tower.partType === "cabinet")) ? tower.id : undefined;
-    const wallId = tower?.wallId ?? selection.selectedWallId ?? room.closetWall?.id ?? null;
+    const attachedId =
+      tower && (!tower.partType || tower.partType === "cabinet")
+        ? tower.id
+        : undefined;
+    const wallId =
+      tower?.wallId ?? selection.selectedWallId ?? room.closetWall?.id ?? null;
     const newPart = closet.addCustomPart(
       type,
       attachedId,
@@ -1065,9 +1126,13 @@ function addCustomPartHandler(type: string) {
 
 function confirmCustomPartSide(side: "left" | "right") {
   if (!pendingCustomPart.value) return;
-  const isLShapeVertical = pendingCustomPart.value.toLowerCase() === "l shape vertical";
+  const isLShapeVertical =
+    pendingCustomPart.value.toLowerCase() === "l shape vertical";
   const tower = selectedTower.value;
-  const attachedId = (tower && (!tower.partType || tower.partType === "cabinet")) ? tower.id : undefined;
+  const attachedId =
+    tower && (!tower.partType || tower.partType === "cabinet")
+      ? tower.id
+      : undefined;
   const wallId = selection.selectedWallId ?? room.closetWall?.id ?? null;
 
   const newPart = closet.addCustomPart(
@@ -1091,12 +1156,12 @@ function cancelCustomPartSide() {
 const towerOneDoor = computed(() => {
   const tower = selectedTower.value;
   if (!tower?.catalogId || !tower.cabinetId) return 0;
-  
+
   // Always query the live catalog first to prevent stale '0' values stored on the tower
   for (const cat of closet.catalogCategories) {
     for (const catalog of cat.catalogs) {
       if (catalog.catalogId === tower.catalogId) {
-        const cab = catalog.cabinets.find(c => c.id === tower.cabinetId);
+        const cab = catalog.cabinets.find((c) => c.id === tower.cabinetId);
         if (cab && cab.oneDoor !== undefined) return cab.oneDoor;
       }
     }
@@ -1107,12 +1172,12 @@ const towerOneDoor = computed(() => {
 const towerTwoDoors = computed(() => {
   const tower = selectedTower.value;
   if (!tower?.catalogId || !tower.cabinetId) return 0;
-  
+
   // Always query the live catalog first to prevent stale '0' values stored on the tower
   for (const cat of closet.catalogCategories) {
     for (const catalog of cat.catalogs) {
       if (catalog.catalogId === tower.catalogId) {
-        const cab = catalog.cabinets.find(c => c.id === tower.cabinetId);
+        const cab = catalog.cabinets.find((c) => c.id === tower.cabinetId);
         if (cab && cab.twoDoors !== undefined) return cab.twoDoors;
       }
     }
@@ -1179,10 +1244,22 @@ const towerTwoDoors = computed(() => {
               >
                 <div>
                   <strong>{{ part.title }}</strong>
-                  <span v-if="part.title.toLowerCase() === 'panel'">W: 0.7500"</span>
-                  <span v-else-if="part.title.toLowerCase() === 'filler'">W: 3" D: 0.7500"</span>
-                  <span v-else-if="part.title.toLowerCase() === 'toe kick'">D: 0.7500"</span>
-                  <span v-else-if="part.title.toLowerCase() === 'l shape vertical' || part.title.toLowerCase() === 'l shape horizontal'">3" x 3"</span>
+                  <span v-if="part.title.toLowerCase() === 'panel'"
+                    >W: 0.7500"</span
+                  >
+                  <span v-else-if="part.title.toLowerCase() === 'filler'"
+                    >W: 3" D: 0.7500"</span
+                  >
+                  <span v-else-if="part.title.toLowerCase() === 'toe kick'"
+                    >D: 0.7500"</span
+                  >
+                  <span
+                    v-else-if="
+                      part.title.toLowerCase() === 'l shape vertical' ||
+                      part.title.toLowerCase() === 'l shape horizontal'
+                    "
+                    >3" x 3"</span
+                  >
                   <span v-else-if="part.has_width">W: 0.7500"</span>
                   <span v-else-if="part.has_depth">D: 0.7500"</span>
                 </div>
@@ -1190,35 +1267,50 @@ const towerTwoDoors = computed(() => {
               </button>
             </template>
             <template v-else>
-              <button class="category-card" @click="addCustomPartHandler('panel')">
+              <button
+                class="category-card"
+                @click="addCustomPartHandler('panel')"
+              >
                 <div>
                   <strong>Panel</strong>
                   <span>W: 0.7500"</span>
                 </div>
                 <Plus :size="16" />
               </button>
-              <button class="category-card" @click="addCustomPartHandler('filler')">
+              <button
+                class="category-card"
+                @click="addCustomPartHandler('filler')"
+              >
                 <div>
                   <strong>Filler</strong>
                   <span>W: 3" D: 0.7500"</span>
                 </div>
                 <Plus :size="16" />
               </button>
-              <button class="category-card" @click="addCustomPartHandler('toe kick')">
+              <button
+                class="category-card"
+                @click="addCustomPartHandler('toe kick')"
+              >
                 <div>
                   <strong>Toe Kick</strong>
                   <span>D: 0.7500"</span>
                 </div>
                 <Plus :size="16" />
               </button>
-              <button class="category-card" @click="addCustomPartHandler('l shape vertical')">
+              <button
+                class="category-card"
+                @click="addCustomPartHandler('l shape vertical')"
+              >
                 <div>
                   <strong>L Shape Vertical</strong>
                   <span>3" x 3"</span>
                 </div>
                 <Plus :size="16" />
               </button>
-              <button class="category-card" @click="addCustomPartHandler('l shape horizontal')">
+              <button
+                class="category-card"
+                @click="addCustomPartHandler('l shape horizontal')"
+              >
                 <div>
                   <strong>L Shape Horizontal</strong>
                   <span>3" x 3"</span>
@@ -1335,7 +1427,8 @@ const towerTwoDoors = computed(() => {
               type="number"
               step="0.0625"
               :min="
-                selectedTower.partType === 'filler' || selectedTower.partType?.toLowerCase() === 'toe kick'
+                selectedTower.partType === 'filler' ||
+                selectedTower.partType?.toLowerCase() === 'toe kick'
                   ? 1.5
                   : selectedTower.isCorner ||
                       selectedTower.cornerPosition === 'left' ||
@@ -1399,7 +1492,10 @@ const towerTwoDoors = computed(() => {
               :min="selectedTowerLimits ? selectedTowerLimits.minD : 0"
               :max="selectedTowerLimits ? selectedTowerLimits.maxD : undefined"
               :value="truncTo4(selectedTower.depth)"
-              :disabled="selectedTower.partType === 'filler' || selectedTower.partType?.toLowerCase() === 'toe kick'"
+              :disabled="
+                selectedTower.partType === 'filler' ||
+                selectedTower.partType?.toLowerCase() === 'toe kick'
+              "
               @change="onDimensionInput('depth', $event)"
               @blur="onDimensionInput('depth', $event)"
               @keyup.enter="onDimensionInput('depth', $event)"
@@ -1489,16 +1585,34 @@ const towerTwoDoors = computed(() => {
             />
           </div>
 
-          <div v-if="selectedTower.doorMode === 'with_doors'" class="box-toggle-section" style="margin-top: 16px;">
+          <div
+            v-if="selectedTower.doorMode === 'with_doors'"
+            class="box-toggle-section"
+            style="margin-top: 16px"
+          >
             <div class="dimension-head">
               <label>Door Hinge</label>
             </div>
-            
-            <div style="font-size: 10px; color: #ff9999; margin-top: 4px; padding-bottom: 8px;">
-              Debug Doors: one={{ towerOneDoor }}, two={{ towerTwoDoors }}, cabId={{ selectedTower?.cabinetId }}, catId={{ selectedTower?.catalogId }}
+
+            <div
+              style="
+                font-size: 10px;
+                color: #ff9999;
+                margin-top: 4px;
+                padding-bottom: 8px;
+              "
+            >
+              Debug Doors: one={{ towerOneDoor }}, two={{ towerTwoDoors }},
+              cabId={{ selectedTower?.cabinetId }}, catId={{
+                selectedTower?.catalogId
+              }}
             </div>
-            
-            <div v-if="towerOneDoor === 1 && towerTwoDoors === 1" class="segmented-control box-toggle" style="margin-bottom: 8px;">
+
+            <div
+              v-if="towerOneDoor === 1 && towerTwoDoors === 1"
+              class="segmented-control box-toggle"
+              style="margin-bottom: 8px"
+            >
               <button
                 class="segment-btn"
                 :class="{ active: selectedTower.doorCount !== 2 }"
@@ -1515,18 +1629,25 @@ const towerTwoDoors = computed(() => {
               </button>
             </div>
 
-            <div v-if="selectedTower.doorCount !== 2" class="segmented-control box-toggle">
+            <div
+              v-if="selectedTower.doorCount !== 2"
+              class="segmented-control box-toggle"
+            >
               <button
                 class="segment-btn"
                 :class="{ active: selectedTower.doorHinge !== 'right' }"
-                @click="closet.updateTower(selectedTower.id, { doorHinge: 'left' })"
+                @click="
+                  closet.updateTower(selectedTower.id, { doorHinge: 'left' })
+                "
               >
                 Left-Hinge
               </button>
               <button
                 class="segment-btn"
                 :class="{ active: selectedTower.doorHinge === 'right' }"
-                @click="closet.updateTower(selectedTower.id, { doorHinge: 'right' })"
+                @click="
+                  closet.updateTower(selectedTower.id, { doorHinge: 'right' })
+                "
               >
                 Right-Hinge
               </button>
@@ -1706,7 +1827,13 @@ const towerTwoDoors = computed(() => {
 
     <div v-if="pendingCustomPart" class="modal-overlay">
       <div class="modal-dialog">
-        <h3 class="modal-title">{{ isPendingLShape ? 'Select orientation' : 'Select position of the part' }}</h3>
+        <h3 class="modal-title">
+          {{
+            isPendingLShape
+              ? "Select orientation"
+              : "Select position of the part"
+          }}
+        </h3>
         <div class="modal-actions">
           <button class="modal-btn" @click="confirmCustomPartSide('left')">
             Left
