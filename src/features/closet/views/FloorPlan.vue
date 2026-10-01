@@ -755,7 +755,7 @@ const adjacentTowerBlockedZones = computed<
 
           maxBlockedDepth = Math.max(
             maxBlockedDepth,
-            totalAdjDepth + adjWallHalfThickness,
+            totalAdjDepth,
           );
           maxLabelDepth = Math.max(maxLabelDepth, totalAdjDepth);
           minBottom = Math.min(minBottom, adjElevation);
@@ -1290,7 +1290,9 @@ function elevationHorizontalBoundsForWall(
         ) * gapScale;
       // Tower is close enough to the corner to protrude into our wall's space
       if (distFromCorner < thresholdDepth - 0.0001) {
-        startAdjacentDepth = Math.max(startAdjacentDepth, tower.depth);
+        const totalAdjDepth = (typeof tower.depth === "number" && !isNaN(tower.depth) ? tower.depth : 0) + 
+                              (typeof tower.outset === "number" && !isNaN(tower.outset) ? tower.outset : 0);
+        startAdjacentDepth = Math.max(startAdjacentDepth, totalAdjDepth);
       }
     }
 
@@ -1336,7 +1338,9 @@ function elevationHorizontalBoundsForWall(
           distFromCorner - (hit(wallEndPt, oStart) ? startMargin : endMargin),
         ) * gapScale;
       if (distFromCorner < thresholdDepth - 0.0001) {
-        endAdjacentDepth = Math.max(endAdjacentDepth, tower.depth);
+        const totalAdjDepth = (typeof tower.depth === "number" && !isNaN(tower.depth) ? tower.depth : 0) + 
+                              (typeof tower.outset === "number" && !isNaN(tower.outset) ? tower.outset : 0);
+        endAdjacentDepth = Math.max(endAdjacentDepth, totalAdjDepth);
       }
     }
   }
