@@ -561,6 +561,8 @@ const clearances = computed(() => {
     right: uiRight < epsilon ? 0 : Math.max(0, uiRight),
     effectiveLeft,
     effectiveRight,
+    minAllowedLeft: Math.max(effectiveLeft, startAdjacentDepth),
+    maxAllowedRight: Math.min(effectiveRight, wall.length - endAdjacentDepth),
     gapScale,
   };
 });
@@ -571,7 +573,7 @@ const maxAllowedWidth = computed(() => {
     : Infinity;
   const c = clearances.value;
   if (c) {
-    maxW = Math.min(maxW, c.effectiveRight - c.effectiveLeft);
+    maxW = Math.min(maxW, c.maxAllowedRight - c.minAllowedLeft);
   }
   return maxW === Infinity ? undefined : maxW;
 });
@@ -726,8 +728,8 @@ function clampSelectedTowerToUsableBounds() {
   if (!tower || !wall || !c) return;
 
   const halfW = tower.width / 2;
-  const minCenterIn = c.effectiveLeft + halfW;
-  const maxCenterIn = Math.max(minCenterIn, c.effectiveRight - halfW);
+  const minCenterIn = c.minAllowedLeft + halfW;
+  const maxCenterIn = Math.max(minCenterIn, c.maxAllowedRight - halfW);
 
   const currentCenterIn = (tower.positionAlongWall ?? 0.5) * wall.length;
   const clampedCenterIn = Math.max(
@@ -932,7 +934,9 @@ function onClearanceInput(side: "left" | "right", event: Event) {
   }
 
   // Ensure center stays within raw wall bounds
-  newCenterIn = Math.max(halfW, Math.min(wall.length - halfW, newCenterIn));
+  const minAllowedCenter = c.minAllowedLeft + halfW;
+  const maxAllowedCenter = Math.max(minAllowedCenter, c.maxAllowedRight - halfW);
+  newCenterIn = Math.max(minAllowedCenter, Math.min(maxAllowedCenter, newCenterIn));
 
   const positionAlongWall = newCenterIn / wall.length;
   closet.updateTower(tower.id, { positionAlongWall });
@@ -956,15 +960,17 @@ function distributeTowers() {
   const c = clearances.value;
   if (!tower || !wall || !c) return;
 
-  // Center the selected tower within its available gap [effectiveLeft, effectiveRight].
-  // effectiveLeft and effectiveRight already account for neighboring towers,
-  // doors, windows, and wall boundaries — so other towers stay untouched.
-  const availableSpace = c.effectiveRight - c.effectiveLeft;
-  const newCenter = c.effectiveLeft + availableSpace / 2;
+  // Center the selected tower within its available gap [minAllowedLeft, maxAllowedRight].
+  // minAllowedLeft and maxAllowedRight already account for neighboring towers,
+  // doors, windows, adjacent walls, and wall boundaries — so other towers stay untouched.
+  const availableSpace = c.maxAllowedRight - c.minAllowedLeft;
+  const newCenter = c.minAllowedLeft + availableSpace / 2;
+  const minAllowedCenter = c.minAllowedLeft + tower.width / 2;
+  const maxAllowedCenter = Math.max(minAllowedCenter, c.maxAllowedRight - tower.width / 2);
   const positionAlongWall = Math.max(
-    tower.width / 2 / wall.length,
+    minAllowedCenter / wall.length,
     Math.min(
-      (wall.length - tower.width / 2) / wall.length,
+      maxAllowedCenter / wall.length,
       newCenter / wall.length,
     ),
   );
@@ -974,7 +980,7 @@ function distributeTowers() {
 /**
  * Move the selected tower all the way to the left boundary.
  * The left edge of the tower will be flush against the nearest obstacle on the
- * left: a wall corner margin, a door/window, or another tower.
+ * left: a wall corner margin, a door/window, adjacent blocked area, or another tower.
  */
 function moveTowerLeft() {
   const tower = selectedTower.value;
@@ -982,22 +988,16 @@ function moveTowerLeft() {
   const c = clearances.value;
   if (!tower || !wall || !c) return;
 
-  // Place the tower's left edge at effectiveLeft.
-  const newCenter = c.effectiveLeft + tower.width / 2;
-  const positionAlongWall = Math.max(
-    tower.width / 2 / wall.length,
-    Math.min(
-      (wall.length - tower.width / 2) / wall.length,
-      newCenter / wall.length,
-    ),
-  );
+  // Place the tower's left edge at minAllowedLeft.
+  const newCenter = c.minAllowedLeft + tower.width / 2;
+  const positionAlongWall = newCenter / wall.length;
   closet.updateTower(tower.id, { positionAlongWall });
 }
 
 /**
  * Move the selected tower all the way to the right boundary.
  * The right edge of the tower will be flush against the nearest obstacle on the
- * right: a wall corner margin, a door/window, or another tower.
+ * right: a wall corner margin, a door/window, adjacent blocked area, or another tower.
  */
 function moveTowerRight() {
   const tower = selectedTower.value;
@@ -1005,15 +1005,9 @@ function moveTowerRight() {
   const c = clearances.value;
   if (!tower || !wall || !c) return;
 
-  // Place the tower's right edge at effectiveRight.
-  const newCenter = c.effectiveRight - tower.width / 2;
-  const positionAlongWall = Math.max(
-    tower.width / 2 / wall.length,
-    Math.min(
-      (wall.length - tower.width / 2) / wall.length,
-      newCenter / wall.length,
-    ),
-  );
+  // Place the tower's right edge at maxAllowedRight.
+  const newCenter = c.maxAllowedRight - tower.width / 2;
+  const positionAlongWall = newCenter / wall.length;
   closet.updateTower(tower.id, { positionAlongWall });
 }
 
