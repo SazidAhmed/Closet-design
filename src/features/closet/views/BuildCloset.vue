@@ -380,7 +380,7 @@ const clearances = computed(() => {
             (hit(wallStartPt, oStart) ? oStartMargin : oEndMargin),
         ) * oGapScale;
 
-      if (uiClearance < tower.depth - epsilon) {
+      if (distFromCorner < tower.depth - epsilon) {
         const otherOutset =
           typeof otherTower.outset === "number" && !isNaN(otherTower.outset)
             ? otherTower.outset
@@ -448,7 +448,7 @@ const clearances = computed(() => {
           distFromCorner - (hit(wallEndPt, oStart) ? oStartMargin : oEndMargin),
         ) * oGapScale;
 
-      if (uiClearance < tower.depth - epsilon) {
+      if (distFromCorner < tower.depth - epsilon) {
         const otherOutset =
           typeof otherTower.outset === "number" && !isNaN(otherTower.outset)
             ? otherTower.outset
@@ -935,8 +935,14 @@ function onClearanceInput(side: "left" | "right", event: Event) {
 
   // Ensure center stays within raw wall bounds
   const minAllowedCenter = c.minAllowedLeft + halfW;
-  const maxAllowedCenter = Math.max(minAllowedCenter, c.maxAllowedRight - halfW);
-  newCenterIn = Math.max(minAllowedCenter, Math.min(maxAllowedCenter, newCenterIn));
+  const maxAllowedCenter = Math.max(
+    minAllowedCenter,
+    c.maxAllowedRight - halfW,
+  );
+  newCenterIn = Math.max(
+    minAllowedCenter,
+    Math.min(maxAllowedCenter, newCenterIn),
+  );
 
   const positionAlongWall = newCenterIn / wall.length;
   closet.updateTower(tower.id, { positionAlongWall });
@@ -966,13 +972,13 @@ function distributeTowers() {
   const availableSpace = c.maxAllowedRight - c.minAllowedLeft;
   const newCenter = c.minAllowedLeft + availableSpace / 2;
   const minAllowedCenter = c.minAllowedLeft + tower.width / 2;
-  const maxAllowedCenter = Math.max(minAllowedCenter, c.maxAllowedRight - tower.width / 2);
+  const maxAllowedCenter = Math.max(
+    minAllowedCenter,
+    c.maxAllowedRight - tower.width / 2,
+  );
   const positionAlongWall = Math.max(
     minAllowedCenter / wall.length,
-    Math.min(
-      maxAllowedCenter / wall.length,
-      newCenter / wall.length,
-    ),
+    Math.min(maxAllowedCenter / wall.length, newCenter / wall.length),
   );
   closet.updateTower(tower.id, { positionAlongWall });
 }
