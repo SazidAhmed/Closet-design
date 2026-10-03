@@ -463,6 +463,10 @@ const clearances = computed(() => {
     }
   }
 
+  // Account for blocked corners before saving global boundaries
+  effectiveLeft = Math.max(effectiveLeft, startAdjacentDepth);
+  effectiveRight = Math.min(effectiveRight, wall.length - endAdjacentDepth);
+
   // Save the global boundaries before same-wall towers restrict it further
   const globalEffectiveLeft = effectiveLeft;
   const globalEffectiveRight = effectiveRight;
@@ -513,45 +517,9 @@ const clearances = computed(() => {
   const rawLeft = towerLeft - effectiveLeft;
   const rawRight = effectiveRight - towerRight;
 
-  // ── 5. Consistent gap scale (global, not per-tower) ───────────────────────
-  // The physical usable range considers corner margins and corner blockages.
-  // We satisfy the user invariant: LeftClearance + TowerWidth + RightClearance = WallDisplayWidth
-  const totalTowerWidthIn = closet.towers
-    .filter(
-      (t) =>
-        t.wallId === wall.id &&
-        t.partType?.toLowerCase() !== "toe kick" &&
-        t.partType?.toLowerCase() !== "l shape horizontal",
-    )
-    .reduce((sum, t) => sum + t.width, 0);
-
-  const isLeftWallOnly =
-    Math.abs(globalEffectiveLeft - startMargin) < 0.1 &&
-    startAdjacentDepth === 0;
-  const isRightWallOnly =
-    Math.abs(globalEffectiveRight - (wall.length - endMargin)) < 0.1 &&
-    endAdjacentDepth === 0;
-
-  const physicalUsable = globalEffectiveRight - globalEffectiveLeft;
-  // We no longer compress the nominal usable space based on adjacent cabinets
-  // so the user can drag/input all the way to the corner.
-  const nominalUsable = wall.length;
-
-  const totalPhysicalGap = Math.max(0, physicalUsable - totalTowerWidthIn);
-
-  const nominalTowerWidthIn = closet.towers
-    .filter(
-      (t) =>
-        t.wallId === wall.id &&
-        t.partType !== "panel" &&
-        t.partType !== "filler" &&
-        t.partType?.toLowerCase() !== "toe kick" &&
-        t.partType?.toLowerCase() !== "l shape horizontal",
-    )
-    .reduce((sum, t) => sum + t.width, 0);
-  const totalNominalGap = Math.max(0, nominalUsable - nominalTowerWidthIn);
-  let gapScale =
-    totalPhysicalGap > 0.1 ? totalNominalGap / totalPhysicalGap : 1;
+  // ── 5. Clearance scaling (removed) ───────────────────────
+  // The clearance displayed is now the physical available space in the room.
+  let gapScale = 1;
 
   let uiLeft = rawLeft * gapScale;
   let uiRight = rawRight * gapScale;
