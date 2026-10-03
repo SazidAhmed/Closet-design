@@ -4664,6 +4664,28 @@ function dimLinePoints(wall: {
                     stroke-width="2"
                     stroke-dasharray="6,3"
                   />
+                  <!-- Solid red border on the top edge of the zone -->
+                  <line
+                    :x1="
+                      zone.side === 'start'
+                        ? elevationLayout.wallX
+                        : elevationLayout.wallX +
+                          elevationLayout.wallWidthPx -
+                          zone.depthCm * elevationLayout.scale
+                    "
+                    :y1="elevationLayout.wallY + elevationLayout.wallHeightPx - (zone.bottomCm + zone.heightCm) * elevationLayout.scale"
+                    :x2="
+                      zone.side === 'start'
+                        ? elevationLayout.wallX +
+                          zone.depthCm * elevationLayout.scale
+                        : elevationLayout.wallX +
+                          elevationLayout.wallWidthPx
+                    "
+                    :y2="elevationLayout.wallY + elevationLayout.wallHeightPx - (zone.bottomCm + zone.heightCm) * elevationLayout.scale"
+                    stroke="rgba(239,68,68,0.9)"
+                    stroke-width="2"
+                    stroke-dasharray="6,3"
+                  />
                   <!-- Label showing blocked depth -->
                   <text
                     :x="
