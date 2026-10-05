@@ -1556,12 +1556,17 @@ const elevationWallContextMetrics = computed(() => {
   const openingCount = elevationItems.value.length;
   const closetCount = elevationClosetBlocks.value.length;
 
+  const startZone = adjacentTowerBlockedZones.value.find(z => z.side === 'start');
+  const endZone = adjacentTowerBlockedZones.value.find(z => z.side === 'end');
+
   return {
     wallLengthCm: wall.length,
     usableWidthCm: horizontalBounds.usableSpanCm,
     blockedLeftCm:
       horizontalBounds.startLabelCm || horizontalBounds.startMarginCm,
+    blockedLeftHeightCm: startZone ? startZone.bottomCm + startZone.heightCm : 0,
     blockedRightCm: horizontalBounds.endLabelCm || horizontalBounds.endMarginCm,
+    blockedRightHeightCm: endZone ? endZone.bottomCm + endZone.heightCm : 0,
     openingCount,
     closetCount,
   };
@@ -4913,15 +4918,27 @@ function dimLinePoints(wall: {
                   </p>
                   <p class="elevation-measurements-row">
                     Blocked Left:
-                    {{
-                      formatLength(elevationWallContextMetrics.blockedLeftCm)
-                    }}
+                    <template v-if="elevationWallContextMetrics.blockedLeftHeightCm > 0">
+                      {{ formatLength(elevationWallContextMetrics.blockedLeftCm).replace('"', '') }}"W;
+                      {{ formatLength(elevationWallContextMetrics.blockedLeftHeightCm).replace('"', '') }}"H
+                    </template>
+                    <template v-else>
+                      {{
+                        formatLength(elevationWallContextMetrics.blockedLeftCm)
+                      }}
+                    </template>
                   </p>
                   <p class="elevation-measurements-row">
                     Blocked Right:
-                    {{
-                      formatLength(elevationWallContextMetrics.blockedRightCm)
-                    }}
+                    <template v-if="elevationWallContextMetrics.blockedRightHeightCm > 0">
+                      {{ formatLength(elevationWallContextMetrics.blockedRightCm).replace('"', '') }}"W;
+                      {{ formatLength(elevationWallContextMetrics.blockedRightHeightCm).replace('"', '') }}"H
+                    </template>
+                    <template v-else>
+                      {{
+                        formatLength(elevationWallContextMetrics.blockedRightCm)
+                      }}
+                    </template>
                   </p>
                   <p class="elevation-measurements-row">
                     Openings: {{ elevationWallContextMetrics.openingCount }}
