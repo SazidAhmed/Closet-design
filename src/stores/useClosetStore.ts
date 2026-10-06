@@ -39,6 +39,8 @@ type ClosetStoreState = ClosetStateV2 & {
   customParts: any[]
   /** Whether catalog data is currently being fetched from the API. */
   catalogsLoading: boolean
+  /** Promise tracking the ongoing API request for catalogs. */
+  _catalogsPromise: Promise<void> | null
 }
 
 export const useClosetStore = defineStore('closet', {
@@ -47,6 +49,7 @@ export const useClosetStore = defineStore('closet', {
     catalogCategories: [],
     customParts: [],
     catalogsLoading: false,
+    _catalogsPromise: null,
   }),
 
   getters: {
@@ -111,34 +114,44 @@ export const useClosetStore = defineStore('closet', {
       }
 
       // 3. Fetch from API if memory state & localStorage cache are empty or forceRefresh is true
-      if (this.catalogsLoading) return
-      this.catalogsLoading = true
-      try {
-        const [withoutDoors, withDoors] = await Promise.all([
-          loadCatalogCategories('without_doors'),
-          loadCatalogCategories('with_doors'),
-        ])
-        const allCategories = [...withoutDoors, ...withDoors]
-        this.catalogCategories = allCategories
-        setActiveCategories(allCategories)
-
-        try {
-          localStorage.setItem(CACHE_KEY, JSON.stringify(allCategories))
-          console.log('[useClosetStore] Saved catalog categories & cabinets to localStorage cache.')
-        } catch (e) {
-          console.warn('[useClosetStore] Failed to save catalog cache to localStorage:', e)
-        }
-        
-        // Refresh all existing towers with newly loaded API categories & cabinets
-        this.towers.forEach((tower) => {
-          refreshTowerCatalog(tower)
-          refreshTowerCabinet(tower)
-        })
-      } catch (err) {
-        console.warn('[useClosetStore] loadCatalogs: unexpected error', err)
-      } finally {
-        this.catalogsLoading = false
+      if (this._catalogsPromise) {
+        return this._catalogsPromise
       }
+
+      this.catalogsLoading = true
+      this._catalogsPromise = (async () => {
+        try {
+          const [withoutDoors, withDoors] = await Promise.all([
+            loadCatalogCategories('without_doors'),
+            loadCatalogCategories('with_doors'),
+          ])
+          const allCategories = [...withoutDoors, ...withDoors]
+          this.catalogCategories = allCategories
+          setActiveCategories(allCategories)
+
+          if (allCategories.length > 0) {
+            try {
+              localStorage.setItem(CACHE_KEY, JSON.stringify(allCategories))
+              console.log('[useClosetStore] Saved catalog categories & cabinets to localStorage cache.')
+            } catch (e) {
+              console.warn('[useClosetStore] Failed to save catalog cache to localStorage:', e)
+            }
+          }
+          
+          // Refresh all existing towers with newly loaded API categories & cabinets
+          this.towers.forEach((tower) => {
+            refreshTowerCatalog(tower)
+            refreshTowerCabinet(tower)
+          })
+        } catch (err) {
+          console.warn('[useClosetStore] loadCatalogs: unexpected error', err)
+        } finally {
+          this.catalogsLoading = false
+          this._catalogsPromise = null
+        }
+      })()
+      
+      return this._catalogsPromise
     },
 
     async loadCustomParts(forceRefresh = false) {

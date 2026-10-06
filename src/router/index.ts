@@ -52,6 +52,10 @@ router.beforeEach((to) => {
   const urlToken = to.query.token as string | undefined
   const storedToken = localStorage.getItem('access_token')
 
+  if (urlToken) {
+    localStorage.setItem('access_token', urlToken)
+  }
+
   if (urlToken || storedToken) {
     return true
   }
