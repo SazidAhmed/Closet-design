@@ -772,6 +772,10 @@ function setTowerOrientation(orientation: "left" | "right") {
 const showBridgeSection = computed(() => {
   const tower = selectedTower.value;
   if (!tower) return false;
+  const code = tower.categoryCode;
+  if (code === "CCS" || code === "CCH" || code === "CCL") {
+    return false;
+  }
   return (
     tower.isCorner ||
     tower.cornerPosition === "left" ||
