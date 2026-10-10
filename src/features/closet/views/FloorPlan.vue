@@ -1562,10 +1562,9 @@ const elevationWallContextMetrics = computed(() => {
   return {
     wallLengthCm: wall.length,
     usableWidthCm: horizontalBounds.usableSpanCm,
-    blockedLeftCm:
-      horizontalBounds.startLabelCm || horizontalBounds.startMarginCm,
+    blockedLeftCm: horizontalBounds.startLabelCm,
     blockedLeftHeightCm: startZone ? startZone.bottomCm + startZone.heightCm : 0,
-    blockedRightCm: horizontalBounds.endLabelCm || horizontalBounds.endMarginCm,
+    blockedRightCm: horizontalBounds.endLabelCm,
     blockedRightHeightCm: endZone ? endZone.bottomCm + endZone.heightCm : 0,
     openingCount,
     closetCount,
