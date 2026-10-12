@@ -383,12 +383,39 @@ const clearances = computed(() => {
             (hit(wallStartPt, oStart) ? oStartMargin : oEndMargin),
         ) * oGapScale;
 
-      if (distFromCorner < tower.depth - epsilon) {
+      const isLShapeV = tower.partType?.toLowerCase() === "l shape vertical";
+      const towerOutset =
+        typeof tower.outset === "number" && !isNaN(tower.outset)
+          ? tower.outset
+          : isLShapeV
+            ? 20.875
+            : 0;
+      const towerReach =
+        (typeof tower.depth === "number" && !isNaN(tower.depth)
+          ? tower.depth
+          : 0) + towerOutset;
+
+      if (distFromCorner < towerReach - epsilon) {
+        const isOtherLShapeV =
+          otherTower.partType?.toLowerCase() === "l shape vertical";
         const otherOutset =
           typeof otherTower.outset === "number" && !isNaN(otherTower.outset)
             ? otherTower.outset
+            : isOtherLShapeV
+              ? 20.875
+              : 0;
+        const otherBridge =
+          otherTower.isCorner &&
+          typeof otherTower.cornerBridgeWidth === "number" &&
+          otherTower.cornerBridgeWidth > 0
+            ? otherTower.cornerBridgeWidth
             : 0;
-        const newEffLeft = otherTower.depth + otherOutset;
+        const newEffLeft =
+          (typeof otherTower.depth === "number" && !isNaN(otherTower.depth)
+            ? otherTower.depth
+            : 0) +
+          otherBridge +
+          otherOutset;
         // Track the depth that should appear in the nominal display
         startAdjacentDepth = Math.max(startAdjacentDepth, newEffLeft);
       }
@@ -451,17 +478,41 @@ const clearances = computed(() => {
           distFromCorner - (hit(wallEndPt, oStart) ? oStartMargin : oEndMargin),
         ) * oGapScale;
 
-      if (distFromCorner < tower.depth - epsilon) {
+      const isLShapeV = tower.partType?.toLowerCase() === "l shape vertical";
+      const towerOutset =
+        typeof tower.outset === "number" && !isNaN(tower.outset)
+          ? tower.outset
+          : isLShapeV
+            ? 20.875
+            : 0;
+      const towerReach =
+        (typeof tower.depth === "number" && !isNaN(tower.depth)
+          ? tower.depth
+          : 0) + towerOutset;
+
+      if (distFromCorner < towerReach - epsilon) {
+        const isOtherLShapeV =
+          otherTower.partType?.toLowerCase() === "l shape vertical";
         const otherOutset =
           typeof otherTower.outset === "number" && !isNaN(otherTower.outset)
             ? otherTower.outset
+            : isOtherLShapeV
+              ? 20.875
+              : 0;
+        const otherBridge =
+          otherTower.isCorner &&
+          typeof otherTower.cornerBridgeWidth === "number" &&
+          otherTower.cornerBridgeWidth > 0
+            ? otherTower.cornerBridgeWidth
             : 0;
-        const newEffRight = wall.length - (otherTower.depth + otherOutset);
+        const otherDepth =
+          (typeof otherTower.depth === "number" && !isNaN(otherTower.depth)
+            ? otherTower.depth
+            : 0) +
+          otherBridge +
+          otherOutset;
         // Track the depth that should appear in the nominal display
-        endAdjacentDepth = Math.max(
-          endAdjacentDepth,
-          otherTower.depth + otherOutset,
-        );
+        endAdjacentDepth = Math.max(endAdjacentDepth, otherDepth);
       }
     }
   }
@@ -527,13 +578,23 @@ const clearances = computed(() => {
   let uiLeft = rawLeft * gapScale;
   let uiRight = rawRight * gapScale;
 
+  const isLShapeV = tower.partType?.toLowerCase() === "l shape vertical";
+  const startCornerClearance = startAdjacentDepth > 0 && isLShapeV ? 0.875 : 0;
+  const endCornerClearance = endAdjacentDepth > 0 && isLShapeV ? 0.875 : 0;
+
   return {
     left: uiLeft < epsilon ? 0 : Math.max(0, uiLeft),
     right: uiRight < epsilon ? 0 : Math.max(0, uiRight),
     effectiveLeft,
     effectiveRight,
-    minAllowedLeft: Math.max(effectiveLeft, startAdjacentDepth),
-    maxAllowedRight: Math.min(effectiveRight, wall.length - endAdjacentDepth),
+    minAllowedLeft: Math.max(
+      effectiveLeft,
+      startAdjacentDepth + startCornerClearance,
+    ),
+    maxAllowedRight: Math.min(
+      effectiveRight,
+      wall.length - (endAdjacentDepth + endCornerClearance),
+    ),
     gapScale,
   };
 });

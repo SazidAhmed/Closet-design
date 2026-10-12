@@ -1228,19 +1228,27 @@ function elevationHorizontalBoundsForWall(
     (t) => t.id === selectionStore.selectedTowerId,
   );
 
-  let thresholdDepth = 61;
+  const getTowerReach = (t: (typeof closetStore.towers)[number]) => {
+    const isLShapeV = t.partType?.toLowerCase() === "l shape vertical";
+    const outset =
+      typeof t.outset === "number" && !isNaN(t.outset)
+        ? t.outset
+        : isLShapeV
+          ? 20.875
+          : 0;
+    const depth = typeof t.depth === "number" && !isNaN(t.depth) ? t.depth : 0;
+    return outset + depth;
+  };
+
+  let thresholdDepth = 24;
   if (
     selectedOnWall &&
     typeof selectedOnWall.depth === "number" &&
     !isNaN(selectedOnWall.depth)
   ) {
-    thresholdDepth = selectedOnWall.depth;
+    thresholdDepth = getTowerReach(selectedOnWall);
   } else if (currentTowersOnWall.length > 0) {
-    thresholdDepth = Math.max(
-      ...currentTowersOnWall.map((t) =>
-        typeof t.depth === "number" && !isNaN(t.depth) ? t.depth : 0,
-      ),
-    );
+    thresholdDepth = Math.max(...currentTowersOnWall.map(getTowerReach));
   }
 
   const CONN_TOL = 1;
@@ -1327,8 +1335,23 @@ function elevationHorizontalBoundsForWall(
         ) * gapScale;
       // Tower is close enough to the corner to protrude into our wall's space
       if (distFromCorner < thresholdDepth - 0.0001) {
-        const totalAdjDepth = (typeof tower.depth === "number" && !isNaN(tower.depth) ? tower.depth : 0) + 
-                              (typeof tower.outset === "number" && !isNaN(tower.outset) ? tower.outset : 0);
+        const isOtherLShapeV = tower.partType?.toLowerCase() === "l shape vertical";
+        const otherOutset =
+          typeof tower.outset === "number" && !isNaN(tower.outset)
+            ? tower.outset
+            : isOtherLShapeV
+              ? 20.875
+              : 0;
+        const bridgeW =
+          tower.isCorner &&
+          typeof tower.cornerBridgeWidth === "number" &&
+          tower.cornerBridgeWidth > 0
+            ? tower.cornerBridgeWidth
+            : 0;
+        const totalAdjDepth =
+          (typeof tower.depth === "number" && !isNaN(tower.depth) ? tower.depth : 0) +
+          bridgeW +
+          otherOutset;
         startAdjacentDepth = Math.max(startAdjacentDepth, totalAdjDepth);
       }
     }
@@ -1375,8 +1398,23 @@ function elevationHorizontalBoundsForWall(
           distFromCorner - (hit(wallEndPt, oStart) ? startMargin : endMargin),
         ) * gapScale;
       if (distFromCorner < thresholdDepth - 0.0001) {
-        const totalAdjDepth = (typeof tower.depth === "number" && !isNaN(tower.depth) ? tower.depth : 0) + 
-                              (typeof tower.outset === "number" && !isNaN(tower.outset) ? tower.outset : 0);
+        const isOtherLShapeV = tower.partType?.toLowerCase() === "l shape vertical";
+        const otherOutset =
+          typeof tower.outset === "number" && !isNaN(tower.outset)
+            ? tower.outset
+            : isOtherLShapeV
+              ? 20.875
+              : 0;
+        const bridgeW =
+          tower.isCorner &&
+          typeof tower.cornerBridgeWidth === "number" &&
+          tower.cornerBridgeWidth > 0
+            ? tower.cornerBridgeWidth
+            : 0;
+        const totalAdjDepth =
+          (typeof tower.depth === "number" && !isNaN(tower.depth) ? tower.depth : 0) +
+          bridgeW +
+          otherOutset;
         endAdjacentDepth = Math.max(endAdjacentDepth, totalAdjDepth);
       }
     }
@@ -1396,8 +1434,15 @@ function elevationHorizontalBoundsForWall(
     endAdjacentDepth > 0 ? endAdjacentDepth + rawEndMargin : rawEndMargin,
   );
 
-  const minLeftCm = startAdjacentDepth;
-  const maxRightCm = Math.max(minLeftCm, minLength - endAdjacentDepth);
+  const isLShapeV = selectedOnWall?.partType?.toLowerCase() === "l shape vertical";
+  const startCornerClearance = startAdjacentDepth > 0 && isLShapeV ? 0.875 : 0;
+  const endCornerClearance = endAdjacentDepth > 0 && isLShapeV ? 0.875 : 0;
+
+  const minLeftCm = startAdjacentDepth + startCornerClearance;
+  const maxRightCm = Math.max(
+    minLeftCm,
+    minLength - (endAdjacentDepth + endCornerClearance),
+  );
 
   return {
     startMarginCm: rawStartMargin,

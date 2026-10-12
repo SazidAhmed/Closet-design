@@ -326,6 +326,7 @@ export const useClosetStore = defineStore('closet', {
           ? 0
           : (attachedTower?.elevation ?? 0);
 
+      const isLShapeGeneric = isLShape && !isLShapeVertical && !isLShapeHorizontal;
       const newPart: Tower = {
         id: createTowerId(),
         label: `${label} ${idx}`,
@@ -333,7 +334,7 @@ export const useClosetStore = defineStore('closet', {
         depth: initialDepth,
         height: initialHeight,
         partType,
-        attachedToTowerId: (partType.toLowerCase() === 'panel' || partType.toLowerCase() === 'filler' || isToeKick || isLShape) ? undefined : attachedTower?.id,
+        attachedToTowerId: (partType.toLowerCase() === 'panel' || partType.toLowerCase() === 'filler' || isToeKick || isLShapeGeneric) ? undefined : attachedTower?.id,
         accessories: [],
         wallId: attachedTower?.wallId, // Place on same wall by default
         positionAlongWall: initialPosition,
