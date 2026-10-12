@@ -143,6 +143,77 @@ export type Tower = {
   oneDoor?: number
   /** Does the cabinet support 2 doors? (from database) */
   twoDoors?: number
+  /** Orientation of the blind area for blind corner cabinets with doors: 'left' | 'right'. */
+  blindOrientation?: 'left' | 'right'
+  /** Width of the blind section (non-door area) in inches. Defaults to 24. */
+  blindWidth?: number
+}
+
+/**
+ * Checks whether a tower is a blind corner cabinet with doors.
+ */
+export function isBlindCornerCabinet(tower: Tower | null | undefined): boolean {
+  if (!tower) return false
+  if (tower.doorMode !== 'with_doors') return false
+  if (tower.partType && tower.partType !== 'cabinet') return false
+  const code = tower.categoryCode
+  const isCornerCat = code === 'CCS' || code === 'CCH' || code === 'CCL'
+  const nameHasBlind = Boolean(
+    tower.categoryName?.toLowerCase().includes('blind') ||
+    tower.label?.toLowerCase().includes('blind')
+  )
+  const isCorner = Boolean(
+    tower.isCorner ||
+    tower.cornerPosition === 'left' ||
+    tower.cornerPosition === 'right' ||
+    tower.cornerOrientation === 'left' ||
+    tower.cornerOrientation === 'right'
+  )
+  return isCornerCat || nameHasBlind || isCorner || Boolean(tower.blindOrientation)
+}
+
+export type TowerBlindLayout = {
+  orientation: 'left' | 'right'
+  blindWidth: number
+  doorWidth: number
+  blindOffsetFromLeft: number
+  doorOffsetFromLeft: number
+  splitOffsetFromLeft: number
+}
+
+export function getTowerBlindLayout(tower: Tower): TowerBlindLayout {
+  const totalW = tower.width
+  const rawBlindW =
+    typeof tower.blindWidth === 'number' && !isNaN(tower.blindWidth)
+      ? tower.blindWidth
+      : 24
+  const maxBlindW = Math.max(1, totalW - 1)
+  const blindWidth = Math.max(1, Math.min(maxBlindW, rawBlindW))
+  const doorWidth = Math.max(0, totalW - blindWidth)
+  const orientation = tower.blindOrientation ?? 'left'
+
+  let blindOffset = 0
+  let doorOffset = 0
+  let splitOffset = 0
+
+  if (orientation === 'left') {
+    blindOffset = 0
+    doorOffset = blindWidth
+    splitOffset = blindWidth
+  } else {
+    doorOffset = 0
+    blindOffset = doorWidth
+    splitOffset = doorWidth
+  }
+
+  return {
+    orientation,
+    blindWidth,
+    doorWidth,
+    blindOffsetFromLeft: blindOffset,
+    doorOffsetFromLeft: doorOffset,
+    splitOffsetFromLeft: splitOffset,
+  }
 }
 
 // ---- Factory helpers ------------------------------------------------------

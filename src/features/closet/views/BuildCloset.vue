@@ -20,7 +20,10 @@ import {
   type ClosetCatalogLimits,
   type ClosetDoorMode,
 } from "../domain/closetCatalogs";
-import type { CornerPosition } from "../domain/types/tower";
+import {
+  type CornerPosition,
+  isBlindCornerCabinet,
+} from "../domain/types/tower";
 import { snapTo16th } from "../domain/snapUtils";
 import { Plus, Trash2 } from "lucide-vue-next";
 
@@ -858,6 +861,11 @@ function onDimensionInput(
       finalValue = Math.min(finalValue, snapTo16th(maxAvailableWidthIn));
     }
     closet.setTowerWidth(tower.id, finalValue, wall?.length);
+    if (tower.blindWidth && tower.blindWidth >= finalValue) {
+      closet.updateTower(tower.id, {
+        blindWidth: Math.max(1, snapTo16th(finalValue - 1)),
+      });
+    }
   } else if (dimension === "depth") {
     closet.setTowerDepth(tower.id, value);
   } else if (dimension === "outset") {
@@ -878,6 +886,38 @@ function onDimensionInput(
     ? (currentTower[dimension] ?? value)
     : value;
   target.value = truncTo4(updatedValue);
+}
+
+function setBlindOrientation(orientation: "left" | "right") {
+  const tower = selectedTower.value;
+  if (!tower) return;
+  closet.updateTower(tower.id, {
+    blindOrientation: orientation,
+    blindWidth: tower.blindWidth ?? 24,
+    doorCount: 1,
+    doorHinge: orientation === "left" ? "left" : "right",
+  });
+}
+
+function onBlindWidthInput(event: Event) {
+  const tower = selectedTower.value;
+  if (!tower) return;
+  const target = event.target as HTMLInputElement;
+  const rawValue = Number(target.value);
+  if (!Number.isFinite(rawValue)) {
+    target.value = truncTo4(tower.blindWidth ?? 24);
+    return;
+  }
+  const maxW = Math.max(1, tower.width - 1);
+  const clamped = Math.max(1, Math.min(maxW, rawValue));
+  const value = snapTo16th(clamped);
+
+  closet.updateTower(tower.id, {
+    blindWidth: value,
+    blindOrientation: tower.blindOrientation ?? "left",
+    doorCount: 1,
+  });
+  target.value = truncTo4(value);
 }
 
 function onClearanceInput(side: "left" | "right", event: Event) {
@@ -1155,6 +1195,28 @@ const towerTwoDoors = computed(() => {
     }
   }
   return tower.twoDoors ?? 0;
+});
+
+const effectiveTowerHinge = computed(() => {
+  const tower = selectedTower.value;
+  if (!tower) return "left";
+  if (isBlindCornerCabinet(tower)) {
+    if (tower.doorHinge) return tower.doorHinge;
+    return (tower.blindOrientation ?? "left") === "left" ? "left" : "right";
+  }
+  return tower.doorHinge ?? "left";
+});
+
+onMounted(() => {
+  closet.towers.forEach((t) => {
+    if (isBlindCornerCabinet(t)) {
+      if (t.blindOrientation === "left" && t.doorHinge === "right") {
+        closet.updateTower(t.id, { doorHinge: "left" });
+      } else if (t.blindOrientation === "right" && t.doorHinge === "left") {
+        closet.updateTower(t.id, { doorHinge: "right" });
+      }
+    }
+  });
 });
 </script>
 
@@ -1562,6 +1624,55 @@ const towerTwoDoors = computed(() => {
             class="box-toggle-section"
             style="margin-top: 16px"
           >
+            <!-- Blind Corner Cabinet Options -->
+            <template v-if="isBlindCornerCabinet(selectedTower)">
+              <div class="dimension-head">
+                <label>Blind Corner Cabinet</label>
+              </div>
+              <div
+                class="segmented-control box-toggle"
+                style="margin-bottom: 12px"
+              >
+                <button
+                  class="segment-btn"
+                  :class="{
+                    active: (selectedTower.blindOrientation ?? 'left') === 'left',
+                  }"
+                  @click="setBlindOrientation('left')"
+                >
+                  Blind Left
+                </button>
+                <button
+                  class="segment-btn"
+                  :class="{
+                    active: selectedTower.blindOrientation === 'right',
+                  }"
+                  @click="setBlindOrientation('right')"
+                >
+                  Blind Right
+                </button>
+              </div>
+
+              <div class="dimension-control" style="margin-bottom: 12px">
+                <div class="dimension-head">
+                  <label>Blind Width</label>
+                  <span>{{ truncTo4(selectedTower.blindWidth ?? 24) }}"</span>
+                </div>
+                <input
+                  id="tower-blind-width-input"
+                  class="number-input"
+                  type="number"
+                  step="0.0625"
+                  min="1"
+                  :max="Math.max(1, selectedTower.width - 1)"
+                  :value="truncTo4(selectedTower.blindWidth ?? 24)"
+                  @change="onBlindWidthInput($event)"
+                  @blur="onBlindWidthInput($event)"
+                  @keyup.enter="onBlindWidthInput($event)"
+                />
+              </div>
+            </template>
+
             <div class="dimension-head">
               <label>Door Hinge</label>
             </div>
@@ -1581,7 +1692,7 @@ const towerTwoDoors = computed(() => {
             </div>
 
             <div
-              v-if="towerOneDoor === 1 && towerTwoDoors === 1"
+              v-if="!isBlindCornerCabinet(selectedTower) && towerOneDoor === 1 && towerTwoDoors === 1"
               class="segmented-control box-toggle"
               style="margin-bottom: 8px"
             >
@@ -1602,23 +1713,23 @@ const towerTwoDoors = computed(() => {
             </div>
 
             <div
-              v-if="selectedTower.doorCount !== 2"
+              v-if="isBlindCornerCabinet(selectedTower) || selectedTower.doorCount !== 2"
               class="segmented-control box-toggle"
             >
               <button
                 class="segment-btn"
-                :class="{ active: selectedTower.doorHinge !== 'right' }"
+                :class="{ active: effectiveTowerHinge !== 'right' }"
                 @click="
-                  closet.updateTower(selectedTower.id, { doorHinge: 'left' })
+                  closet.updateTower(selectedTower.id, { doorHinge: 'left', doorCount: 1 })
                 "
               >
                 Left-Hinge
               </button>
               <button
                 class="segment-btn"
-                :class="{ active: selectedTower.doorHinge === 'right' }"
+                :class="{ active: effectiveTowerHinge === 'right' }"
                 @click="
-                  closet.updateTower(selectedTower.id, { doorHinge: 'right' })
+                  closet.updateTower(selectedTower.id, { doorHinge: 'right', doorCount: 1 })
                 "
               >
                 Right-Hinge

@@ -1,5 +1,5 @@
 import type { Accessory, Tower, CornerPosition } from "./types/tower";
-import { createTowerId } from "./types/tower";
+import { createTowerId, isBlindCornerCabinet } from "./types/tower";
 
 // No longer converting to cm, internal units are now inches.
 // The entry function directly assigns the inch values.
@@ -477,7 +477,9 @@ export function refreshTowerCabinet(
 
   // Auto-correct doorCount if it is unsupported by the new cabinet
   if (tower.doorMode === 'with_doors') {
-    if ((!tower.doorCount || tower.doorCount === 1) && tower.oneDoor === 0 && tower.twoDoors === 1) {
+    if (isBlindCornerCabinet(tower)) {
+      tower.doorCount = 1;
+    } else if ((!tower.doorCount || tower.doorCount === 1) && tower.oneDoor === 0 && tower.twoDoors === 1) {
       tower.doorCount = 2;
     } else if ((!tower.doorCount || tower.doorCount === 2) && tower.twoDoors === 0 && tower.oneDoor === 1) {
       tower.doorCount = 1;
@@ -704,7 +706,10 @@ export function createTowerFromCategory(
     cabinetCode: cabinet?.code,
     oneDoor: cabinet?.oneDoor,
     twoDoors: cabinet?.twoDoors,
-    doorCount: (cabinet?.twoDoors === 1 && cabinet?.oneDoor === 0) ? 2 : 1,
+    doorCount: isCorner && doorMode === "with_doors" ? 1 : ((cabinet?.twoDoors === 1 && cabinet?.oneDoor === 0) ? 2 : 1),
+    blindOrientation: isCorner && doorMode === "with_doors" ? "left" : undefined,
+    blindWidth: isCorner && doorMode === "with_doors" ? 24 : undefined,
+    doorHinge: isCorner && doorMode === "with_doors" ? "left" : "left",
     accessories: accessoriesForCategory(categoryCode),
   };
 }

@@ -33,7 +33,11 @@ import {
 import { wallInsideGuideAreaPoints } from "../domain/geometry/insideWallSide";
 import { useHistoryStore } from "../../../stores/useHistoryStore";
 import { useSelectionStore } from "../../../stores/useSelectionStore";
-import type { Tower } from "../domain/types/tower";
+import {
+  type Tower,
+  isBlindCornerCabinet,
+  getTowerBlindLayout,
+} from "../domain/types/tower";
 import type {
   PlacedItemType,
   PlacedItemCategory,
@@ -887,6 +891,39 @@ function isCabinet(tower: Tower): boolean {
 
 function isCabinetWithDoors(tower: Tower): boolean {
   return tower.doorMode === "with_doors" && isCabinet(tower);
+}
+
+function towerBlindElevationLayout(tower: Tower) {
+  const blind = getTowerBlindLayout(tower);
+  const rect = towerElevationRect(tower);
+  const scale = elevationLayout.value.scale;
+  const doorH = (tower.doorHeight || (tower.height - 4.5)) * scale;
+  const doorY =
+    rect.y +
+    ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * scale);
+
+  const blindWidthPx = blind.blindWidth * scale;
+  const doorWidthPx = blind.doorWidth * scale;
+  const blindX = rect.x + blind.blindOffsetFromLeft * scale;
+  const doorX = rect.x + blind.doorOffsetFromLeft * scale;
+  const splitX = rect.x + blind.splitOffsetFromLeft * scale;
+
+  const defaultHinge = blind.orientation === "left" ? "left" : "right";
+  const effectiveHinge = tower.doorHinge || defaultHinge;
+
+  return {
+    ...blind,
+    rect,
+    scale,
+    doorH,
+    doorY,
+    blindWidthPx,
+    doorWidthPx,
+    blindX,
+    doorX,
+    splitX,
+    effectiveHinge,
+  };
 }
 
 function hasAttachedToeKick(tower: Tower): boolean {
@@ -4466,6 +4503,132 @@ function dimLinePoints(wall: {
 
                   <!-- Door (if applicable) -->
                   <g v-if="isCabinetWithDoors(tower)" class="elevation-door">
+                    <!-- Blind Corner Cabinet with Doors -->
+                    <template v-if="isBlindCornerCabinet(tower)">
+                      <!-- Blind panel (non-door area) -->
+                      <rect
+                        :x="towerBlindElevationLayout(tower).blindX"
+                        :y="towerBlindElevationLayout(tower).doorY"
+                        :width="towerBlindElevationLayout(tower).blindWidthPx"
+                        :height="towerBlindElevationLayout(tower).doorH"
+                        class="elevation-door-face elevation-blind-panel"
+                        :class="{ selected: selectionStore.selectedTowerId === tower.id }"
+                        @click.stop="selectionStore.selectTower(tower.id)"
+                      />
+
+                      <!-- Door face -->
+                      <rect
+                        :x="towerBlindElevationLayout(tower).doorX"
+                        :y="towerBlindElevationLayout(tower).doorY"
+                        :width="towerBlindElevationLayout(tower).doorWidthPx"
+                        :height="towerBlindElevationLayout(tower).doorH"
+                        class="elevation-door-face"
+                        :class="{ selected: selectionStore.selectedTowerId === tower.id }"
+                        @click.stop="selectionStore.selectTower(tower.id)"
+                      />
+
+                      <!-- Split line dividing door and blind panel -->
+                      <line
+                        :x1="towerBlindElevationLayout(tower).splitX"
+                        :y1="towerBlindElevationLayout(tower).doorY"
+                        :x2="towerBlindElevationLayout(tower).splitX"
+                        :y2="towerBlindElevationLayout(tower).doorY + towerBlindElevationLayout(tower).doorH"
+                        class="elevation-door-center-split"
+                        pointer-events="none"
+                      />
+
+                      <!-- Horizontal Dashed Lines for Shelves Behind Door (in door area) -->
+                      <g
+                        v-for="(shelf, sIdx) in getTowerAccessoriesLayout(tower).shelves"
+                        :key="`blind-door-shelf-${sIdx}`"
+                      >
+                        <line
+                          :x1="towerBlindElevationLayout(tower).doorX"
+                          :y1="elevationLayout.wallY + (elevationLayout.roomHeightCm - (shelf.y + shelf.h)) * elevationLayout.scale"
+                          :x2="towerBlindElevationLayout(tower).doorX + towerBlindElevationLayout(tower).doorWidthPx"
+                          :y2="elevationLayout.wallY + (elevationLayout.roomHeightCm - (shelf.y + shelf.h)) * elevationLayout.scale"
+                          class="elevation-door-shelf-line"
+                          pointer-events="none"
+                        />
+                      </g>
+
+                      <!-- Diagonal Dashed Lines (Single Door Hinge indicator on door) -->
+                      <template v-if="towerBlindElevationLayout(tower).effectiveHinge === 'right'">
+                        <!-- Right Hinge: Vertex meets on right edge of door (Blind Right default) -->
+                        <line
+                          :x1="towerBlindElevationLayout(tower).doorX"
+                          :y1="towerBlindElevationLayout(tower).doorY"
+                          :x2="towerBlindElevationLayout(tower).doorX + towerBlindElevationLayout(tower).doorWidthPx"
+                          :y2="towerBlindElevationLayout(tower).doorY + (towerBlindElevationLayout(tower).doorH / 2)"
+                          class="elevation-door-hinge-line"
+                          pointer-events="none"
+                        />
+                        <line
+                          :x1="towerBlindElevationLayout(tower).doorX"
+                          :y1="towerBlindElevationLayout(tower).doorY + towerBlindElevationLayout(tower).doorH"
+                          :x2="towerBlindElevationLayout(tower).doorX + towerBlindElevationLayout(tower).doorWidthPx"
+                          :y2="towerBlindElevationLayout(tower).doorY + (towerBlindElevationLayout(tower).doorH / 2)"
+                          class="elevation-door-hinge-line"
+                          pointer-events="none"
+                        />
+                      </template>
+                      <template v-else>
+                        <!-- Left Hinge: Vertex meets on left edge of door (Blind Left default) -->
+                        <line
+                          :x1="towerBlindElevationLayout(tower).doorX + towerBlindElevationLayout(tower).doorWidthPx"
+                          :y1="towerBlindElevationLayout(tower).doorY"
+                          :x2="towerBlindElevationLayout(tower).doorX"
+                          :y2="towerBlindElevationLayout(tower).doorY + (towerBlindElevationLayout(tower).doorH / 2)"
+                          class="elevation-door-hinge-line"
+                          pointer-events="none"
+                        />
+                        <line
+                          :x1="towerBlindElevationLayout(tower).doorX + towerBlindElevationLayout(tower).doorWidthPx"
+                          :y1="towerBlindElevationLayout(tower).doorY + towerBlindElevationLayout(tower).doorH"
+                          :x2="towerBlindElevationLayout(tower).doorX"
+                          :y2="towerBlindElevationLayout(tower).doorY + (towerBlindElevationLayout(tower).doorH / 2)"
+                          class="elevation-door-hinge-line"
+                          pointer-events="none"
+                        />
+                      </template>
+
+                      <!-- Labels -->
+                      <!-- Cabinet label centered at the top -->
+                      <text
+                        :x="towerElevationRect(tower).x + (towerElevationRect(tower).width / 2)"
+                        :y="towerBlindElevationLayout(tower).doorY + 14"
+                        class="elevation-door-label-top"
+                      >
+                        {{ tower.label }}
+                      </text>
+                      <!-- Total cabinet width centered directly below label to prevent overlap -->
+                      <text
+                        :x="towerElevationRect(tower).x + (towerElevationRect(tower).width / 2)"
+                        :y="towerBlindElevationLayout(tower).doorY + 26"
+                        class="elevation-door-label-top"
+                      >
+                        {{ formatLength(tower.width) }}
+                      </text>
+                      <!-- Usable door width in the door panel -->
+                      <text
+                        :x="towerBlindElevationLayout(tower).doorX + (towerBlindElevationLayout(tower).doorWidthPx / 2)"
+                        :y="towerBlindElevationLayout(tower).doorY + (towerBlindElevationLayout(tower).doorH * 0.75)"
+                        class="elevation-door-label-middle"
+                      >
+                        {{ formatLength(towerBlindElevationLayout(tower).doorWidth) }}
+                      </text>
+                      <!-- Blind width in the blind panel -->
+                      <text
+                        :x="towerBlindElevationLayout(tower).blindX + (towerBlindElevationLayout(tower).blindWidthPx / 2)"
+                        :y="towerBlindElevationLayout(tower).doorY + (towerBlindElevationLayout(tower).doorH * 0.75)"
+                        class="elevation-door-label-middle"
+                      >
+                        Blind {{ formatLength(towerBlindElevationLayout(tower).blindWidth) }}
+                      </text>
+                    </template>
+
+                    <!-- Standard Cabinet with Doors -->
+                    <template v-else>
                     <rect
                       :x="towerElevationRect(tower).x"
                       :y="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale)"
@@ -4596,6 +4759,7 @@ function dimLinePoints(wall: {
                     >
                       {{ formatLength(tower.doorWidth || tower.width) }}
                     </text>
+                    </template>
                   </g>
                   </template>
 
@@ -6316,6 +6480,13 @@ function dimLinePoints(wall: {
 }
 .elevation-door-face:hover {
   fill: #fdf6e3;
+}
+
+.elevation-blind-panel {
+  fill: #f4e8cf;
+}
+.elevation-blind-panel:hover {
+  fill: #faf2dc;
 }
 
 .elevation-door-shelf-line {

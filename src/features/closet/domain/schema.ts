@@ -100,6 +100,8 @@ export function exportForBackend(state: ClosetStateV2) {
         typeof t.cornerBridgeWidth === 'number'
       ) ? t.depth + t.cornerBridgeWidth : undefined,
       boxCount: t.boxCount ?? 2,
+      blindOrientation: t.blindOrientation,
+      blindWidth: t.blindWidth,
       cabinetId: t.cabinetId,
       cabinetCode: t.cabinetCode,
       width: clamp(Number(t.width) || 0, 20, 200),
