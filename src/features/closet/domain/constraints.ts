@@ -17,7 +17,7 @@ export const TOWER_CONSTRAINTS = {
 } as const
 
 export const ACCESSORY_CONSTRAINTS = {
-  shelves: { min: 0, max: 10 },
+  shelves: { min: 0, max: 12 },
   rods: { min: 0, max: 2 },
   drawers: { min: 0, max: 6 },
   drawerHeight: { min: 8, max: 30 },

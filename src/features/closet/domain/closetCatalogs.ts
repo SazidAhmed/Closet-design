@@ -1,4 +1,4 @@
-import type { Accessory, Tower, CornerPosition } from "./types/tower";
+import type { Accessory, ShelfSetAccessory, ShoeShelfAccessory, Tower, CornerPosition } from "./types/tower";
 import { createTowerId, isBlindCornerCabinet } from "./types/tower";
 
 // No longer converting to cm, internal units are now inches.
@@ -457,6 +457,21 @@ export function refreshTowerCabinet(
     if (isCorner) {
       refreshBridgeCabinetForTower(tower);
     }
+    // Sync shelf count from the first cabinet's numberOfShelves
+    const switchedCatCode = tower.categoryCode;
+    if (switchedCatCode === 'CAS' || switchedCatCode === 'CCS') {
+      const shelfCount = resolveShelfCount(switchedCatCode, firstCabinet);
+      const idx = tower.accessories.findIndex((a) => a.type === 'shelf_set');
+      if (idx >= 0) {
+        (tower.accessories[idx] as ShelfSetAccessory).count = shelfCount;
+      }
+    } else if (switchedCatCode === 'CSS') {
+      const shelfCount = resolveShelfCount(switchedCatCode, firstCabinet);
+      const idx = tower.accessories.findIndex((a) => a.type === 'shoe_shelf');
+      if (idx >= 0) {
+        (tower.accessories[idx] as ShoeShelfAccessory).count = shelfCount;
+      }
+    }
     return;
   }
 
@@ -499,6 +514,24 @@ export function refreshTowerCabinet(
     ;(tower as any).bridgeCatalogId = undefined;
     ;(tower as any).bridgeCatalogCode = undefined;
     ;(tower as any).bridgeDebug = undefined;
+  }
+
+  // 3. Sync shelf / shoe-shelf count from the resolved cabinet's numberOfShelves.
+  // This keeps the elevation view in sync whenever height, width, depth, or
+  // box count changes (all callers of refreshTowerCabinet).
+  const catCode = tower.categoryCode;
+  if (catCode === 'CAS' || catCode === 'CCS') {
+    const shelfCount = resolveShelfCount(catCode, baseCabinet);
+    const idx = tower.accessories.findIndex((a) => a.type === 'shelf_set');
+    if (idx >= 0) {
+      (tower.accessories[idx] as ShelfSetAccessory).count = shelfCount;
+    }
+  } else if (catCode === 'CSS') {
+    const shelfCount = resolveShelfCount(catCode, baseCabinet);
+    const idx = tower.accessories.findIndex((a) => a.type === 'shoe_shelf');
+    if (idx >= 0) {
+      (tower.accessories[idx] as ShoeShelfAccessory).count = shelfCount;
+    }
   }
 }
 
@@ -634,8 +667,34 @@ export function refreshBridgeCabinetForTower(tower: Tower): void {
   ;(tower as any).bridgeCabinetCode = cabinet?.code;
 }
 
+/**
+ * Returns the number of shelves (or shoe shelves) to render for a tower based
+ * on the resolved cabinet record's `numberOfShelves` field from the API.
+ * Falls back to a hard-coded default when the cabinet record is absent or the
+ * API returned 0.
+ */
+export function resolveShelfCount(
+  categoryCode: ClosetCatalogCategoryCode,
+  cabinet: ClosetCabinetEntry | null | undefined,
+): number {
+  if (cabinet && Number(cabinet.numberOfShelves) > 0) {
+    return Number(cabinet.numberOfShelves);
+  }
+  // Fallback defaults matching the previous hard-coded behaviour
+  switch (categoryCode) {
+    case 'CAS':
+    case 'CCS':
+      return 5;
+    case 'CSS':
+      return 5;
+    default:
+      return 0;
+  }
+}
+
 function accessoriesForCategory(
   categoryCode: ClosetCatalogCategoryCode,
+  cabinet?: ClosetCabinetEntry | null,
 ): Accessory[] {
 
   switch (categoryCode) {
@@ -651,10 +710,10 @@ function accessoriesForCategory(
     case "CRD":
       return [{ type: "drawer", count: 4, drawerHeight: 8 }];
     case "CSS":
-      return [{ type: "shoe_shelf", count: 5 }];
+      return [{ type: "shoe_shelf", count: resolveShelfCount(categoryCode, cabinet) }];
     case "CAS":
     case "CCS":
-      return [{ type: "shelf_set", count: 5 }];
+      return [{ type: "shelf_set", count: resolveShelfCount(categoryCode, cabinet) }];
   }
 }
 
@@ -710,7 +769,7 @@ export function createTowerFromCategory(
     blindOrientation: isCorner && doorMode === "with_doors" ? "left" : undefined,
     blindWidth: isCorner && doorMode === "with_doors" ? 24 : undefined,
     doorHinge: isCorner && doorMode === "with_doors" ? "left" : "left",
-    accessories: accessoriesForCategory(categoryCode),
+    accessories: accessoriesForCategory(categoryCode, cabinet),
   };
 }
 

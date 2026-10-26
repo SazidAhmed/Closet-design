@@ -893,6 +893,26 @@ function isCabinetWithDoors(tower: Tower): boolean {
   return tower.doorMode === "with_doors" && isCabinet(tower);
 }
 
+function isTwoBoxCabinet(tower: Tower): boolean {
+  return isCabinet(tower) && (tower.boxCount ?? 2) === 2 && tower.doorMode !== "with_doors";
+}
+
+function getTwoBoxHeights(totalHeight: number): { lowerBoxHeight: number; upperBoxHeight: number } {
+  if (totalHeight <= 84) {
+    const ratio = 42.625 / 84;
+    const lower = Math.abs(totalHeight - 84) < 0.01 ? 42.625 : totalHeight * ratio;
+    return { lowerBoxHeight: lower, upperBoxHeight: totalHeight - lower };
+  } else if (totalHeight <= 90) {
+    const ratio = 45.625 / 90;
+    const lower = Math.abs(totalHeight - 90) < 0.01 ? 45.625 : totalHeight * ratio;
+    return { lowerBoxHeight: lower, upperBoxHeight: totalHeight - lower };
+  } else {
+    const ratio = 44.125 / 96;
+    const lower = Math.abs(totalHeight - 96) < 0.01 ? 44.125 : totalHeight * ratio;
+    return { lowerBoxHeight: lower, upperBoxHeight: totalHeight - lower };
+  }
+}
+
 function towerBlindElevationLayout(tower: Tower) {
   const blind = getTowerBlindLayout(tower);
   const rect = towerElevationRect(tower);
@@ -962,7 +982,7 @@ function getTowerAccessoriesLayout(tower: Tower) {
   // Get opening rects on the current elevation wall
   const openings = elevationOpeningRectsCmForCurrentWall();
 
-  const shelves: Array<{ x: number; y: number; w: number; h: number }> = [];
+  const shelves: Array<{ x: number; y: number; w: number; h: number; isFixed?: boolean }> = [];
   const rods: Array<{
     x: number;
     y: number;
@@ -989,20 +1009,82 @@ function getTowerAccessoriesLayout(tower: Tower) {
     if (acc.type === "shelf_set") {
       const count = acc.count;
       if (count > 0) {
-        const gap = innerHeight / (count + 1);
-        for (let i = 0; i < count; i++) {
-          const y = innerBottom + gap * (i + 1);
-          const shelfBottom = y - T / 2;
-          const shelfTop = shelfBottom + T;
-          const segments = splitHorizontalSegments(
+        if (isTwoBoxCabinet(tower) && count >= 4) {
+          const { lowerBoxHeight } = getTwoBoxHeights(geom.heightCm);
+          // 4th shelf is the fixed divider shelf placed at the boundary between boxes.
+          const lowerCount = 3;
+          const dividerY = lowerBoxHeight;
+          const lowerAvailable = Math.max(0, (dividerY - T / 2) - innerBottom);
+          const lowerGap = lowerAvailable / (lowerCount + 1);
+
+          // 3 adjustable shelves in lower box
+          for (let i = 0; i < lowerCount; i++) {
+            const y = innerBottom + lowerGap * (i + 1);
+            const shelfBottom = y - T / 2;
+            const shelfTop = shelfBottom + T;
+            const segments = splitHorizontalSegments(
+              innerLeft,
+              innerWidth,
+              shelfBottom,
+              shelfTop,
+              openings,
+            );
+            for (const seg of segments) {
+              shelves.push({ x: seg.x, y: shelfBottom, w: seg.w, h: T, isFixed: false });
+            }
+          }
+
+          // 4th shelf: Fixed divider shelf at the box boundary
+          const divShelfBottom = dividerY - T / 2;
+          const divShelfTop = divShelfBottom + T;
+          const divSegments = splitHorizontalSegments(
             innerLeft,
             innerWidth,
-            shelfBottom,
-            shelfTop,
+            divShelfBottom,
+            divShelfTop,
             openings,
           );
-          for (const seg of segments) {
-            shelves.push({ x: seg.x, y: shelfBottom, w: seg.w, h: T });
+          for (const seg of divSegments) {
+            shelves.push({ x: seg.x, y: divShelfBottom, w: seg.w, h: T, isFixed: true });
+          }
+
+          // Remaining adjustable shelves in upper box (3 for 84/90, 4 for 96)
+          const upperCount = Math.max(0, count - 1 - lowerCount);
+          const upperBottom = dividerY + T / 2;
+          const upperAvailable = Math.max(0, innerTop - upperBottom);
+          const upperGap = upperAvailable / (upperCount + 1);
+
+          for (let i = 0; i < upperCount; i++) {
+            const y = upperBottom + upperGap * (i + 1);
+            const shelfBottom = y - T / 2;
+            const shelfTop = shelfBottom + T;
+            const segments = splitHorizontalSegments(
+              innerLeft,
+              innerWidth,
+              shelfBottom,
+              shelfTop,
+              openings,
+            );
+            for (const seg of segments) {
+              shelves.push({ x: seg.x, y: shelfBottom, w: seg.w, h: T, isFixed: false });
+            }
+          }
+        } else {
+          const gap = innerHeight / (count + 1);
+          for (let i = 0; i < count; i++) {
+            const y = innerBottom + gap * (i + 1);
+            const shelfBottom = y - T / 2;
+            const shelfTop = shelfBottom + T;
+            const segments = splitHorizontalSegments(
+              innerLeft,
+              innerWidth,
+              shelfBottom,
+              shelfTop,
+              openings,
+            );
+            for (const seg of segments) {
+              shelves.push({ x: seg.x, y: shelfBottom, w: seg.w, h: T, isFixed: false });
+            }
           }
         }
       }
@@ -4392,8 +4474,28 @@ function dimLinePoints(wall: {
                     :y="towerElevationRect(tower).y + towerElevationRect(tower).height - towerBottomGap(tower) * elevationLayout.scale - (closetStore.cabinet?.thickness ?? 0.75) * elevationLayout.scale"
                     :width="towerElevationRect(tower).width - (closetStore.cabinet?.thickness ?? 0.75) * 2 * elevationLayout.scale"
                     :height="(closetStore.cabinet?.thickness ?? 0.75) * elevationLayout.scale"
-                    class="elevation-carcass-panel"
+                    :class="isTwoBoxCabinet(tower) ? 'elevation-carcass-panel-fixed' : 'elevation-carcass-panel'"
                   />
+
+                  <!-- 2-Box Separation: Horizontal seam line across side panels -->
+                  <template v-if="isTwoBoxCabinet(tower)">
+                    <!-- Left side seam -->
+                    <line
+                      :x1="towerElevationRect(tower).x"
+                      :x2="towerElevationRect(tower).x + (closetStore.cabinet?.thickness ?? 0.75) * elevationLayout.scale"
+                      :y1="towerElevationRect(tower).y + getTwoBoxHeights(tower.height).upperBoxHeight * elevationLayout.scale"
+                      :y2="towerElevationRect(tower).y + getTwoBoxHeights(tower.height).upperBoxHeight * elevationLayout.scale"
+                      class="elevation-carcass-seam"
+                    />
+                    <!-- Right side seam -->
+                    <line
+                      :x1="towerElevationRect(tower).x + towerElevationRect(tower).width - (closetStore.cabinet?.thickness ?? 0.75) * elevationLayout.scale"
+                      :x2="towerElevationRect(tower).x + towerElevationRect(tower).width"
+                      :y1="towerElevationRect(tower).y + getTwoBoxHeights(tower.height).upperBoxHeight * elevationLayout.scale"
+                      :y2="towerElevationRect(tower).y + getTwoBoxHeights(tower.height).upperBoxHeight * elevationLayout.scale"
+                      class="elevation-carcass-seam"
+                    />
+                  </template>
                   
                   <!-- Legs (Only for cabinets with doors, not without doors or custom parts) -->
                   <template v-if="isCabinetWithDoors(tower) && !hasAttachedToeKick(tower)">
@@ -4432,10 +4534,11 @@ function dimLinePoints(wall: {
                       "
                       :width="shelf.w * elevationLayout.scale"
                       :height="shelf.h * elevationLayout.scale"
-                      class="elevation-shelf"
+                      :class="shelf.isFixed ? 'elevation-shelf-fixed' : 'elevation-shelf'"
                     />
-                    <!-- Dotted line under shelf -->
+                    <!-- Dotted line under shelf (only for adjustable shelves) -->
                     <line
+                      v-if="!shelf.isFixed"
                       :x1="elevationLayout.wallX + shelf.x * elevationLayout.scale"
                       :y1="elevationLayout.wallY + (elevationLayout.roomHeightCm - (shelf.y + shelf.h)) * elevationLayout.scale + shelf.h * elevationLayout.scale + 1"
                       :x2="elevationLayout.wallX + (shelf.x + shelf.w) * elevationLayout.scale"
@@ -6475,6 +6578,18 @@ function dimLinePoints(wall: {
   fill: #faedd2;
   stroke: #1e293b;
   stroke-width: 1px;
+}
+
+.elevation-carcass-panel-fixed,
+.elevation-shelf-fixed {
+  fill: #1e293b;
+  stroke: #0f172a;
+  stroke-width: 1.5px;
+}
+
+.elevation-carcass-seam {
+  stroke: #0f172a;
+  stroke-width: 1.5px;
 }
 
 /* Accessory items */
