@@ -1697,7 +1697,8 @@ onMounted(() => {
                 <button
                   class="segment-btn"
                   :class="{
-                    active: (selectedTower.blindOrientation ?? 'left') === 'left',
+                    active:
+                      (selectedTower.blindOrientation ?? 'left') === 'left',
                   }"
                   @click="setBlindOrientation('left')"
                 >
@@ -1734,68 +1735,80 @@ onMounted(() => {
               </div>
             </template>
 
-            <div class="dimension-head">
-              <label>Door Hinge</label>
-            </div>
+            <template v-if="!isBlindCornerCabinet(selectedTower)">
+              <div class="dimension-head">
+                <label>Door Hinge</label>
+              </div>
 
-            <div
-              style="
-                font-size: 10px;
-                color: #ff9999;
-                margin-top: 4px;
-                padding-bottom: 8px;
-              "
-            >
-              Debug Doors: one={{ towerOneDoor }}, two={{ towerTwoDoors }},
-              cabId={{ selectedTower?.cabinetId }}, catId={{
-                selectedTower?.catalogId
-              }}
-            </div>
-
-            <div
-              v-if="!isBlindCornerCabinet(selectedTower) && towerOneDoor === 1 && towerTwoDoors === 1"
-              class="segmented-control box-toggle"
-              style="margin-bottom: 8px"
-            >
-              <button
-                class="segment-btn"
-                :class="{ active: selectedTower.doorCount !== 2 }"
-                @click="closet.updateTower(selectedTower.id, { doorCount: 1 })"
-              >
-                1 Door
-              </button>
-              <button
-                class="segment-btn"
-                :class="{ active: selectedTower.doorCount === 2 }"
-                @click="closet.updateTower(selectedTower.id, { doorCount: 2 })"
-              >
-                2 Doors
-              </button>
-            </div>
-
-            <div
-              v-if="isBlindCornerCabinet(selectedTower) || selectedTower.doorCount !== 2"
-              class="segmented-control box-toggle"
-            >
-              <button
-                class="segment-btn"
-                :class="{ active: effectiveTowerHinge !== 'right' }"
-                @click="
-                  closet.updateTower(selectedTower.id, { doorHinge: 'left', doorCount: 1 })
+              <div
+                style="
+                  font-size: 10px;
+                  color: #ff9999;
+                  margin-top: 4px;
+                  padding-bottom: 8px;
                 "
               >
-                Left-Hinge
-              </button>
-              <button
-                class="segment-btn"
-                :class="{ active: effectiveTowerHinge === 'right' }"
-                @click="
-                  closet.updateTower(selectedTower.id, { doorHinge: 'right', doorCount: 1 })
-                "
+                Debug Doors: one={{ towerOneDoor }}, two={{ towerTwoDoors }},
+                cabId={{ selectedTower?.cabinetId }}, catId={{
+                  selectedTower?.catalogId
+                }}
+              </div>
+
+              <div
+                v-if="towerOneDoor === 1 && towerTwoDoors === 1"
+                class="segmented-control box-toggle"
+                style="margin-bottom: 8px"
               >
-                Right-Hinge
-              </button>
-            </div>
+                <button
+                  class="segment-btn"
+                  :class="{ active: selectedTower.doorCount !== 2 }"
+                  @click="
+                    closet.updateTower(selectedTower.id, { doorCount: 1 })
+                  "
+                >
+                  1 Door
+                </button>
+                <button
+                  class="segment-btn"
+                  :class="{ active: selectedTower.doorCount === 2 }"
+                  @click="
+                    closet.updateTower(selectedTower.id, { doorCount: 2 })
+                  "
+                >
+                  2 Doors
+                </button>
+              </div>
+
+              <div
+                v-if="selectedTower.doorCount !== 2"
+                class="segmented-control box-toggle"
+              >
+                <button
+                  class="segment-btn"
+                  :class="{ active: effectiveTowerHinge !== 'right' }"
+                  @click="
+                    closet.updateTower(selectedTower.id, {
+                      doorHinge: 'left',
+                      doorCount: 1,
+                    })
+                  "
+                >
+                  Left-Hinge
+                </button>
+                <button
+                  class="segment-btn"
+                  :class="{ active: effectiveTowerHinge === 'right' }"
+                  @click="
+                    closet.updateTower(selectedTower.id, {
+                      doorHinge: 'right',
+                      doorCount: 1,
+                    })
+                  "
+                >
+                  Right-Hinge
+                </button>
+              </div>
+            </template>
           </div>
 
           <!-- Box Count Toggle (Without Doors only) -->
