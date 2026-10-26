@@ -1230,12 +1230,15 @@ function elevationHorizontalBoundsForWall(
 
   const getTowerReach = (t: (typeof closetStore.towers)[number]) => {
     const isLShapeV = t.partType?.toLowerCase() === "l shape vertical";
+    const isFiller = t.partType?.toLowerCase() === "filler";
     const outset =
       typeof t.outset === "number" && !isNaN(t.outset)
         ? t.outset
         : isLShapeV
           ? 20.875
-          : 0;
+          : isFiller
+            ? 14.25
+            : 0;
     const depth = typeof t.depth === "number" && !isNaN(t.depth) ? t.depth : 0;
     return outset + depth;
   };
@@ -1336,12 +1339,15 @@ function elevationHorizontalBoundsForWall(
       // Tower is close enough to the corner to protrude into our wall's space
       if (distFromCorner < thresholdDepth - 0.0001) {
         const isOtherLShapeV = tower.partType?.toLowerCase() === "l shape vertical";
+        const isOtherFiller = tower.partType?.toLowerCase() === "filler";
         const otherOutset =
           typeof tower.outset === "number" && !isNaN(tower.outset)
             ? tower.outset
             : isOtherLShapeV
               ? 20.875
-              : 0;
+              : isOtherFiller
+                ? 14.25
+                : 0;
         const bridgeW =
           tower.isCorner &&
           typeof tower.cornerBridgeWidth === "number" &&
@@ -1399,12 +1405,15 @@ function elevationHorizontalBoundsForWall(
         ) * gapScale;
       if (distFromCorner < thresholdDepth - 0.0001) {
         const isOtherLShapeV = tower.partType?.toLowerCase() === "l shape vertical";
+        const isOtherFiller = tower.partType?.toLowerCase() === "filler";
         const otherOutset =
           typeof tower.outset === "number" && !isNaN(tower.outset)
             ? tower.outset
             : isOtherLShapeV
               ? 20.875
-              : 0;
+              : isOtherFiller
+                ? 14.25
+                : 0;
         const bridgeW =
           tower.isCorner &&
           typeof tower.cornerBridgeWidth === "number" &&
@@ -1434,9 +1443,14 @@ function elevationHorizontalBoundsForWall(
     endAdjacentDepth > 0 ? endAdjacentDepth + rawEndMargin : rawEndMargin,
   );
 
-  const isLShapeV = selectedOnWall?.partType?.toLowerCase() === "l shape vertical";
-  const startCornerClearance = startAdjacentDepth > 0 && isLShapeV ? 0.875 : 0;
-  const endCornerClearance = endAdjacentDepth > 0 && isLShapeV ? 0.875 : 0;
+  const isCornerClearancePart =
+    selectedOnWall?.partType?.toLowerCase() === "l shape vertical" ||
+    selectedOnWall?.partType?.toLowerCase() === "panel" ||
+    selectedOnWall?.partType?.toLowerCase() === "filler";
+  const startCornerClearance =
+    startAdjacentDepth > 0 && isCornerClearancePart ? 0.875 : 0;
+  const endCornerClearance =
+    endAdjacentDepth > 0 && isCornerClearancePart ? 0.875 : 0;
 
   const minLeftCm = startAdjacentDepth + startCornerClearance;
   const maxRightCm = Math.max(

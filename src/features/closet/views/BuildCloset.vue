@@ -384,12 +384,15 @@ const clearances = computed(() => {
         ) * oGapScale;
 
       const isLShapeV = tower.partType?.toLowerCase() === "l shape vertical";
+      const isFiller = tower.partType?.toLowerCase() === "filler";
       const towerOutset =
         typeof tower.outset === "number" && !isNaN(tower.outset)
           ? tower.outset
           : isLShapeV
             ? 20.875
-            : 0;
+            : isFiller
+              ? 14.25
+              : 0;
       const towerReach =
         (typeof tower.depth === "number" && !isNaN(tower.depth)
           ? tower.depth
@@ -398,12 +401,15 @@ const clearances = computed(() => {
       if (distFromCorner < towerReach - epsilon) {
         const isOtherLShapeV =
           otherTower.partType?.toLowerCase() === "l shape vertical";
+        const isOtherFiller = otherTower.partType?.toLowerCase() === "filler";
         const otherOutset =
           typeof otherTower.outset === "number" && !isNaN(otherTower.outset)
             ? otherTower.outset
             : isOtherLShapeV
               ? 20.875
-              : 0;
+              : isOtherFiller
+                ? 14.25
+                : 0;
         const otherBridge =
           otherTower.isCorner &&
           typeof otherTower.cornerBridgeWidth === "number" &&
@@ -479,12 +485,15 @@ const clearances = computed(() => {
         ) * oGapScale;
 
       const isLShapeV = tower.partType?.toLowerCase() === "l shape vertical";
+      const isFiller = tower.partType?.toLowerCase() === "filler";
       const towerOutset =
         typeof tower.outset === "number" && !isNaN(tower.outset)
           ? tower.outset
           : isLShapeV
             ? 20.875
-            : 0;
+            : isFiller
+              ? 14.25
+              : 0;
       const towerReach =
         (typeof tower.depth === "number" && !isNaN(tower.depth)
           ? tower.depth
@@ -493,12 +502,15 @@ const clearances = computed(() => {
       if (distFromCorner < towerReach - epsilon) {
         const isOtherLShapeV =
           otherTower.partType?.toLowerCase() === "l shape vertical";
+        const isOtherFiller = otherTower.partType?.toLowerCase() === "filler";
         const otherOutset =
           typeof otherTower.outset === "number" && !isNaN(otherTower.outset)
             ? otherTower.outset
             : isOtherLShapeV
               ? 20.875
-              : 0;
+              : isOtherFiller
+                ? 14.25
+                : 0;
         const otherBridge =
           otherTower.isCorner &&
           typeof otherTower.cornerBridgeWidth === "number" &&
@@ -578,9 +590,14 @@ const clearances = computed(() => {
   let uiLeft = rawLeft * gapScale;
   let uiRight = rawRight * gapScale;
 
-  const isLShapeV = tower.partType?.toLowerCase() === "l shape vertical";
-  const startCornerClearance = startAdjacentDepth > 0 && isLShapeV ? 0.875 : 0;
-  const endCornerClearance = endAdjacentDepth > 0 && isLShapeV ? 0.875 : 0;
+  const isCornerClearancePart =
+    tower.partType?.toLowerCase() === "l shape vertical" ||
+    tower.partType?.toLowerCase() === "panel" ||
+    tower.partType?.toLowerCase() === "filler";
+  const startCornerClearance =
+    startAdjacentDepth > 0 && isCornerClearancePart ? 0.875 : 0;
+  const endCornerClearance =
+    endAdjacentDepth > 0 && isCornerClearancePart ? 0.875 : 0;
 
   return {
     left: uiLeft < epsilon ? 0 : Math.max(0, uiLeft),

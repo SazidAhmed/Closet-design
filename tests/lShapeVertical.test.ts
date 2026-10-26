@@ -173,6 +173,141 @@ describe('L Shape Vertical custom part', () => {
 
       expect(parseFloat((clearanceInputs[0]!.element as HTMLInputElement).value)).toBeCloseTo(0, 4)
     })
+
+    it('calculates clearance 0.875 for Panel when corner wall has cabinets, and 0 when empty', async () => {
+      const closet = useClosetStore()
+      const room = useRoomStore()
+      const selection = useSelectionStore()
+
+      room.walls = [
+        { id: 'wall-1', length: 100, position: [0, 0], angle: 0, hasCloset: false, thickness: 5.0, label: '1', visible: true },
+        { id: 'wall-4', length: 100, position: [0, 0], angle: Math.PI / 2, hasCloset: false, thickness: 5.0, label: '4', visible: true },
+      ]
+
+      closet.towers = [
+        {
+          id: 'corner-cab',
+          label: 'Blind Corner Shelves 1',
+          catalogId: 100,
+          width: 40,
+          depth: 23,
+          height: 84,
+          wallId: 'wall-1',
+          positionAlongWall: 0.2,
+          accessories: [],
+        },
+        {
+          id: 'panel-1',
+          label: 'Panel 1',
+          partType: 'panel',
+          width: 0.75,
+          depth: 15,
+          height: 84,
+          wallId: 'wall-4',
+          positionAlongWall: 0.5,
+          accessories: [],
+        },
+      ]
+
+      selection.selectTower('panel-1')
+
+      const wrapper = mount(BuildCloset, {
+        global: {
+          stubs: {
+            TopToolbar: true,
+            FooterBar: true,
+            RoomPlanPreview: true,
+            FloorPlan: true,
+          },
+        },
+      })
+      await nextTick()
+      selection.selectTower('panel-1')
+      await nextTick()
+
+      const clearanceInputs = wrapper.findAll('.clearance-section .number-input')
+      const snapButtons = wrapper.findAll('.snap-btn')
+      const moveLeftBtn = snapButtons[0]!
+      await moveLeftBtn.trigger('click')
+      await nextTick()
+
+      expect(parseFloat((clearanceInputs[0]!.element as HTMLInputElement).value)).toBeCloseTo(0.875, 4)
+
+      closet.towers = closet.towers.filter((t) => t.id !== 'corner-cab')
+      await nextTick()
+      await moveLeftBtn.trigger('click')
+      await nextTick()
+
+      expect(parseFloat((clearanceInputs[0]!.element as HTMLInputElement).value)).toBeCloseTo(0, 4)
+    })
+
+    it('calculates clearance 0.875 for Filler when corner wall has cabinets, and 0 when empty', async () => {
+      const closet = useClosetStore()
+      const room = useRoomStore()
+      const selection = useSelectionStore()
+
+      room.walls = [
+        { id: 'wall-1', length: 100, position: [0, 0], angle: 0, hasCloset: false, thickness: 5.0, label: '1', visible: true },
+        { id: 'wall-4', length: 100, position: [0, 0], angle: Math.PI / 2, hasCloset: false, thickness: 5.0, label: '4', visible: true },
+      ]
+
+      closet.towers = [
+        {
+          id: 'corner-cab',
+          label: 'Blind Corner Shelves 1',
+          catalogId: 100,
+          width: 40,
+          depth: 23,
+          height: 84,
+          wallId: 'wall-1',
+          positionAlongWall: 0.2,
+          accessories: [],
+        },
+        {
+          id: 'filler-1',
+          label: 'Filler 1',
+          partType: 'filler',
+          width: 3,
+          depth: 0.75,
+          height: 84,
+          outset: 14.25,
+          wallId: 'wall-4',
+          positionAlongWall: 0.5,
+          accessories: [],
+        },
+      ]
+
+      selection.selectTower('filler-1')
+
+      const wrapper = mount(BuildCloset, {
+        global: {
+          stubs: {
+            TopToolbar: true,
+            FooterBar: true,
+            RoomPlanPreview: true,
+            FloorPlan: true,
+          },
+        },
+      })
+      await nextTick()
+      selection.selectTower('filler-1')
+      await nextTick()
+
+      const clearanceInputs = wrapper.findAll('.clearance-section .number-input')
+      const snapButtons = wrapper.findAll('.snap-btn')
+      const moveLeftBtn = snapButtons[0]!
+      await moveLeftBtn.trigger('click')
+      await nextTick()
+
+      expect(parseFloat((clearanceInputs[0]!.element as HTMLInputElement).value)).toBeCloseTo(0.875, 4)
+
+      closet.towers = closet.towers.filter((t) => t.id !== 'corner-cab')
+      await nextTick()
+      await moveLeftBtn.trigger('click')
+      await nextTick()
+
+      expect(parseFloat((clearanceInputs[0]!.element as HTMLInputElement).value)).toBeCloseTo(0, 4)
+    })
   })
 })
 
