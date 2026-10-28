@@ -147,6 +147,12 @@ export type Tower = {
   blindOrientation?: 'left' | 'right'
   /** Width of the blind section (non-door area) in inches. Defaults to 24. */
   blindWidth?: number
+  /**
+   * For CRD cabinets: height of the lower (drawer) section in inches.
+   * Derived from the `hor_line` field in the API cabinet record.
+   * When set, drawers are confined to the lower zone and shelves to the upper zone.
+   */
+  crdSplitHeight?: number
 }
 
 /**

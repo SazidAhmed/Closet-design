@@ -1,4 +1,4 @@
-import type { Accessory, ShelfSetAccessory, ShoeShelfAccessory, Tower, CornerPosition } from "./types/tower";
+import type { Accessory, ShelfSetAccessory, ShoeShelfAccessory, DrawerAccessory, Tower, CornerPosition } from "./types/tower";
 import { createTowerId, isBlindCornerCabinet } from "./types/tower";
 
 // No longer converting to cm, internal units are now inches.
@@ -42,6 +42,7 @@ export type ClosetCabinetEntry = {
   numberOfShelves: number;
   numOfDrawers: number;
   numOfRollouts: number;
+  horLine?: number;
   basePrice: string;
   oneDoor?: number;
   twoDoors?: number;
@@ -471,6 +472,26 @@ export function refreshTowerCabinet(
       if (idx >= 0) {
         (tower.accessories[idx] as ShoeShelfAccessory).count = shelfCount;
       }
+    } else if (switchedCatCode === 'CRD') {
+      tower.crdSplitHeight = resolveCrdSplitHeight(firstCabinet, tower.height);
+      const drawerCount = resolveDrawerCount(switchedCatCode, firstCabinet);
+      const drawerIdx = tower.accessories.findIndex((a) => a.type === 'drawer');
+      if (drawerIdx >= 0) {
+        (tower.accessories[drawerIdx] as DrawerAccessory).count = drawerCount;
+      } else {
+        tower.accessories.push({ type: 'drawer', count: drawerCount, drawerHeight: 8 });
+      }
+      const crdShelfCount = Number(firstCabinet?.numberOfShelves ?? 0) || 4;
+      const shelfIdx = tower.accessories.findIndex((a) => a.type === 'shelf_set');
+      if (crdShelfCount > 0) {
+        if (shelfIdx >= 0) {
+          (tower.accessories[shelfIdx] as ShelfSetAccessory).count = crdShelfCount;
+        } else {
+          tower.accessories.push({ type: 'shelf_set', count: crdShelfCount });
+        }
+      } else if (shelfIdx >= 0) {
+        tower.accessories.splice(shelfIdx, 1);
+      }
     }
     return;
   }
@@ -531,6 +552,26 @@ export function refreshTowerCabinet(
     const idx = tower.accessories.findIndex((a) => a.type === 'shoe_shelf');
     if (idx >= 0) {
       (tower.accessories[idx] as ShoeShelfAccessory).count = shelfCount;
+    }
+  } else if (catCode === 'CRD') {
+    tower.crdSplitHeight = resolveCrdSplitHeight(baseCabinet, tower.height);
+    const drawerCount = resolveDrawerCount(catCode, baseCabinet);
+    const drawerIdx = tower.accessories.findIndex((a) => a.type === 'drawer');
+    if (drawerIdx >= 0) {
+      (tower.accessories[drawerIdx] as DrawerAccessory).count = drawerCount;
+    } else {
+      tower.accessories.push({ type: 'drawer', count: drawerCount, drawerHeight: 8 });
+    }
+    const crdShelfCount = Number(baseCabinet?.numberOfShelves ?? 0) || 4;
+    const shelfIdx = tower.accessories.findIndex((a) => a.type === 'shelf_set');
+    if (crdShelfCount > 0) {
+      if (shelfIdx >= 0) {
+        (tower.accessories[shelfIdx] as ShelfSetAccessory).count = crdShelfCount;
+      } else {
+        tower.accessories.push({ type: 'shelf_set', count: crdShelfCount });
+      }
+    } else if (shelfIdx >= 0) {
+      tower.accessories.splice(shelfIdx, 1);
     }
   }
 }
@@ -687,8 +728,54 @@ export function resolveShelfCount(
       return 5;
     case 'CSS':
       return 5;
+    case 'CRD':
+      return 4;
     default:
       return 0;
+  }
+}
+
+/**
+ * Returns the number of drawers to render for a tower based on the resolved
+ * cabinet record's `numOfDrawers` field from the API.
+ * Defaults to 5 when absent or 0.
+ */
+export function resolveDrawerCount(
+  categoryCode: ClosetCatalogCategoryCode,
+  cabinet: ClosetCabinetEntry | null | undefined,
+): number {
+  if (cabinet && Number(cabinet.numOfDrawers) > 0) {
+    return Number(cabinet.numOfDrawers);
+  }
+  switch (categoryCode) {
+    case 'CRD':
+      return 5;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Returns the height of the lower drawer section (in inches) for a CRD cabinet.
+ * If horLine from API is > 10, uses that. Otherwise derives the split based on
+ * the standard two-box cabinet division (42 5/8" for 84", 45 5/8" for 90", 44 1/8" for 96").
+ */
+export function resolveCrdSplitHeight(
+  cabinet: ClosetCabinetEntry | null | undefined,
+  totalHeight: number,
+): number {
+  const horLine = Number(cabinet?.horLine ?? 0);
+  if (horLine > 10) return horLine;
+
+  if (totalHeight <= 84) {
+    const ratio = 42.625 / 84;
+    return Math.abs(totalHeight - 84) < 0.01 ? 42.625 : totalHeight * ratio;
+  } else if (totalHeight <= 90) {
+    const ratio = 45.625 / 90;
+    return Math.abs(totalHeight - 90) < 0.01 ? 45.625 : totalHeight * ratio;
+  } else {
+    const ratio = 44.125 / 96;
+    return Math.abs(totalHeight - 96) < 0.01 ? 44.125 : totalHeight * ratio;
   }
 }
 
@@ -707,8 +794,17 @@ function accessoriesForCategory(
     case "CLH":
     case "CCL":
       return [{ type: "rod", position: "high", count: 1 }];
-    case "CRD":
-      return [{ type: "drawer", count: 4, drawerHeight: 8 }];
+    case "CRD": {
+      const drawerCount = resolveDrawerCount(categoryCode, cabinet);
+      const crdShelfCount = Number(cabinet?.numberOfShelves ?? 0) || 4;
+      const crdAccessories: Accessory[] = [
+        { type: "drawer", count: drawerCount, drawerHeight: 8 },
+      ];
+      if (crdShelfCount > 0) {
+        crdAccessories.push({ type: "shelf_set", count: crdShelfCount });
+      }
+      return crdAccessories;
+    }
     case "CSS":
       return [{ type: "shoe_shelf", count: resolveShelfCount(categoryCode, cabinet) }];
     case "CAS":
@@ -769,6 +865,7 @@ export function createTowerFromCategory(
     blindOrientation: isCorner && doorMode === "with_doors" ? "left" : undefined,
     blindWidth: isCorner && doorMode === "with_doors" ? 24 : undefined,
     doorHinge: isCorner && doorMode === "with_doors" ? "left" : "left",
+    crdSplitHeight: categoryCode === 'CRD' ? resolveCrdSplitHeight(cabinet, cabinet ? cabinet.height : limits.minH) : undefined,
     accessories: accessoriesForCategory(categoryCode, cabinet),
   };
 }
@@ -822,6 +919,7 @@ export async function loadCatalogCategories(
               numberOfShelves: Number(raw.number_of_shelves ?? raw.numberOfShelves ?? 0),
               numOfDrawers: Number(raw.num_of_drawers ?? raw.numOfDrawers ?? 0),
               numOfRollouts: Number(raw.num_of_rollouts ?? raw.numOfRollouts ?? 0),
+              horLine: Number(raw.hor_line ?? raw.horLine ?? 0) || undefined,
               basePrice: String(raw.base_price ?? raw.basePrice ?? '0'),
               oneDoor: Number(raw.one_door ?? raw.oneDoor ?? 0),
               twoDoors: Number(raw.two_doors ?? raw.twoDoors ?? 0),

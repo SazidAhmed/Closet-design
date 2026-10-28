@@ -50,6 +50,7 @@ function mapCabinet(raw: any): ClosetCabinetEntry {
     numberOfShelves: Number(raw.number_of_shelves ?? raw.numberOfShelves ?? 0),
     numOfDrawers: Number(raw.num_of_drawers ?? raw.numOfDrawers ?? 0),
     numOfRollouts: Number(raw.num_of_rollouts ?? raw.numOfRollouts ?? 0),
+    horLine: Number(raw.hor_line ?? raw.horLine ?? 0) || undefined,
     basePrice: String(raw.base_price ?? raw.basePrice ?? '0'),
   }
 }

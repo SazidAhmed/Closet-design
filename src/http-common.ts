@@ -1,4 +1,4 @@
-import { router } from "@/router"; // Closet project router path
+import { router } from "./router"; // Closet project router path
 
 // Dynamically determine backend URL based on current host
 const getBackendURL = () => {

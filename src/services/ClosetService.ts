@@ -1,4 +1,4 @@
-import http from "@/http-common";
+import http from "../http-common";
 import { type ClosetCatalogCategory, type ClosetDoorMode } from "../features/closet/domain/closetCatalogs";
 
 export default {

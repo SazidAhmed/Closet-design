@@ -276,9 +276,49 @@ function buildShelves(
   finishId: string,
   bottomGap: number,
 ) {
-  if (count <= 0) return;
+  if (count <= 0 && tower.categoryCode !== "CRD") return;
 
   const bottomInnerY = -H / 2 + bottomGap + T;
+
+  if (tower.categoryCode === "CRD") {
+    // In CRD: shelves are in the upper box above the split line
+    const splitHeight = tower.crdSplitHeight ?? (H * (42.625 / 84));
+    const divY = -H / 2 + bottomGap + splitHeight;
+
+    // Fixed divider shelf at the split line
+    parts.push({
+      id: `shelf_${tower.id}_div`,
+      type: "shelf",
+      dims: { x: innerW, y: T, z: iD },
+      transform: { pos: [centerX, divY, T / 2], rot: [0, 0, 0] },
+      materialId: finishId,
+      towerId: tower.id,
+      meta: { isFixed: true },
+    });
+
+    // Adjustable shelves in upper zone
+    const adjCount = count >= 4 ? count - 1 : count;
+    const topInnerY = H / 2 - T;
+    const upperAvailable = Math.max(0, topInnerY - (divY + T / 2));
+    if (adjCount > 0 && upperAvailable > 0) {
+      const gap = upperAvailable / (adjCount + 1);
+      for (let i = 0; i < adjCount; i++) {
+        const y = (divY + T / 2) + gap * (i + 1);
+        parts.push({
+          id: `shelf_${tower.id}_${i + 1}`,
+          type: "shelf",
+          dims: { x: innerW, y: T, z: iD },
+          transform: { pos: [centerX, y, T / 2], rot: [0, 0, 0] },
+          materialId: finishId,
+          towerId: tower.id,
+          meta: { index: i + 1 },
+        });
+      }
+    }
+    return;
+  }
+
+  if (count <= 0) return;
   const gap = (iH - bottomGap) / (count + 1);
 
   for (let i = 0; i < count; i++) {
@@ -350,6 +390,30 @@ function buildDrawers(
   if (count <= 0) return;
 
   const bottomInnerY = -H / 2 + bottomGap + T;
+
+  if (tower.categoryCode === "CRD") {
+    // In CRD: drawers fill the lower box below the split line
+    const splitHeight = tower.crdSplitHeight ?? (H * (42.625 / 84));
+    const divY = -H / 2 + bottomGap + splitHeight;
+    const drawerZoneH = Math.max(0, (divY - T / 2) - bottomInnerY);
+    const gap = 0.25;
+    const singleH = Math.max(1, (drawerZoneH - (count - 1) * gap) / count);
+
+    for (let i = 0; i < count; i++) {
+      const y = bottomInnerY + singleH / 2 + i * (singleH + gap);
+      parts.push({
+        id: `drawer_${tower.id}_${i + 1}`,
+        type: "drawer_box",
+        dims: { x: innerW - 2, y: singleH, z: iD - 2 },
+        transform: { pos: [centerX, y, T / 2 + 1], rot: [0, 0, 0] },
+        materialId: finishId,
+        towerId: tower.id,
+        meta: { index: i + 1 },
+      });
+    }
+    return;
+  }
+
   const gap = 1; // 1cm gap between drawers
 
   for (let i = 0; i < count; i++) {

@@ -1009,7 +1009,45 @@ function getTowerAccessoriesLayout(tower: Tower) {
     if (acc.type === "shelf_set") {
       const count = acc.count;
       if (count > 0) {
-        if (isTwoBoxCabinet(tower) && count >= 4) {
+        if (tower.categoryCode === "CRD") {
+          const splitY = tower.crdSplitHeight ?? getTwoBoxHeights(geom.heightCm).lowerBoxHeight;
+          // Fixed divider shelf at the box boundary / split line
+          const divShelfBottom = splitY - T / 2;
+          const divShelfTop = divShelfBottom + T;
+          const divSegments = splitHorizontalSegments(
+            innerLeft,
+            innerWidth,
+            divShelfBottom,
+            divShelfTop,
+            openings,
+          );
+          for (const seg of divSegments) {
+            shelves.push({ x: seg.x, y: divShelfBottom, w: seg.w, h: T, isFixed: true });
+          }
+
+          // Upper box adjustable shelves (e.g. 3 shelves for a 4-shelf CRD cabinet)
+          const adjCount = count >= 4 ? count - 1 : count;
+          const upperBottom = splitY + T / 2;
+          const upperAvailable = Math.max(0, innerTop - upperBottom);
+          if (adjCount > 0 && upperAvailable > 0) {
+            const upperGap = upperAvailable / (adjCount + 1);
+            for (let i = 0; i < adjCount; i++) {
+              const y = upperBottom + upperGap * (i + 1);
+              const shelfBottom = y - T / 2;
+              const shelfTop = shelfBottom + T;
+              const segments = splitHorizontalSegments(
+                innerLeft,
+                innerWidth,
+                shelfBottom,
+                shelfTop,
+                openings,
+              );
+              for (const seg of segments) {
+                shelves.push({ x: seg.x, y: shelfBottom, w: seg.w, h: T, isFixed: false });
+              }
+            }
+          }
+        } else if (isTwoBoxCabinet(tower) && count >= 4) {
           const { lowerBoxHeight } = getTwoBoxHeights(geom.heightCm);
           // 4th shelf is the fixed divider shelf placed at the boundary between boxes.
           const lowerCount = 3;
@@ -1123,31 +1161,66 @@ function getTowerAccessoriesLayout(tower: Tower) {
       }
     } else if (acc.type === "drawer") {
       const count = acc.count;
-      const drawerHeight = acc.drawerHeight || 20;
-      const gap = 1;
-      for (let i = 0; i < count; i++) {
-        const bottom = innerBottom + i * (drawerHeight + gap);
-        const top = bottom + drawerHeight;
-        const segments = splitHorizontalSegments(
-          innerLeft + 1,
-          innerWidth - 2,
-          bottom,
-          top,
-          openings,
-        );
-        for (const seg of segments) {
-          drawers.push({
-            x: seg.x,
-            y: bottom,
-            w: seg.w,
-            h: drawerHeight,
-            handle: {
-              x: seg.x + seg.w * 0.3,
-              y: bottom + drawerHeight / 2 - 0.5,
-              w: seg.w * 0.4,
-              h: 1,
-            },
-          });
+      if (tower.categoryCode === "CRD") {
+        const splitY = tower.crdSplitHeight ?? getTwoBoxHeights(geom.heightCm).lowerBoxHeight;
+        const drawerZoneHeight = Math.max(0, (splitY - T / 2) - innerBottom);
+        if (count > 0 && drawerZoneHeight > 0) {
+          const gap = 0.25;
+          const totalGap = gap * (count - 1);
+          const singleH = Math.max(1, (drawerZoneHeight - totalGap) / count);
+          for (let i = 0; i < count; i++) {
+            const bottom = innerBottom + i * (singleH + gap);
+            const top = bottom + singleH;
+            const segments = splitHorizontalSegments(
+              innerLeft + 1,
+              innerWidth - 2,
+              bottom,
+              top,
+              openings,
+            );
+            for (const seg of segments) {
+              drawers.push({
+                x: seg.x,
+                y: bottom,
+                w: seg.w,
+                h: singleH,
+                handle: {
+                  x: seg.x + seg.w * 0.3,
+                  y: bottom + singleH / 2 - 0.5,
+                  w: seg.w * 0.4,
+                  h: 1,
+                },
+              });
+            }
+          }
+        }
+      } else {
+        const drawerHeight = acc.drawerHeight || 20;
+        const gap = 1;
+        for (let i = 0; i < count; i++) {
+          const bottom = innerBottom + i * (drawerHeight + gap);
+          const top = bottom + drawerHeight;
+          const segments = splitHorizontalSegments(
+            innerLeft + 1,
+            innerWidth - 2,
+            bottom,
+            top,
+            openings,
+          );
+          for (const seg of segments) {
+            drawers.push({
+              x: seg.x,
+              y: bottom,
+              w: seg.w,
+              h: drawerHeight,
+              handle: {
+                x: seg.x + seg.w * 0.3,
+                y: bottom + drawerHeight / 2 - 0.5,
+                w: seg.w * 0.4,
+                h: 1,
+              },
+            });
+          }
         }
       }
     } else if (acc.type === "shoe_shelf") {
