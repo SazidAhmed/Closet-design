@@ -573,17 +573,26 @@ const depthLabel = computed(() => {
                 step="0.0625"
                 @change="
                   const target = $event.target as HTMLInputElement;
-                  closet.setTowerHeight(selectedTower!.id, Number(target.value));
+                  closet.setTowerHeight(
+                    selectedTower!.id,
+                    Number(target.value),
+                  );
                   target.value = String(selectedTower!.height);
                 "
                 @blur="
                   const target = $event.target as HTMLInputElement;
-                  closet.setTowerHeight(selectedTower!.id, Number(target.value));
+                  closet.setTowerHeight(
+                    selectedTower!.id,
+                    Number(target.value),
+                  );
                   target.value = String(selectedTower!.height);
                 "
                 @keyup.enter="
                   const target = $event.target as HTMLInputElement;
-                  closet.setTowerHeight(selectedTower!.id, Number(target.value));
+                  closet.setTowerHeight(
+                    selectedTower!.id,
+                    Number(target.value),
+                  );
                   target.value = String(selectedTower!.height);
                 "
               />

@@ -4665,8 +4665,19 @@ function dimLinePoints(wall: {
                     :y="towerElevationRect(tower).y + towerElevationRect(tower).height - towerBottomGap(tower) * elevationLayout.scale - (closetStore.cabinet?.thickness ?? 0.75) * elevationLayout.scale"
                     :width="towerElevationRect(tower).width - (closetStore.cabinet?.thickness ?? 0.75) * 2 * elevationLayout.scale"
                     :height="(closetStore.cabinet?.thickness ?? 0.75) * elevationLayout.scale"
-                    :class="isTwoBoxCabinet(tower) ? 'elevation-carcass-panel-fixed' : 'elevation-carcass-panel'"
+                    class="elevation-carcass-panel"
                   />
+
+                  <!-- Built-in toe-kick line for cabinets without doors (blank inside, matching CAD drawing) -->
+                  <template v-if="!isCabinetWithDoors(tower) && !hasAttachedToeKick(tower)">
+                    <line
+                      :x1="towerElevationRect(tower).x + (closetStore.cabinet?.thickness ?? 0.75) * elevationLayout.scale"
+                      :x2="towerElevationRect(tower).x + towerElevationRect(tower).width - (closetStore.cabinet?.thickness ?? 0.75) * elevationLayout.scale"
+                      :y1="towerElevationRect(tower).y + towerElevationRect(tower).height - 0.5 * elevationLayout.scale"
+                      :y2="towerElevationRect(tower).y + towerElevationRect(tower).height - 0.5 * elevationLayout.scale"
+                      class="elevation-carcass-seam"
+                    />
+                  </template>
 
                   <!-- 2-Box Separation: Horizontal seam line across side panels -->
                   <template v-if="isTwoBoxCabinet(tower)">
