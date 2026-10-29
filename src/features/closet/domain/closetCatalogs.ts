@@ -471,6 +471,8 @@ export function refreshTowerCabinet(
       const idx = tower.accessories.findIndex((a) => a.type === 'shoe_shelf');
       if (idx >= 0) {
         (tower.accessories[idx] as ShoeShelfAccessory).count = shelfCount;
+      } else {
+        tower.accessories.push({ type: 'shoe_shelf', count: shelfCount });
       }
     } else if (switchedCatCode === 'CRD') {
       tower.crdSplitHeight = resolveCrdSplitHeight(firstCabinet, tower.height);
@@ -552,6 +554,8 @@ export function refreshTowerCabinet(
     const idx = tower.accessories.findIndex((a) => a.type === 'shoe_shelf');
     if (idx >= 0) {
       (tower.accessories[idx] as ShoeShelfAccessory).count = shelfCount;
+    } else {
+      tower.accessories.push({ type: 'shoe_shelf', count: shelfCount });
     }
   } else if (catCode === 'CRD') {
     tower.crdSplitHeight = resolveCrdSplitHeight(baseCabinet, tower.height);
@@ -727,7 +731,7 @@ export function resolveShelfCount(
     case 'CCS':
       return 5;
     case 'CSS':
-      return 5;
+      return 9;
     case 'CRD':
       return 4;
     default:
@@ -756,6 +760,32 @@ export function resolveDrawerCount(
 }
 
 /**
+ * Returns whether a tower is configured as a two-box open cabinet.
+ */
+export function isTwoBoxCabinet(tower: Tower): boolean {
+  return (!tower.partType || tower.partType === "cabinet") && (tower.boxCount ?? 2) === 2 && tower.doorMode !== "with_doors";
+}
+
+/**
+ * Returns lower and upper box heights (in inches) for standard two-box cabinet divisions.
+ */
+export function getTwoBoxHeights(totalHeight: number): { lowerBoxHeight: number; upperBoxHeight: number } {
+  if (totalHeight <= 84) {
+    const ratio = 42.625 / 84;
+    const lower = Math.abs(totalHeight - 84) < 0.01 ? 42.625 : totalHeight * ratio;
+    return { lowerBoxHeight: lower, upperBoxHeight: totalHeight - lower };
+  } else if (totalHeight <= 90) {
+    const ratio = 45.625 / 90;
+    const lower = Math.abs(totalHeight - 90) < 0.01 ? 45.625 : totalHeight * ratio;
+    return { lowerBoxHeight: lower, upperBoxHeight: totalHeight - lower };
+  } else {
+    const ratio = 44.125 / 96;
+    const lower = Math.abs(totalHeight - 96) < 0.01 ? 44.125 : totalHeight * ratio;
+    return { lowerBoxHeight: lower, upperBoxHeight: totalHeight - lower };
+  }
+}
+
+/**
  * Returns the height of the lower drawer section (in inches) for a CRD cabinet.
  * If horLine from API is > 10, uses that. Otherwise derives the split based on
  * the standard two-box cabinet division (42 5/8" for 84", 45 5/8" for 90", 44 1/8" for 96").
@@ -766,17 +796,7 @@ export function resolveCrdSplitHeight(
 ): number {
   const horLine = Number(cabinet?.horLine ?? 0);
   if (horLine > 10) return horLine;
-
-  if (totalHeight <= 84) {
-    const ratio = 42.625 / 84;
-    return Math.abs(totalHeight - 84) < 0.01 ? 42.625 : totalHeight * ratio;
-  } else if (totalHeight <= 90) {
-    const ratio = 45.625 / 90;
-    return Math.abs(totalHeight - 90) < 0.01 ? 45.625 : totalHeight * ratio;
-  } else {
-    const ratio = 44.125 / 96;
-    return Math.abs(totalHeight - 96) < 0.01 ? 44.125 : totalHeight * ratio;
-  }
+  return getTwoBoxHeights(totalHeight).lowerBoxHeight;
 }
 
 function accessoriesForCategory(

@@ -5,6 +5,7 @@
 import type { ClosetStateV2 } from "./schema";
 import type { ClosetPart } from "./parts";
 import type { Tower } from "./types/tower";
+import { isTwoBoxCabinet, getTwoBoxHeights } from "./closetCatalogs";
 
 // ---- Derived dimensions ---------------------------------------------------
 
@@ -445,6 +446,59 @@ function buildShoeShelves(
   bottomGap: number,
 ) {
   if (count <= 0) return;
+
+  const isTwoBox = isTwoBoxCabinet(tower);
+  if (isTwoBox && count >= 8) {
+    const { lowerBoxHeight } = getTwoBoxHeights(H);
+    const divY = -H / 2 + bottomGap + lowerBoxHeight;
+
+    // Fixed divider shelf at the split line
+    parts.push({
+      id: `shelf_${tower.id}_div`,
+      type: "shelf",
+      dims: { x: innerW, y: T, z: iD },
+      transform: { pos: [centerX, divY, T / 2], rot: [0, 0, 0] },
+      materialId: finishId,
+      towerId: tower.id,
+      meta: { isFixed: true },
+    });
+
+    const shoeCount = count >= 9 ? count - 1 : count;
+    const lowerCount = Math.floor(shoeCount / 2);
+    const upperCount = shoeCount - lowerCount;
+
+    // Lower box shoe shelves: 9" down from divider shelf, then 7 1/8" (7.125") step
+    for (let i = 0; i < lowerCount; i++) {
+      const drop = 9 + i * 7.125;
+      const y = divY - T / 2 - drop;
+      parts.push({
+        id: `shoe_shelf_${tower.id}_lower_${i + 1}`,
+        type: "shoe_shelf",
+        dims: { x: innerW, y: T, z: iD * 0.75 },
+        transform: { pos: [centerX, y, T / 2 + iD * 0.12], rot: [0.26, 0, 0] },
+        materialId: finishId,
+        towerId: tower.id,
+        meta: { index: i + 1 },
+      });
+    }
+
+    // Upper box shoe shelves: 9" down from top inside, then 7 1/8" (7.125") step
+    const topInnerY = H / 2 - T;
+    for (let i = 0; i < upperCount; i++) {
+      const drop = 9 + i * 7.125;
+      const y = topInnerY - drop;
+      parts.push({
+        id: `shoe_shelf_${tower.id}_upper_${i + 1}`,
+        type: "shoe_shelf",
+        dims: { x: innerW, y: T, z: iD * 0.75 },
+        transform: { pos: [centerX, y, T / 2 + iD * 0.12], rot: [0.26, 0, 0] },
+        materialId: finishId,
+        towerId: tower.id,
+        meta: { index: lowerCount + i + 1 },
+      });
+    }
+    return;
+  }
 
   const bottomInnerY = -H / 2 + bottomGap + T;
   const shelfSpacing = Math.min(20, (iH - bottomGap) / (count + 1)); // max 20cm between shoe shelves

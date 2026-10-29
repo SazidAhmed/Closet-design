@@ -1003,7 +1003,35 @@ function getTowerAccessoriesLayout(tower: Tower) {
     w: number;
     h: number;
     guardrailY: number;
+    frontY?: number;
+    rearY?: number;
+    slantH?: number;
+    shelfH?: number;
+    guardrailH?: number;
+    bracketW?: number;
+    bracketH?: number;
   }> = [];
+
+  const isTwoBox = isTwoBoxCabinet(tower);
+  const twoBoxHeights = isTwoBox ? getTwoBoxHeights(geom.heightCm) : null;
+  const dividerY = twoBoxHeights ? twoBoxHeights.lowerBoxHeight : 0;
+
+  // For 2-box cabinets without shelf_set (e.g. CSS, CDH): add the fixed middle divider shelf
+  const hasShelfSet = tower.accessories.some((a) => a.type === "shelf_set");
+  if (isTwoBox && !hasShelfSet) {
+    const divShelfBottom = dividerY - T / 2;
+    const divShelfTop = divShelfBottom + T;
+    const divSegments = splitHorizontalSegments(
+      innerLeft,
+      innerWidth,
+      divShelfBottom,
+      divShelfTop,
+      openings,
+    );
+    for (const seg of divSegments) {
+      shelves.push({ x: seg.x, y: divShelfBottom, w: seg.w, h: T, isFixed: true });
+    }
+  }
 
   for (const acc of tower.accessories) {
     if (acc.type === "shelf_set") {
@@ -1226,25 +1254,115 @@ function getTowerAccessoriesLayout(tower: Tower) {
     } else if (acc.type === "shoe_shelf") {
       const count = acc.count;
       if (count > 0) {
-        const shelfSpacing = Math.min(20, innerHeight / (count + 1));
-        for (let i = 0; i < count; i++) {
-          const y = innerBottom + shelfSpacing * (i + 1);
-          const shelfTop = y + T;
-          const segments = splitHorizontalSegments(
-            innerLeft,
-            innerWidth,
-            y,
-            shelfTop,
-            openings,
-          );
-          for (const seg of segments) {
-            shoeShelves.push({
-              x: seg.x,
-              y: y,
-              w: seg.w,
-              h: T,
-              guardrailY: y + 3,
-            });
+        const slantH = 3.25;
+        const guardrailH = 1.2;
+        const bracketW = 0.5;
+        const bracketH = 0.8;
+
+        if (isTwoBox && count >= 8) {
+          const shoeCount = count >= 9 ? count - 1 : count;
+          const lowerCount = Math.floor(shoeCount / 2);
+          const upperCount = shoeCount - lowerCount;
+
+          // Lower box shoe shelves: 9" down from divider shelf, then 7 1/8" (7.125") step
+          const lowerTop = dividerY - T / 2;
+          const lowerAvailable = Math.max(0, lowerTop - innerBottom);
+          const isStandard84 = Math.abs(geom.heightCm - 84) < 1;
+
+          for (let i = 0; i < lowerCount; i++) {
+            const frontY = isStandard84 && lowerCount === 4
+              ? lowerTop - 9 - i * 7.125
+              : lowerTop - Math.min(9, lowerAvailable * 0.22) - i * ((lowerAvailable - Math.min(9, lowerAvailable * 0.22) - 4) / Math.max(1, lowerCount - 1));
+            const shelfBottom = frontY - T;
+            const rearY = frontY + slantH;
+            const segments = splitHorizontalSegments(
+              innerLeft,
+              innerWidth,
+              shelfBottom,
+              frontY,
+              openings,
+            );
+            for (const seg of segments) {
+              shoeShelves.push({
+                x: seg.x,
+                y: shelfBottom,
+                w: seg.w,
+                h: T,
+                guardrailY: frontY,
+                frontY,
+                rearY,
+                slantH,
+                shelfH: T,
+                guardrailH,
+                bracketW,
+                bracketH,
+              });
+            }
+          }
+
+          // Upper box shoe shelves: 9" down from inside top, then 7 1/8" (7.125") step
+          const upperBottom = dividerY + T / 2;
+          const upperAvailable = Math.max(0, innerTop - upperBottom);
+
+          for (let i = 0; i < upperCount; i++) {
+            const frontY = isStandard84 && upperCount === 4
+              ? innerTop - 9 - i * 7.125
+              : innerTop - Math.min(9, upperAvailable * 0.22) - i * ((upperAvailable - Math.min(9, upperAvailable * 0.22) - 4) / Math.max(1, upperCount - 1));
+            const shelfBottom = frontY - T;
+            const rearY = frontY + slantH;
+            const segments = splitHorizontalSegments(
+              innerLeft,
+              innerWidth,
+              shelfBottom,
+              frontY,
+              openings,
+            );
+            for (const seg of segments) {
+              shoeShelves.push({
+                x: seg.x,
+                y: shelfBottom,
+                w: seg.w,
+                h: T,
+                guardrailY: frontY,
+                frontY,
+                rearY,
+                slantH,
+                shelfH: T,
+                guardrailH,
+                bracketW,
+                bracketH,
+              });
+            }
+          }
+        } else {
+          const gap = innerHeight / (count + 1);
+          for (let i = 0; i < count; i++) {
+            const frontY = innerBottom + gap * (i + 1);
+            const shelfBottom = frontY - T;
+            const rearY = frontY + slantH;
+            const segments = splitHorizontalSegments(
+              innerLeft,
+              innerWidth,
+              shelfBottom,
+              frontY,
+              openings,
+            );
+            for (const seg of segments) {
+              shoeShelves.push({
+                x: seg.x,
+                y: shelfBottom,
+                w: seg.w,
+                h: T,
+                guardrailY: frontY,
+                frontY,
+                rearY,
+                slantH,
+                shelfH: T,
+                guardrailH,
+                bracketW,
+                bracketH,
+              });
+            }
           }
         }
       }
@@ -4695,41 +4813,109 @@ function dimLinePoints(wall: {
                     />
                   </g>
 
-                  <!-- Shoe shelves with safety guardrails -->
+                  <!-- Shoe shelves: angled shelf face, rear edge, front edge face, white guardrail fence, and side brackets -->
                   <g
                     v-for="(shoe, shIdx) in getTowerAccessoriesLayout(tower)
                       .shoeShelves"
                     :key="`shoe-${shIdx}`"
                   >
+                    <!-- Slanted shelf face showing perspective depth -->
                     <rect
-                      :x="
-                        elevationLayout.wallX + shoe.x * elevationLayout.scale
-                      "
+                      :x="elevationLayout.wallX + shoe.x * elevationLayout.scale"
                       :y="
                         elevationLayout.wallY +
-                        (elevationLayout.roomHeightCm - (shoe.y + shoe.h)) *
+                        (elevationLayout.roomHeightCm - (shoe.rearY ?? (shoe.y + shoe.h + 3.25))) *
                           elevationLayout.scale
                       "
                       :width="shoe.w * elevationLayout.scale"
-                      :height="shoe.h * elevationLayout.scale"
-                      class="elevation-shoe-shelf"
+                      :height="(shoe.slantH ?? 3.25) * elevationLayout.scale"
+                      class="elevation-shoe-surface"
                     />
+                    <!-- Rear top edge line of the slanted shelf -->
                     <line
-                      :x1="
-                        elevationLayout.wallX + shoe.x * elevationLayout.scale
-                      "
+                      :x1="elevationLayout.wallX + shoe.x * elevationLayout.scale"
                       :y1="
                         elevationLayout.wallY +
-                        (elevationLayout.roomHeightCm - shoe.guardrailY) *
+                        (elevationLayout.roomHeightCm - (shoe.rearY ?? (shoe.y + shoe.h + 3.25))) *
                           elevationLayout.scale
                       "
-                      :x2="
-                        elevationLayout.wallX +
-                        (shoe.x + shoe.w) * elevationLayout.scale
-                      "
+                      :x2="elevationLayout.wallX + (shoe.x + shoe.w) * elevationLayout.scale"
                       :y2="
                         elevationLayout.wallY +
-                        (elevationLayout.roomHeightCm - shoe.guardrailY) *
+                        (elevationLayout.roomHeightCm - (shoe.rearY ?? (shoe.y + shoe.h + 3.25))) *
+                          elevationLayout.scale
+                      "
+                      class="elevation-shoe-rear-edge"
+                    />
+                    <!-- Left side mounting bracket -->
+                    <rect
+                      :x="elevationLayout.wallX + shoe.x * elevationLayout.scale"
+                      :y="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm - (shoe.frontY ?? (shoe.y + shoe.h))) *
+                          elevationLayout.scale
+                      "
+                      :width="(shoe.bracketW ?? 0.5) * elevationLayout.scale"
+                      :height="((shoe.bracketH ?? 0.8) + (shoe.shelfH ?? shoe.h)) * elevationLayout.scale"
+                      class="elevation-shoe-bracket"
+                      rx="1"
+                    />
+                    <!-- Right side mounting bracket -->
+                    <rect
+                      :x="
+                        elevationLayout.wallX +
+                        (shoe.x + shoe.w - (shoe.bracketW ?? 0.5)) * elevationLayout.scale
+                      "
+                      :y="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm - (shoe.frontY ?? (shoe.y + shoe.h))) *
+                          elevationLayout.scale
+                      "
+                      :width="(shoe.bracketW ?? 0.5) * elevationLayout.scale"
+                      :height="((shoe.bracketH ?? 0.8) + (shoe.shelfH ?? shoe.h)) * elevationLayout.scale"
+                      class="elevation-shoe-bracket"
+                      rx="1"
+                    />
+                    <!-- Front shelf edge face (brown shelf line pushed below the white line) -->
+                    <rect
+                      :x="elevationLayout.wallX + shoe.x * elevationLayout.scale"
+                      :y="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm - (shoe.frontY ?? (shoe.y + shoe.h))) *
+                          elevationLayout.scale
+                      "
+                      :width="shoe.w * elevationLayout.scale"
+                      :height="(shoe.shelfH ?? shoe.h) * elevationLayout.scale"
+                      class="elevation-shoe-shelf"
+                    />
+                    <!-- Front guardrail fence bar (starts at the brown line and extends above) -->
+                    <rect
+                      :x="elevationLayout.wallX + shoe.x * elevationLayout.scale"
+                      :y="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm -
+                          ((shoe.frontY ?? (shoe.y + shoe.h)) + (shoe.guardrailH ?? 1.2))) *
+                          elevationLayout.scale
+                      "
+                      :width="shoe.w * elevationLayout.scale"
+                      :height="(shoe.guardrailH ?? 1.2) * elevationLayout.scale"
+                      class="elevation-shoe-guardrail-bar"
+                      rx="1"
+                    />
+                    <!-- Pure white line along the top of the guardrail fence -->
+                    <line
+                      :x1="elevationLayout.wallX + shoe.x * elevationLayout.scale"
+                      :y1="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm -
+                          ((shoe.frontY ?? (shoe.y + shoe.h)) + (shoe.guardrailH ?? 1.2))) *
+                          elevationLayout.scale
+                      "
+                      :x2="elevationLayout.wallX + (shoe.x + shoe.w) * elevationLayout.scale"
+                      :y2="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm -
+                          ((shoe.frontY ?? (shoe.y + shoe.h)) + (shoe.guardrailH ?? 1.2))) *
                           elevationLayout.scale
                       "
                       class="elevation-shoe-guardrail"
@@ -6705,15 +6891,38 @@ function dimLinePoints(wall: {
   rx: 1px;
 }
 
+.elevation-shoe-surface {
+  fill: #d7b58c;
+  fill-opacity: 0.45;
+}
+
+.elevation-shoe-rear-edge {
+  stroke: #78350f;
+  stroke-width: 1.2px;
+}
+
 .elevation-shoe-shelf {
   fill: url(#wood-gradient);
   stroke: #451a03;
-  stroke-width: 1px;
+  stroke-width: 1.2px;
+}
+
+.elevation-shoe-guardrail-bar {
+  fill: rgba(255, 255, 255, 0.35);
+  stroke: #ffffff;
+  stroke-width: 1.2px;
 }
 
 .elevation-shoe-guardrail {
-  stroke: #94a3b8;
-  stroke-width: 1px;
+  stroke: #ffffff;
+  stroke-width: 2px;
+  stroke-linecap: round;
+}
+
+.elevation-shoe-bracket {
+  fill: #cbd5e1;
+  stroke: #475569;
+  stroke-width: 0.8px;
 }
 
 /* Door Face */
