@@ -897,7 +897,29 @@ function isTwoBoxCabinet(tower: Tower): boolean {
   return isCabinet(tower) && (tower.boxCount ?? 2) === 2 && tower.doorMode !== "with_doors";
 }
 
-function getTwoBoxHeights(totalHeight: number): { lowerBoxHeight: number; upperBoxHeight: number } {
+function getTwoBoxHeights(
+  totalHeight: number,
+  categoryCode?: string,
+): { lowerBoxHeight: number; upperBoxHeight: number } {
+  if (categoryCode === "CLH" || categoryCode === "CCL") {
+    // CLH / CCL (Long Hanging) two-box split per manufacturer shop drawings:
+    // 84"H: Lower 72½" (72.5), Upper 11½" (11.5)
+    // 90"H: Lower 77¾" (77.75), Upper 12¼" (12.25)
+    // 96"H: Lower 76½" (76.5), Upper 19½" (19.5)
+    if (totalHeight <= 84) {
+      const lower = Math.abs(totalHeight - 84) < 0.01 ? 72.5 : totalHeight * (72.5 / 84);
+      return { lowerBoxHeight: lower, upperBoxHeight: totalHeight - lower };
+    } else if (totalHeight <= 90) {
+      const t = (totalHeight - 84) / (90 - 84);
+      const lower = 72.5 + t * (77.75 - 72.5);
+      return { lowerBoxHeight: lower, upperBoxHeight: totalHeight - lower };
+    } else {
+      const t = (totalHeight - 90) / (96 - 90);
+      const lower = 77.75 + t * (76.5 - 77.75);
+      return { lowerBoxHeight: lower, upperBoxHeight: totalHeight - lower };
+    }
+  }
+
   if (totalHeight <= 84) {
     const ratio = 42.625 / 84;
     const lower = Math.abs(totalHeight - 84) < 0.01 ? 42.625 : totalHeight * ratio;
@@ -1031,10 +1053,11 @@ function getTowerAccessoriesLayout(tower: Tower) {
   }> = [];
 
   const isTwoBox = isTwoBoxCabinet(tower);
-  const twoBoxHeights = isTwoBox ? getTwoBoxHeights(geom.heightCm) : null;
+  const twoBoxHeights = isTwoBox ? getTwoBoxHeights(geom.heightCm, tower.categoryCode) : null;
   const dividerY = twoBoxHeights ? twoBoxHeights.lowerBoxHeight : 0;
 
-  // For 2-box cabinets without shelf_set (e.g. CSS, CDH): add the fixed middle divider shelf
+  // For 2-box cabinets without shelf_set (e.g. CSS, CDH, CLH): add the fixed box divider shelf
+  const isCLH = tower.categoryCode === "CLH" || tower.categoryCode === "CCL";
   const hasShelfSet = tower.accessories.some((a) => a.type === "shelf_set");
   if (isTwoBox && !hasShelfSet) {
     const divShelfBottom = dividerY - T / 2;
@@ -1183,11 +1206,32 @@ function getTowerAccessoriesLayout(tower: Tower) {
       const rodRadius = 1.0;
       const GAP_ABOVE = 2.5; // 2½" open gap above the shelf
 
-      if ((isCDH && isTwoBox && twoBoxHeights) || isCLH) {
+      if (isCDH && isTwoBox && twoBoxHeights) {
         // Map accessory to corresponding section
         let sectionTop = innerTop;
-        if (isCDH && acc.position === "low") {
+        if (acc.position === "low") {
           sectionTop = dividerY - T / 2;
+        } else if (acc.position === "high" && geom.heightCm >= 93) {
+          // For 96"+ CDH: top shelf compartment with 8¼" inside clearance per 96" CDH drawing
+          const topShelfTop = innerTop - 8.25;
+          const topShelfBottom = topShelfTop - T;
+          const topSegments = splitHorizontalSegments(
+            innerLeft,
+            innerWidth,
+            topShelfBottom,
+            topShelfTop,
+            openings,
+          );
+          for (const seg of topSegments) {
+            shelves.push({
+              x: seg.x,
+              y: topShelfBottom,
+              w: seg.w,
+              h: T,
+              isFixed: true,
+            });
+          }
+          sectionTop = topShelfBottom;
         }
 
         // 1. Fixed shelf placed 2½" below the top boundary (creating the 2½" gap)
@@ -1236,6 +1280,92 @@ function getTowerAccessoriesLayout(tower: Tower) {
           });
 
           // 3. Two clothes-hanger icons placed side-by-side on this rod
+          const spacing = Math.min(seg.w * 0.14, 1.8);
+          const sW = Math.min(seg.w * 0.28, 3.8);
+          const dropH = 4.8;
+          const hookR = 0.8;
+          const stemH = 1.0;
+
+          for (const dir of [-1, 1]) {
+            hangers.push({
+              rodY: rodCentreY,
+              cx: seg.x + seg.w / 2 + dir * spacing,
+              sW,
+              hookR,
+              stemH,
+              dropH,
+            });
+          }
+        }
+      } else if (isCLH && isTwoBox && twoBoxHeights) {
+        // ── CLH (Long Hanging) & CCL (Corner Long Hanging) ───────────────────
+        // Per manufacturer drawings:
+        // Lower box has 2½" gap below divider shelf -> fixed shelf -> rod & 2 hangers
+        // Upper box has single compartment for 84" / 90", or 1 intermediate shelf for 96"
+        const upperBoxInnerH = innerTop - (dividerY + T / 2);
+        if (upperBoxInnerH >= 15) {
+          // 96" cabinet (upper box 19½"): 1 intermediate shelf dividing upper box into two 8¼" compartments
+          const midY = (dividerY + T / 2 + innerTop) / 2;
+          const sBottom = midY - T / 2;
+          const sTop = sBottom + T;
+          const segments = splitHorizontalSegments(
+            innerLeft,
+            innerWidth,
+            sBottom,
+            sTop,
+            openings,
+          );
+          for (const seg of segments) {
+            shelves.push({ x: seg.x, y: sBottom, w: seg.w, h: T, isFixed: true });
+          }
+        }
+
+        // Fixed shelf placed 2½" below divider shelf
+        const shelfTop = (dividerY - T / 2) - GAP_ABOVE;
+        const shelfBottom = shelfTop - T;
+
+        const shelfSegments = splitHorizontalSegments(
+          innerLeft,
+          innerWidth,
+          shelfBottom,
+          shelfTop,
+          openings,
+        );
+        for (const seg of shelfSegments) {
+          shelves.push({
+            x: seg.x,
+            y: shelfBottom,
+            w: seg.w,
+            h: T,
+            isFixed: true,
+          });
+        }
+
+        // Hanging rod mounted directly below this shelf
+        const rodTop = shelfBottom - 0.2;
+        const rodBottom = rodTop - rodRadius * 2;
+        const rodCentreY = (rodTop + rodBottom) / 2;
+
+        const rodSegments = splitHorizontalSegments(
+          innerLeft + 1,
+          innerWidth - 2,
+          rodBottom,
+          rodTop,
+          openings,
+        );
+        for (const seg of rodSegments) {
+          rods.push({
+            x: seg.x,
+            y: rodBottom,
+            w: seg.w,
+            h: rodRadius * 2,
+            brackets: [
+              { x: seg.x, y: rodCentreY - 1.5, w: 0.8, h: 3 },
+              { x: seg.x + seg.w - 0.8, y: rodCentreY - 1.5, w: 0.8, h: 3 },
+            ],
+          });
+
+          // Two clothes-hanger icons placed side-by-side on this rod
           const spacing = Math.min(seg.w * 0.14, 1.8);
           const sW = Math.min(seg.w * 0.28, 3.8);
           const dropH = 4.8;
@@ -4786,16 +4916,16 @@ function dimLinePoints(wall: {
                     <line
                       :x1="towerElevationRect(tower).x"
                       :x2="towerElevationRect(tower).x + (closetStore.cabinet?.thickness ?? 0.75) * elevationLayout.scale"
-                      :y1="towerElevationRect(tower).y + getTwoBoxHeights(tower.height).upperBoxHeight * elevationLayout.scale"
-                      :y2="towerElevationRect(tower).y + getTwoBoxHeights(tower.height).upperBoxHeight * elevationLayout.scale"
+                      :y1="towerElevationRect(tower).y + getTwoBoxHeights(tower.height, tower.categoryCode).upperBoxHeight * elevationLayout.scale"
+                      :y2="towerElevationRect(tower).y + getTwoBoxHeights(tower.height, tower.categoryCode).upperBoxHeight * elevationLayout.scale"
                       class="elevation-carcass-seam"
                     />
                     <!-- Right side seam -->
                     <line
                       :x1="towerElevationRect(tower).x + towerElevationRect(tower).width - (closetStore.cabinet?.thickness ?? 0.75) * elevationLayout.scale"
                       :x2="towerElevationRect(tower).x + towerElevationRect(tower).width"
-                      :y1="towerElevationRect(tower).y + getTwoBoxHeights(tower.height).upperBoxHeight * elevationLayout.scale"
-                      :y2="towerElevationRect(tower).y + getTwoBoxHeights(tower.height).upperBoxHeight * elevationLayout.scale"
+                      :y1="towerElevationRect(tower).y + getTwoBoxHeights(tower.height, tower.categoryCode).upperBoxHeight * elevationLayout.scale"
+                      :y2="towerElevationRect(tower).y + getTwoBoxHeights(tower.height, tower.categoryCode).upperBoxHeight * elevationLayout.scale"
                       class="elevation-carcass-seam"
                     />
                   </template>

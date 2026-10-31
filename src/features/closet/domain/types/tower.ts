@@ -139,6 +139,8 @@ export type Tower = {
   doorHinge?: 'left' | 'right'
   /** Number of doors for this cabinet. Defaults to 1 (or 2 based on width). */
   doorCount?: 1 | 2
+  /** Number of shelves resolved from the API catalog (e.g. for CLH / CAS / CRD / CSS). */
+  numberOfShelves?: number
   /** Does the cabinet support 1 door? (from database) */
   oneDoor?: number
   /** Does the cabinet support 2 doors? (from database) */

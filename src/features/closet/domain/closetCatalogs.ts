@@ -577,6 +577,8 @@ export function refreshTowerCabinet(
     } else if (shelfIdx >= 0) {
       tower.accessories.splice(shelfIdx, 1);
     }
+  } else if (catCode === 'CLH' || catCode === 'CCL') {
+    tower.numberOfShelves = resolveShelfCount(catCode, baseCabinet);
   }
 }
 
@@ -727,6 +729,9 @@ export function resolveShelfCount(
   }
   // Fallback defaults matching the previous hard-coded behaviour
   switch (categoryCode) {
+    case 'CLH':
+    case 'CCL':
+      return 1;
     case 'CAS':
     case 'CCS':
       return 5;
@@ -769,7 +774,29 @@ export function isTwoBoxCabinet(tower: Tower): boolean {
 /**
  * Returns lower and upper box heights (in inches) for standard two-box cabinet divisions.
  */
-export function getTwoBoxHeights(totalHeight: number): { lowerBoxHeight: number; upperBoxHeight: number } {
+export function getTwoBoxHeights(
+  totalHeight: number,
+  categoryCode?: string,
+): { lowerBoxHeight: number; upperBoxHeight: number } {
+  if (categoryCode === "CLH" || categoryCode === "CCL") {
+    // CLH / CCL (Long Hanging) two-box split per manufacturer shop drawings:
+    // 84"H: Lower 72½" (72.5), Upper 11½" (11.5)
+    // 90"H: Lower 77¾" (77.75), Upper 12¼" (12.25)
+    // 96"H: Lower 76½" (76.5), Upper 19½" (19.5)
+    if (totalHeight <= 84) {
+      const lower = Math.abs(totalHeight - 84) < 0.01 ? 72.5 : totalHeight * (72.5 / 84);
+      return { lowerBoxHeight: lower, upperBoxHeight: totalHeight - lower };
+    } else if (totalHeight <= 90) {
+      const t = (totalHeight - 84) / (90 - 84);
+      const lower = 72.5 + t * (77.75 - 72.5);
+      return { lowerBoxHeight: lower, upperBoxHeight: totalHeight - lower };
+    } else {
+      const t = (totalHeight - 90) / (96 - 90);
+      const lower = 77.75 + t * (76.5 - 77.75);
+      return { lowerBoxHeight: lower, upperBoxHeight: totalHeight - lower };
+    }
+  }
+
   if (totalHeight <= 84) {
     const ratio = 42.625 / 84;
     const lower = Math.abs(totalHeight - 84) < 0.01 ? 42.625 : totalHeight * ratio;
@@ -886,6 +913,9 @@ export function createTowerFromCategory(
     blindWidth: isCorner && doorMode === "with_doors" ? 24 : undefined,
     doorHinge: isCorner && doorMode === "with_doors" ? "left" : "left",
     crdSplitHeight: categoryCode === 'CRD' ? resolveCrdSplitHeight(cabinet, cabinet ? cabinet.height : limits.minH) : undefined,
+    numberOfShelves: (categoryCode === 'CLH' || categoryCode === 'CCL')
+      ? resolveShelfCount(categoryCode, cabinet)
+      : Number(cabinet?.numberOfShelves ?? 0) || undefined,
     accessories: accessoriesForCategory(categoryCode, cabinet),
   };
 }

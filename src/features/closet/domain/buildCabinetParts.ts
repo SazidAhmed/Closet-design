@@ -356,7 +356,7 @@ function buildRods(
   const GAP_ABOVE = 2.5;
 
   if (isCDH && isTwoBox) {
-    const { lowerBoxHeight } = getTwoBoxHeights(H);
+    const { lowerBoxHeight } = getTwoBoxHeights(H, tower.categoryCode);
     const dividerY = -H / 2 + bottomGap + lowerBoxHeight;
 
     // Middle divider shelf (if not yet added)
@@ -373,7 +373,23 @@ function buildRods(
     }
 
     const isUpper = rod.position === "high";
-    const sectionTop = isUpper ? H / 2 - T : dividerY - T / 2;
+    let sectionTop = isUpper ? H / 2 - T : dividerY - T / 2;
+
+    if (isUpper && H >= 93) {
+      // 96"+ CDH: top shelf compartment with 8¼" inside clearance per 96" CDH drawing
+      const topShelfY = (H / 2 - T - 8.25) - T / 2;
+      parts.push({
+        id: `shelf_${tower.id}_cdh_top`,
+        type: "shelf",
+        dims: { x: innerW, y: T, z: iD },
+        transform: { pos: [centerX, topShelfY, T / 2], rot: [0, 0, 0] },
+        materialId: "classic-white",
+        towerId: tower.id,
+        meta: { isFixed: true },
+      });
+      sectionTop = (H / 2 - T - 8.25) - T;
+    }
+
     const shelfY = sectionTop - GAP_ABOVE - T / 2;
     const rodY = sectionTop - GAP_ABOVE - T - rodRadius - 0.2;
 
@@ -401,13 +417,48 @@ function buildRods(
     return;
   }
 
-  if (isCLH) {
-    const sectionTop = H / 2 - T;
+  if (isCLH && isTwoBox) {
+    const { lowerBoxHeight } = getTwoBoxHeights(H, tower.categoryCode);
+    const dividerY = -H / 2 + bottomGap + lowerBoxHeight;
+
+    // 1. Divider shelf separating upper and lower box (at 72.5" for 84, 77.75" for 90, 76.5" for 96)
+    if (!parts.some((p) => p.id === `shelf_${tower.id}_div`)) {
+      parts.push({
+        id: `shelf_${tower.id}_div`,
+        type: "shelf",
+        dims: { x: innerW, y: T, z: iD },
+        transform: { pos: [centerX, dividerY, T / 2], rot: [0, 0, 0] },
+        materialId: "classic-white",
+        towerId: tower.id,
+        meta: { isFixed: true },
+      });
+    }
+
+    // 2. For 96" (or H >= 93): 1 intermediate shelf in upper box dividing it into two 8 1/4" compartments
+    const topInnerY = H / 2 - T;
+    const upperBoxInnerH = topInnerY - (dividerY + T / 2);
+    if (upperBoxInnerH >= 15) {
+      const midShelfY = (dividerY + T / 2 + topInnerY) / 2;
+      if (!parts.some((p) => p.id === `shelf_${tower.id}_upper_mid`)) {
+        parts.push({
+          id: `shelf_${tower.id}_upper_mid`,
+          type: "shelf",
+          dims: { x: innerW, y: T, z: iD },
+          transform: { pos: [centerX, midShelfY, T / 2], rot: [0, 0, 0] },
+          materialId: "classic-white",
+          towerId: tower.id,
+          meta: { isFixed: true },
+        });
+      }
+    }
+
+    // 3. In lower box: 2.5" gap below divider shelf -> fixed shelf -> rod & hangers
+    const sectionTop = dividerY - T / 2;
     const shelfY = sectionTop - GAP_ABOVE - T / 2;
     const rodY = sectionTop - GAP_ABOVE - T - rodRadius - 0.2;
 
     parts.push({
-      id: `shelf_${tower.id}_clh`,
+      id: `shelf_${tower.id}_clh_rod`,
       type: "shelf",
       dims: { x: innerW, y: T, z: iD },
       transform: { pos: [centerX, shelfY, T / 2], rot: [0, 0, 0] },
