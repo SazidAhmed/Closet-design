@@ -990,6 +990,24 @@ function getTowerAccessoriesLayout(tower: Tower) {
     h: number;
     brackets: Array<{ x: number; y: number; w: number; h: number }>;
   }> = [];
+  /**
+   * Clothes-hanger icons rendered below each hanging rod for CDH / CLH / CCH / CCL towers.
+   * Each entry describes one hanger centred horizontally in its section.
+   * Coordinates are in the same bottom-up cm space as shelves/rods.
+   *   rodY   – y of the rod centre (the hook rests on this)
+   *   cx     – horizontal centre of the hanger
+   *   sW     – shoulder width (half-width of each arm from centre)
+   *   hookR  – radius of the hook circle
+   *   dropH  – vertical distance the body drops below the rod
+   */
+  const hangers: Array<{
+    rodY: number;
+    cx: number;
+    sW: number;
+    hookR: number;
+    stemH: number;
+    dropH: number;
+  }> = [];
   const drawers: Array<{
     x: number;
     y: number;
@@ -1155,36 +1173,118 @@ function getTowerAccessoriesLayout(tower: Tower) {
         }
       }
     } else if (acc.type === "rod") {
-      const positionFractions: Record<string, number> = {
-        high: 0.8,
-        medium: 0.5,
-        low: 0.25,
-      };
-      const fraction = positionFractions[acc.position] ?? 0.5;
-      const baseY = innerBottom + innerHeight * fraction;
-      const rodRadius = 1.2;
-      for (let r = 0; r < acc.count; r++) {
-        const y = baseY - r * 40;
-        const rodBottom = y - rodRadius;
-        const rodTop = y + rodRadius;
-        const segments = splitHorizontalSegments(
+      // ── CDH / CCH / CLH / CCL: place rods precisely per spec ──────────────
+      // CDH (Double Hanging) & CCH corner variant:
+      //   Upper section: 2½" gap below top panel -> fixed shelf -> rod & 2 hangers
+      //   Lower section: 2½" gap below divider shelf -> fixed shelf -> rod & 2 hangers
+      // CLH (Long Hanging) & CCL: single rod with 2½" gap below top panel -> shelf -> rod & 2 hangers
+      const isCDH = tower.categoryCode === "CDH" || tower.categoryCode === "CCH";
+      const isCLH = tower.categoryCode === "CLH" || tower.categoryCode === "CCL";
+      const rodRadius = 1.0;
+      const GAP_ABOVE = 2.5; // 2½" open gap above the shelf
+
+      if ((isCDH && isTwoBox && twoBoxHeights) || isCLH) {
+        // Map accessory to corresponding section
+        let sectionTop = innerTop;
+        if (isCDH && acc.position === "low") {
+          sectionTop = dividerY - T / 2;
+        }
+
+        // 1. Fixed shelf placed 2½" below the top boundary (creating the 2½" gap)
+        const shelfTop = sectionTop - GAP_ABOVE;
+        const shelfBottom = shelfTop - T;
+
+        const shelfSegments = splitHorizontalSegments(
+          innerLeft,
+          innerWidth,
+          shelfBottom,
+          shelfTop,
+          openings,
+        );
+        for (const seg of shelfSegments) {
+          shelves.push({
+            x: seg.x,
+            y: shelfBottom,
+            w: seg.w,
+            h: T,
+            isFixed: true,
+          });
+        }
+
+        // 2. Hanging rod mounted directly below this shelf
+        const rodTop = shelfBottom - 0.2;
+        const rodBottom = rodTop - rodRadius * 2;
+        const rodCentreY = (rodTop + rodBottom) / 2;
+
+        const rodSegments = splitHorizontalSegments(
           innerLeft + 1,
           innerWidth - 2,
           rodBottom,
           rodTop,
           openings,
         );
-        for (const seg of segments) {
+        for (const seg of rodSegments) {
           rods.push({
             x: seg.x,
             y: rodBottom,
             w: seg.w,
             h: rodRadius * 2,
             brackets: [
-              { x: seg.x, y: y - 2, w: 1, h: 4 },
-              { x: seg.x + seg.w - 1, y: y - 2, w: 1, h: 4 },
+              { x: seg.x, y: rodCentreY - 1.5, w: 0.8, h: 3 },
+              { x: seg.x + seg.w - 0.8, y: rodCentreY - 1.5, w: 0.8, h: 3 },
             ],
           });
+
+          // 3. Two clothes-hanger icons placed side-by-side on this rod
+          const spacing = Math.min(seg.w * 0.14, 1.8);
+          const sW = Math.min(seg.w * 0.28, 3.8);
+          const dropH = 4.8;
+          const hookR = 0.8;
+          const stemH = 1.0;
+
+          for (const dir of [-1, 1]) {
+            hangers.push({
+              rodY: rodCentreY,
+              cx: seg.x + seg.w / 2 + dir * spacing,
+              sW,
+              hookR,
+              stemH,
+              dropH,
+            });
+          }
+        }
+      } else {
+        // ── Generic rod placement (non-CDH categories) ──────────────────────
+        const positionFractions: Record<string, number> = {
+          high: 0.8,
+          medium: 0.5,
+          low: 0.25,
+        };
+        const fraction = positionFractions[acc.position] ?? 0.5;
+        const baseY = innerBottom + innerHeight * fraction;
+        for (let r = 0; r < acc.count; r++) {
+          const y = baseY - r * 40;
+          const rodBottom = y - rodRadius;
+          const rodTop = y + rodRadius;
+          const segments = splitHorizontalSegments(
+            innerLeft + 1,
+            innerWidth - 2,
+            rodBottom,
+            rodTop,
+            openings,
+          );
+          for (const seg of segments) {
+            rods.push({
+              x: seg.x,
+              y: rodBottom,
+              w: seg.w,
+              h: rodRadius * 2,
+              brackets: [
+                { x: seg.x, y: y - 2, w: 1, h: 4 },
+                { x: seg.x + seg.w - 1, y: y - 2, w: 1, h: 4 },
+              ],
+            });
+          }
         }
       }
     } else if (acc.type === "drawer") {
@@ -1380,6 +1480,7 @@ function getTowerAccessoriesLayout(tower: Tower) {
     innerHeight,
     shelves,
     rods,
+    hangers,
     drawers,
     shoeShelves,
   };
@@ -4786,6 +4887,108 @@ function dimLinePoints(wall: {
                     />
                   </g>
 
+                  <!-- ── CDH / CLH Clothes-Hanger icons (hook + shoulders) ── -->
+                  <g
+                    v-for="(hanger, hIdx) in getTowerAccessoriesLayout(tower).hangers"
+                    :key="`hanger-${hIdx}`"
+                    class="elevation-hanger"
+                  >
+                    <!--
+                      Clothes hanger shape (front-view elevation):
+                      • Small circle = hook loop resting on the rod
+                      • Two diagonal lines descend from the hook to form the shoulder bar
+                      • Horizontal centre-bar connects the two shoulders at the bottom
+                      All coords in the same bottom-up cm space, flipped by the standard formula.
+                    -->
+                    <!-- Hook circle -->
+                    <circle
+                      :cx="elevationLayout.wallX + hanger.cx * elevationLayout.scale"
+                      :cy="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm - hanger.rodY) *
+                          elevationLayout.scale
+                      "
+                      :r="hanger.hookR * elevationLayout.scale"
+                      class="elevation-hanger-hook"
+                    />
+                    <!-- Vertical neck stem (hook -> shoulder apex) -->
+                    <line
+                      :x1="elevationLayout.wallX + hanger.cx * elevationLayout.scale"
+                      :y1="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm - (hanger.rodY - hanger.hookR)) *
+                          elevationLayout.scale
+                      "
+                      :x2="elevationLayout.wallX + hanger.cx * elevationLayout.scale"
+                      :y2="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm - (hanger.rodY - hanger.hookR - hanger.stemH)) *
+                          elevationLayout.scale
+                      "
+                      class="elevation-hanger-arm"
+                    />
+                    <!-- Left shoulder arm (apex → bottom-left) -->
+                    <line
+                      :x1="elevationLayout.wallX + hanger.cx * elevationLayout.scale"
+                      :y1="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm - (hanger.rodY - hanger.hookR - hanger.stemH)) *
+                          elevationLayout.scale
+                      "
+                      :x2="
+                        elevationLayout.wallX +
+                        (hanger.cx - hanger.sW) * elevationLayout.scale
+                      "
+                      :y2="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm - (hanger.rodY - hanger.dropH)) *
+                          elevationLayout.scale
+                      "
+                      class="elevation-hanger-arm"
+                    />
+                    <!-- Right shoulder arm (apex → bottom-right) -->
+                    <line
+                      :x1="elevationLayout.wallX + hanger.cx * elevationLayout.scale"
+                      :y1="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm - (hanger.rodY - hanger.hookR - hanger.stemH)) *
+                          elevationLayout.scale
+                      "
+                      :x2="
+                        elevationLayout.wallX +
+                        (hanger.cx + hanger.sW) * elevationLayout.scale
+                      "
+                      :y2="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm - (hanger.rodY - hanger.dropH)) *
+                          elevationLayout.scale
+                      "
+                      class="elevation-hanger-arm"
+                    />
+                    <!-- Horizontal bar at the bottom of the shoulders -->
+                    <line
+                      :x1="
+                        elevationLayout.wallX +
+                        (hanger.cx - hanger.sW) * elevationLayout.scale
+                      "
+                      :y1="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm - (hanger.rodY - hanger.dropH)) *
+                          elevationLayout.scale
+                      "
+                      :x2="
+                        elevationLayout.wallX +
+                        (hanger.cx + hanger.sW) * elevationLayout.scale
+                      "
+                      :y2="
+                        elevationLayout.wallY +
+                        (elevationLayout.roomHeightCm - (hanger.rodY - hanger.dropH)) *
+                          elevationLayout.scale
+                      "
+                      class="elevation-hanger-arm"
+                    />
+                  </g>
+
                   <!-- Drawers with warm wood fronts and polished chrome handle strips -->
                   <g
                     v-for="(drawer, dIdx) in getTowerAccessoriesLayout(tower)
@@ -6886,6 +7089,23 @@ function dimLinePoints(wall: {
   stroke: #334155;
   stroke-width: 0.8px;
   rx: 1px;
+}
+
+/* ── Clothes-hanger icons (CDH / CLH) ─────────────────────────────────── */
+.elevation-hanger {
+  pointer-events: none;
+}
+
+.elevation-hanger-hook {
+  fill: none;
+  stroke: #334155;
+  stroke-width: 1px;
+}
+
+.elevation-hanger-arm {
+  stroke: #334155;
+  stroke-width: 1px;
+  stroke-linecap: round;
 }
 
 .elevation-drawer-face {

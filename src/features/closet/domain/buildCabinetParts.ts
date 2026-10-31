@@ -342,14 +342,93 @@ function buildRods(
   rod: { position: "high" | "medium" | "low"; count: 1 | 2 },
   centerX: number,
   innerW: number,
-  _T: number,
+  T: number,
   H: number,
   _D: number,
   iD: number,
   iH: number,
   bottomGap: number,
 ) {
-  // Position the rod at a fraction of inner height
+  const isCDH = tower.categoryCode === "CDH" || tower.categoryCode === "CCH";
+  const isCLH = tower.categoryCode === "CLH" || tower.categoryCode === "CCL";
+  const isTwoBox = isTwoBoxCabinet(tower);
+  const rodRadius = 1.0;
+  const GAP_ABOVE = 2.5;
+
+  if (isCDH && isTwoBox) {
+    const { lowerBoxHeight } = getTwoBoxHeights(H);
+    const dividerY = -H / 2 + bottomGap + lowerBoxHeight;
+
+    // Middle divider shelf (if not yet added)
+    if (!parts.some((p) => p.id === `shelf_${tower.id}_div`)) {
+      parts.push({
+        id: `shelf_${tower.id}_div`,
+        type: "shelf",
+        dims: { x: innerW, y: T, z: iD },
+        transform: { pos: [centerX, dividerY, T / 2], rot: [0, 0, 0] },
+        materialId: "classic-white",
+        towerId: tower.id,
+        meta: { isFixed: true },
+      });
+    }
+
+    const isUpper = rod.position === "high";
+    const sectionTop = isUpper ? H / 2 - T : dividerY - T / 2;
+    const shelfY = sectionTop - GAP_ABOVE - T / 2;
+    const rodY = sectionTop - GAP_ABOVE - T - rodRadius - 0.2;
+
+    // Fixed shelf above the rod (creating the 2.5" gap)
+    parts.push({
+      id: `shelf_${tower.id}_cdh_${rod.position}`,
+      type: "shelf",
+      dims: { x: innerW, y: T, z: iD },
+      transform: { pos: [centerX, shelfY, T / 2], rot: [0, 0, 0] },
+      materialId: "classic-white",
+      towerId: tower.id,
+      meta: { isFixed: true },
+    });
+
+    // Hanging rod
+    parts.push({
+      id: `rod_${tower.id}_${rod.position}`,
+      type: "rod",
+      dims: { x: innerW, y: rodRadius * 2, z: rodRadius * 2 },
+      transform: { pos: [centerX, rodY, iD / 2], rot: [0, 0, Math.PI / 2] },
+      materialId: "polished-chrome",
+      towerId: tower.id,
+      meta: { position: rod.position, index: 1 },
+    });
+    return;
+  }
+
+  if (isCLH) {
+    const sectionTop = H / 2 - T;
+    const shelfY = sectionTop - GAP_ABOVE - T / 2;
+    const rodY = sectionTop - GAP_ABOVE - T - rodRadius - 0.2;
+
+    parts.push({
+      id: `shelf_${tower.id}_clh`,
+      type: "shelf",
+      dims: { x: innerW, y: T, z: iD },
+      transform: { pos: [centerX, shelfY, T / 2], rot: [0, 0, 0] },
+      materialId: "classic-white",
+      towerId: tower.id,
+      meta: { isFixed: true },
+    });
+
+    parts.push({
+      id: `rod_${tower.id}_${rod.position}`,
+      type: "rod",
+      dims: { x: innerW, y: rodRadius * 2, z: rodRadius * 2 },
+      transform: { pos: [centerX, rodY, iD / 2], rot: [0, 0, Math.PI / 2] },
+      materialId: "polished-chrome",
+      towerId: tower.id,
+      meta: { position: rod.position, index: 1 },
+    });
+    return;
+  }
+
+  // Generic fallback rod placement
   const positionFractions: Record<string, number> = {
     high: 0.8,
     medium: 0.5,
@@ -358,10 +437,9 @@ function buildRods(
 
   const fraction = positionFractions[rod.position] ?? 0.5;
   const baseY = -H / 2 + bottomGap + (iH - bottomGap) * fraction;
-  const rodRadius = 1.2; // cm
 
   for (let r = 0; r < rod.count; r++) {
-    const y = baseY - r * 40; // stack rods 40cm apart vertically
+    const y = baseY - r * 40;
     parts.push({
       id: `rod_${tower.id}_${rod.position}_${r + 1}`,
       type: "rod",
