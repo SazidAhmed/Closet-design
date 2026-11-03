@@ -1235,9 +1235,10 @@ function getTowerAccessoriesLayout(tower: Tower) {
         if (acc.position === "low") {
           sectionTop = dividerY - T / 2;
         } else if (acc.position === "high" && geom.heightCm >= 93) {
-          // For 96"+ CDH: top shelf compartment with 8¼" inside clearance per 96" CDH drawing
-          const topShelfTop = innerTop - 8.25;
-          const topShelfBottom = topShelfTop - T;
+          const upperShelves = getStandardUpperShelfPositions(geom.heightCm, T);
+          const topShelfY = upperShelves.length >= 2 ? upperShelves[upperShelves.length - 1] : innerTop - 8.25;
+          const topShelfBottom = topShelfY - T / 2;
+          const topShelfTop = topShelfBottom + T;
           const topSegments = splitHorizontalSegments(
             innerLeft,
             innerWidth,
@@ -1251,41 +1252,20 @@ function getTowerAccessoriesLayout(tower: Tower) {
               y: topShelfBottom,
               w: seg.w,
               h: T,
-              isFixed: true,
+              isFixed: false,
             });
           }
           sectionTop = topShelfBottom;
         }
 
-        // 1. Fixed shelf placed 2½" below the top boundary (creating the 2½" gap)
-        const shelfTop = sectionTop - GAP_ABOVE;
-        const shelfBottom = shelfTop - T;
-
-        const shelfSegments = splitHorizontalSegments(
-          innerLeft,
-          innerWidth,
-          shelfBottom,
-          shelfTop,
-          openings,
-        );
-        for (const seg of shelfSegments) {
-          shelves.push({
-            x: seg.x,
-            y: shelfBottom,
-            w: seg.w,
-            h: T,
-            isFixed: true,
-          });
-        }
-
-        // 2. Hanging rod mounted directly below this shelf
-        const rodTop = shelfBottom - 0.2;
-        const rodBottom = rodTop - rodRadius * 2;
-        const rodCentreY = (rodTop + rodBottom) / 2;
+        // Hanging rod placed where the black shelf line was (centered at sectionTop - GAP_ABOVE - T / 2)
+        const rodCentreY = sectionTop - GAP_ABOVE - T / 2;
+        const rodBottom = rodCentreY - rodRadius;
+        const rodTop = rodCentreY + rodRadius;
 
         const rodSegments = splitHorizontalSegments(
-          innerLeft + 1,
-          innerWidth - 2,
+          innerLeft,
+          innerWidth,
           rodBottom,
           rodTop,
           openings,
@@ -1296,10 +1276,7 @@ function getTowerAccessoriesLayout(tower: Tower) {
             y: rodBottom,
             w: seg.w,
             h: rodRadius * 2,
-            brackets: [
-              { x: seg.x, y: rodCentreY - 1.5, w: 0.8, h: 3 },
-              { x: seg.x + seg.w - 0.8, y: rodCentreY - 1.5, w: 0.8, h: 3 },
-            ],
+            brackets: [],
           });
 
           // 3. Two clothes-hanger icons placed side-by-side on this rod
@@ -4913,7 +4890,7 @@ function dimLinePoints(wall: {
                   </template>
 
                   <!-- 2-Box Separation: Horizontal seam line across side panels -->
-                  <template v-if="isTwoBoxCabinet(tower) && tower.categoryCode !== 'CLH' && tower.categoryCode !== 'CCL'">
+                  <template v-if="isTwoBoxCabinet(tower) && tower.categoryCode !== 'CLH' && tower.categoryCode !== 'CCL' && tower.categoryCode !== 'CDH' && tower.categoryCode !== 'CCH'">
                     <!-- Left side seam -->
                     <line
                       :x1="towerElevationRect(tower).x"

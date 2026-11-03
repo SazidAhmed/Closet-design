@@ -376,8 +376,9 @@ function buildRods(
     let sectionTop = isUpper ? H / 2 - T : dividerY - T / 2;
 
     if (isUpper && H >= 93) {
-      // 96"+ CDH: top shelf compartment with 8¼" inside clearance per 96" CDH drawing
-      const topShelfY = (H / 2 - T - 8.25) - T / 2;
+      const upperShelves = getStandardUpperShelfPositions(H, T);
+      const topShelfHeight = upperShelves.length >= 2 ? upperShelves[upperShelves.length - 1] : H - 8.25 - T;
+      const topShelfY = -H / 2 + bottomGap + topShelfHeight;
       parts.push({
         id: `shelf_${tower.id}_cdh_top`,
         type: "shelf",
@@ -385,24 +386,13 @@ function buildRods(
         transform: { pos: [centerX, topShelfY, T / 2], rot: [0, 0, 0] },
         materialId: "classic-white",
         towerId: tower.id,
-        meta: { isFixed: true },
+        meta: { isFixed: false },
       });
-      sectionTop = (H / 2 - T - 8.25) - T;
+      sectionTop = topShelfY - T / 2;
     }
 
-    const shelfY = sectionTop - GAP_ABOVE - T / 2;
-    const rodY = sectionTop - GAP_ABOVE - T - rodRadius - 0.2;
-
-    // Fixed shelf above the rod (creating the 2.5" gap)
-    parts.push({
-      id: `shelf_${tower.id}_cdh_${rod.position}`,
-      type: "shelf",
-      dims: { x: innerW, y: T, z: iD },
-      transform: { pos: [centerX, shelfY, T / 2], rot: [0, 0, 0] },
-      materialId: "classic-white",
-      towerId: tower.id,
-      meta: { isFixed: true },
-    });
+    // Hanging rod placed where the shelf was (at sectionTop - GAP_ABOVE - T / 2)
+    const rodY = sectionTop - GAP_ABOVE - T / 2;
 
     // Hanging rod
     parts.push({
