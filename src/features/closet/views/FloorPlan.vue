@@ -897,6 +897,28 @@ function isTwoBoxCabinet(tower: Tower): boolean {
   return isCabinet(tower) && (tower.boxCount ?? 2) === 2 && tower.doorMode !== "with_doors";
 }
 
+
+function getStandardUpperShelfPositions(
+  totalHeight: number,
+  T: number = 0.75,
+): number[] {
+  const is96 = totalHeight >= 93;
+  const count = is96 ? 8 : 7;
+  const lowerCount = 3;
+  const { lowerBoxHeight } = getTwoBoxHeights(totalHeight);
+  const upperCount = Math.max(0, count - 1 - lowerCount);
+  const upperBottom = lowerBoxHeight + T / 2;
+  const innerTop = totalHeight - T;
+  const upperAvailable = Math.max(0, innerTop - upperBottom);
+  const upperGap = upperAvailable / (upperCount + 1);
+
+  const shelfYPositions: number[] = [];
+  for (let i = 0; i < upperCount; i++) {
+    shelfYPositions.push(upperBottom + upperGap * (i + 1));
+  }
+  return shelfYPositions;
+}
+
 function getTwoBoxHeights(
   totalHeight: number,
   categoryCode?: string,
@@ -915,7 +937,7 @@ function getTwoBoxHeights(
       return { lowerBoxHeight: lower, upperBoxHeight: totalHeight - lower };
     } else {
       const t = (totalHeight - 90) / (96 - 90);
-      const lower = 77.75 + t * (76.5 - 77.75);
+      const lower = 77.75 + t * (74.95 - 77.75);
       return { lowerBoxHeight: lower, upperBoxHeight: totalHeight - lower };
     }
   }
@@ -1056,10 +1078,11 @@ function getTowerAccessoriesLayout(tower: Tower) {
   const twoBoxHeights = isTwoBox ? getTwoBoxHeights(geom.heightCm, tower.categoryCode) : null;
   const dividerY = twoBoxHeights ? twoBoxHeights.lowerBoxHeight : 0;
 
-  // For 2-box cabinets without shelf_set (e.g. CSS, CDH, CLH): add the fixed box divider shelf
+  // For 2-box cabinets without shelf_set (e.g. CSS, CDH): add the fixed box divider shelf
+  // CLH does not show the black divider shelf line
   const isCLH = tower.categoryCode === "CLH" || tower.categoryCode === "CCL";
   const hasShelfSet = tower.accessories.some((a) => a.type === "shelf_set");
-  if (isTwoBox && !hasShelfSet) {
+  if (isTwoBox && !hasShelfSet && !isCLH) {
     const divShelfBottom = dividerY - T / 2;
     const divShelfTop = divShelfBottom + T;
     const divSegments = splitHorizontalSegments(
@@ -1297,58 +1320,40 @@ function getTowerAccessoriesLayout(tower: Tower) {
             });
           }
         }
-      } else if (isCLH && isTwoBox && twoBoxHeights) {
+      } else if (isCLH) {
         // ── CLH (Long Hanging) & CCL (Corner Long Hanging) ───────────────────
-        // Per manufacturer drawings:
-        // Lower box has 2½" gap below divider shelf -> fixed shelf -> rod & 2 hangers
-        // Upper box has single compartment for 84" / 90", or 1 intermediate shelf for 96"
-        const upperBoxInnerH = innerTop - (dividerY + T / 2);
-        if (upperBoxInnerH >= 15) {
-          // 96" cabinet (upper box 19½"): 1 intermediate shelf dividing upper box into two 8¼" compartments
-          const midY = (dividerY + T / 2 + innerTop) / 2;
-          const sBottom = midY - T / 2;
-          const sTop = sBottom + T;
-          const segments = splitHorizontalSegments(
-            innerLeft,
-            innerWidth,
-            sBottom,
-            sTop,
-            openings,
-          );
-          for (const seg of segments) {
-            shelves.push({ x: seg.x, y: sBottom, w: seg.w, h: T, isFixed: true });
+        // In 2-box: divider separates upper cubby and lower hanging section.
+        // For 96" cabinet: upper shelf aligned with top shelf on left cabinet (same style and height).
+        // Hanger rod placed at dividerY (74.95" for 96"), matching the red-marked shelf on left cabinet.
+        const isTwoBoxCLH = isTwoBox && twoBoxHeights;
+        if (isTwoBoxCLH && geom.heightCm >= 93) {
+          const upperShelves = getStandardUpperShelfPositions(geom.heightCm, T);
+          if (upperShelves.length >= 2) {
+            const topShelfY = upperShelves[upperShelves.length - 1];
+            const sBottom = topShelfY - T / 2;
+            const sTop = sBottom + T;
+            const segments = splitHorizontalSegments(
+              innerLeft,
+              innerWidth,
+              sBottom,
+              sTop,
+              openings,
+            );
+            for (const seg of segments) {
+              shelves.push({ x: seg.x, y: sBottom, w: seg.w, h: T, isFixed: false });
+            }
           }
         }
 
-        // Fixed shelf placed 2½" below divider shelf
-        const shelfTop = (dividerY - T / 2) - GAP_ABOVE;
-        const shelfBottom = shelfTop - T;
-
-        const shelfSegments = splitHorizontalSegments(
-          innerLeft,
-          innerWidth,
-          shelfBottom,
-          shelfTop,
-          openings,
-        );
-        for (const seg of shelfSegments) {
-          shelves.push({
-            x: seg.x,
-            y: shelfBottom,
-            w: seg.w,
-            h: T,
-            isFixed: true,
-          });
-        }
-
-        // Hanging rod mounted directly below this shelf
-        const rodTop = shelfBottom - 0.2;
-        const rodBottom = rodTop - rodRadius * 2;
-        const rodCentreY = (rodTop + rodBottom) / 2;
+        // Hanging rod mounted at the divider position without showing the black shelf line.
+        // The silver rod is placed at dividerY and extends edge-to-edge across the cabinet.
+        const rodCentreY = isTwoBoxCLH ? dividerY : innerTop - rodRadius;
+        const rodBottom = rodCentreY - rodRadius;
+        const rodTop = rodCentreY + rodRadius;
 
         const rodSegments = splitHorizontalSegments(
-          innerLeft + 1,
-          innerWidth - 2,
+          innerLeft,
+          innerWidth,
           rodBottom,
           rodTop,
           openings,
@@ -1359,10 +1364,7 @@ function getTowerAccessoriesLayout(tower: Tower) {
             y: rodBottom,
             w: seg.w,
             h: rodRadius * 2,
-            brackets: [
-              { x: seg.x, y: rodCentreY - 1.5, w: 0.8, h: 3 },
-              { x: seg.x + seg.w - 0.8, y: rodCentreY - 1.5, w: 0.8, h: 3 },
-            ],
+            brackets: [],
           });
 
           // Two clothes-hanger icons placed side-by-side on this rod

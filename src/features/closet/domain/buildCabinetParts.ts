@@ -5,7 +5,7 @@
 import type { ClosetStateV2 } from "./schema";
 import type { ClosetPart } from "./parts";
 import type { Tower } from "./types/tower";
-import { isTwoBoxCabinet, getTwoBoxHeights } from "./closetCatalogs";
+import { isTwoBoxCabinet, getTwoBoxHeights, getStandardUpperShelfPositions } from "./closetCatalogs";
 
 // ---- Derived dimensions ---------------------------------------------------
 
@@ -417,6 +417,22 @@ function buildRods(
     return;
   }
 
+  if (isCLH && !isTwoBox) {
+    const sectionTop = H / 2 - T;
+    const rodY = sectionTop - rodRadius - 0.2;
+
+    parts.push({
+      id: `rod_${tower.id}_${rod.position}`,
+      type: "rod",
+      dims: { x: innerW, y: rodRadius * 2, z: rodRadius * 2 },
+      transform: { pos: [centerX, rodY, iD / 2], rot: [0, 0, Math.PI / 2] },
+      materialId: "polished-chrome",
+      towerId: tower.id,
+      meta: { position: rod.position, index: 1 },
+    });
+    return;
+  }
+
   if (isCLH && isTwoBox) {
     const { lowerBoxHeight } = getTwoBoxHeights(H, tower.categoryCode);
     const dividerY = -H / 2 + bottomGap + lowerBoxHeight;
@@ -434,11 +450,11 @@ function buildRods(
       });
     }
 
-    // 2. For 96" (or H >= 93): 1 intermediate shelf in upper box dividing it into two 8 1/4" compartments
-    const topInnerY = H / 2 - T;
-    const upperBoxInnerH = topInnerY - (dividerY + T / 2);
-    if (upperBoxInnerH >= 15) {
-      const midShelfY = (dividerY + T / 2 + topInnerY) / 2;
+    // 2. For 96" (or H >= 93): upper shelf aligned with standard top shelf
+    const upperShelves = getStandardUpperShelfPositions(H, T);
+    if (H >= 93 && upperShelves.length >= 2) {
+      const topShelfHeight = upperShelves[upperShelves.length - 1];
+      const midShelfY = -H / 2 + bottomGap + topShelfHeight;
       if (!parts.some((p) => p.id === `shelf_${tower.id}_upper_mid`)) {
         parts.push({
           id: `shelf_${tower.id}_upper_mid`,
@@ -447,25 +463,14 @@ function buildRods(
           transform: { pos: [centerX, midShelfY, T / 2], rot: [0, 0, 0] },
           materialId: "classic-white",
           towerId: tower.id,
-          meta: { isFixed: true },
+          meta: { isFixed: false },
         });
       }
     }
 
-    // 3. In lower box: 2.5" gap below divider shelf -> fixed shelf -> rod & hangers
+    // 3. In lower box: hanging rod mounted directly under divider shelf (no extra shelf)
     const sectionTop = dividerY - T / 2;
-    const shelfY = sectionTop - GAP_ABOVE - T / 2;
-    const rodY = sectionTop - GAP_ABOVE - T - rodRadius - 0.2;
-
-    parts.push({
-      id: `shelf_${tower.id}_clh_rod`,
-      type: "shelf",
-      dims: { x: innerW, y: T, z: iD },
-      transform: { pos: [centerX, shelfY, T / 2], rot: [0, 0, 0] },
-      materialId: "classic-white",
-      towerId: tower.id,
-      meta: { isFixed: true },
-    });
+    const rodY = sectionTop - rodRadius - 0.2;
 
     parts.push({
       id: `rod_${tower.id}_${rod.position}`,

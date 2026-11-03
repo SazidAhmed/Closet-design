@@ -774,6 +774,32 @@ export function isTwoBoxCabinet(tower: Tower): boolean {
 /**
  * Returns lower and upper box heights (in inches) for standard two-box cabinet divisions.
  */
+
+/**
+ * Computes standard upper box shelf center-Y positions (in inches from bottom of cabinet)
+ * for a standard 2-box cabinet (e.g. CAS).
+ */
+export function getStandardUpperShelfPositions(
+  totalHeight: number,
+  T: number = 0.75,
+): number[] {
+  const is96 = totalHeight >= 93;
+  const count = is96 ? 8 : 7;
+  const lowerCount = 3;
+  const { lowerBoxHeight } = getTwoBoxHeights(totalHeight);
+  const upperCount = Math.max(0, count - 1 - lowerCount);
+  const upperBottom = lowerBoxHeight + T / 2;
+  const innerTop = totalHeight - T;
+  const upperAvailable = Math.max(0, innerTop - upperBottom);
+  const upperGap = upperAvailable / (upperCount + 1);
+
+  const shelfYPositions: number[] = [];
+  for (let i = 0; i < upperCount; i++) {
+    shelfYPositions.push(upperBottom + upperGap * (i + 1));
+  }
+  return shelfYPositions;
+}
+
 export function getTwoBoxHeights(
   totalHeight: number,
   categoryCode?: string,
@@ -792,7 +818,7 @@ export function getTwoBoxHeights(
       return { lowerBoxHeight: lower, upperBoxHeight: totalHeight - lower };
     } else {
       const t = (totalHeight - 90) / (96 - 90);
-      const lower = 77.75 + t * (76.5 - 77.75);
+      const lower = 77.75 + t * (74.95 - 77.75);
       return { lowerBoxHeight: lower, upperBoxHeight: totalHeight - lower };
     }
   }
