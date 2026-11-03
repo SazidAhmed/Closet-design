@@ -151,6 +151,10 @@ describe("CRD Cabinet domain and rendering", () => {
 
     const drawerBoxes = parts.filter((p) => p.type === "drawer_box");
     expect(drawerBoxes.length).toBe(5);
+    // Drawers extend edge-to-edge across the inside width of the cabinet (no inset gap)
+    for (const drawer of drawerBoxes) {
+      expect(drawer.dims.x).toBeCloseTo(24 - 0.75, 2);
+    }
 
     const shelves = parts.filter((p) => p.type === "shelf");
     // 1 fixed divider shelf + 3 adjustable shelves in upper section = 4 shelves

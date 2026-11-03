@@ -529,7 +529,7 @@ function buildDrawers(
       parts.push({
         id: `drawer_${tower.id}_${i + 1}`,
         type: "drawer_box",
-        dims: { x: innerW - 2, y: singleH, z: iD - 2 },
+        dims: { x: innerW, y: singleH, z: iD - 2 },
         transform: { pos: [centerX, y, T / 2 + 1], rot: [0, 0, 0] },
         materialId: finishId,
         towerId: tower.id,
@@ -546,7 +546,7 @@ function buildDrawers(
     parts.push({
       id: `drawer_${tower.id}_${i + 1}`,
       type: "drawer_box",
-      dims: { x: innerW - 2, y: drawerHeight, z: iD - 2 },
+      dims: { x: innerW, y: drawerHeight, z: iD - 2 },
       transform: { pos: [centerX, y, T / 2 + 1], rot: [0, 0, 0] },
       materialId: finishId,
       towerId: tower.id,
@@ -575,6 +575,7 @@ function buildShoeShelves(
   if (isTwoBox && count >= 8) {
     const { lowerBoxHeight } = getTwoBoxHeights(H);
     const divY = -H / 2 + bottomGap + lowerBoxHeight;
+    const bottomInnerY = -H / 2 + bottomGap + T;
 
     // Fixed divider shelf at the split line
     parts.push({
@@ -591,9 +592,14 @@ function buildShoeShelves(
     const lowerCount = Math.floor(shoeCount / 2);
     const upperCount = shoeCount - lowerCount;
 
-    // Lower box shoe shelves: 9" down from divider shelf, then 7 1/8" (7.125") step
+    // Lower box shoe shelves: evenly distributed across lower box
+    const lowerAvailable = (divY - T / 2) - bottomInnerY;
+    const topDropLower = Math.min(8.75, lowerAvailable * 0.23);
+    const bottomClearanceLower = 2.0;
+    const stepLower = (lowerAvailable - topDropLower - bottomClearanceLower) / Math.max(1, lowerCount - 1);
+
     for (let i = 0; i < lowerCount; i++) {
-      const drop = 9 + i * 7.125;
+      const drop = topDropLower + i * stepLower;
       const y = divY - T / 2 - drop;
       parts.push({
         id: `shoe_shelf_${tower.id}_lower_${i + 1}`,
@@ -606,10 +612,15 @@ function buildShoeShelves(
       });
     }
 
-    // Upper box shoe shelves: 9" down from top inside, then 7 1/8" (7.125") step
+    // Upper box shoe shelves: evenly distributed across upper box
     const topInnerY = H / 2 - T;
+    const upperAvailable = topInnerY - (divY + T / 2);
+    const topDropUpper = Math.min(9.0, upperAvailable * 0.23);
+    const bottomClearanceUpper = 2.0;
+    const stepUpper = (upperAvailable - topDropUpper - bottomClearanceUpper) / Math.max(1, upperCount - 1);
+
     for (let i = 0; i < upperCount; i++) {
-      const drop = 9 + i * 7.125;
+      const drop = topDropUpper + i * stepUpper;
       const y = topInnerY - drop;
       parts.push({
         id: `shoe_shelf_${tower.id}_upper_${i + 1}`,

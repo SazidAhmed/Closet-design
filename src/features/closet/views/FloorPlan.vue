@@ -1409,8 +1409,8 @@ function getTowerAccessoriesLayout(tower: Tower) {
             const bottom = innerBottom + i * (singleH + gap);
             const top = bottom + singleH;
             const segments = splitHorizontalSegments(
-              innerLeft + 1,
-              innerWidth - 2,
+              innerLeft,
+              innerWidth,
               bottom,
               top,
               openings,
@@ -1473,15 +1473,15 @@ function getTowerAccessoriesLayout(tower: Tower) {
           const lowerCount = Math.floor(shoeCount / 2);
           const upperCount = shoeCount - lowerCount;
 
-          // Lower box shoe shelves: 9" down from divider shelf, then 7 1/8" (7.125") step
+          // Lower box shoe shelves: evenly distributed across lower box
           const lowerTop = dividerY - T / 2;
           const lowerAvailable = Math.max(0, lowerTop - innerBottom);
-          const isStandard84 = Math.abs(geom.heightCm - 84) < 1;
+          const topDropLower = Math.min(8.75, lowerAvailable * 0.23);
+          const bottomClearanceLower = 2.0;
+          const stepLower = (lowerAvailable - topDropLower - bottomClearanceLower) / Math.max(1, lowerCount - 1);
 
           for (let i = 0; i < lowerCount; i++) {
-            const frontY = isStandard84 && lowerCount === 4
-              ? lowerTop - 9 - i * 7.125
-              : lowerTop - Math.min(9, lowerAvailable * 0.22) - i * ((lowerAvailable - Math.min(9, lowerAvailable * 0.22) - 4) / Math.max(1, lowerCount - 1));
+            const frontY = lowerTop - topDropLower - i * stepLower;
             const shelfBottom = frontY - T;
             const rearY = frontY + slantH;
             const segments = splitHorizontalSegments(
@@ -1509,14 +1509,15 @@ function getTowerAccessoriesLayout(tower: Tower) {
             }
           }
 
-          // Upper box shoe shelves: 9" down from inside top, then 7 1/8" (7.125") step
+          // Upper box shoe shelves: evenly distributed across upper box
           const upperBottom = dividerY + T / 2;
           const upperAvailable = Math.max(0, innerTop - upperBottom);
+          const topDropUpper = Math.min(9.0, upperAvailable * 0.23);
+          const bottomClearanceUpper = 2.0;
+          const stepUpper = (upperAvailable - topDropUpper - bottomClearanceUpper) / Math.max(1, upperCount - 1);
 
           for (let i = 0; i < upperCount; i++) {
-            const frontY = isStandard84 && upperCount === 4
-              ? innerTop - 9 - i * 7.125
-              : innerTop - Math.min(9, upperAvailable * 0.22) - i * ((upperAvailable - Math.min(9, upperAvailable * 0.22) - 4) / Math.max(1, upperCount - 1));
+            const frontY = innerTop - topDropUpper - i * stepUpper;
             const shelfBottom = frontY - T;
             const rearY = frontY + slantH;
             const segments = splitHorizontalSegments(

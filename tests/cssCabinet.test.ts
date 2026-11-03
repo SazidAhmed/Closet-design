@@ -145,6 +145,19 @@ describe("CSS (Shoe Shelves) Cabinet domain and elevation layout", () => {
     for (const shelf of shoeShelves) {
       expect(shelf.transform.rot[0]).toBeCloseTo(0.26, 2);
     }
+
+    // Verify even distribution across compartments (filling the entire height)
+    // Lower box shelves
+    const lowerY = lowerShelves.map((s) => s.transform.pos[1]);
+    expect(lowerY[0] - lowerY[1]).toBeCloseTo(10.25, 1);
+    expect(lowerY[1] - lowerY[2]).toBeCloseTo(10.25, 1);
+    expect(lowerY[2] - lowerY[3]).toBeCloseTo(10.25, 1);
+
+    // Upper box shelves
+    const upperY = upperShelves.map((s) => s.transform.pos[1]);
+    expect(upperY[0] - upperY[1]).toBeCloseTo(9.15, 1);
+    expect(upperY[1] - upperY[2]).toBeCloseTo(9.15, 1);
+    expect(upperY[2] - upperY[3]).toBeCloseTo(9.15, 1);
   });
 });
 
