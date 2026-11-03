@@ -4913,7 +4913,7 @@ function dimLinePoints(wall: {
                   </template>
 
                   <!-- 2-Box Separation: Horizontal seam line across side panels -->
-                  <template v-if="isTwoBoxCabinet(tower)">
+                  <template v-if="isTwoBoxCabinet(tower) && tower.categoryCode !== 'CLH' && tower.categoryCode !== 'CCL'">
                     <!-- Left side seam -->
                     <line
                       :x1="towerElevationRect(tower).x"
