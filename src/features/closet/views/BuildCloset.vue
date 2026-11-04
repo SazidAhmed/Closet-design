@@ -41,6 +41,8 @@ function truncTo4(value: number): string {
 
 const selectedDoorMode = ref<ClosetDoorMode>("without_doors");
 const showElevation = ref(false);
+const currentElevationWallId = ref<string | null>(null);
+const showSelectionWarning = ref(false);
 const pendingCustomPart = ref<string | null>(null);
 
 const allowedCustomParts = [
@@ -749,21 +751,38 @@ function sanitizeAllTowerPositions() {
   }
 }
 
+function resolveTargetWallId(): string | null {
+  if (showElevation.value) {
+    return currentElevationWallId.value ?? room.walls[0]?.id ?? null;
+  }
+  if (
+    selection.selectedWallId &&
+    room.walls.some((w) => w.id === selection.selectedWallId)
+  ) {
+    return selection.selectedWallId;
+  }
+  if (
+    selectedTower.value?.wallId &&
+    room.walls.some((w) => w.id === selectedTower.value.wallId)
+  ) {
+    return selectedTower.value.wallId;
+  }
+  return null;
+}
+
 function addCategoryTower(category: ClosetCatalogCategory) {
+  const targetWallId = resolveTargetWallId();
+  if (!targetWallId) {
+    showSelectionWarning.value = true;
+    return;
+  }
+
   closet.addTowerFromCatalog(category.doorMode, category.categoryCode);
   const added = closet.towers[closet.towers.length - 1];
   if (!added) return;
 
-  // Capture the selected wall ID BEFORE selectTower() clears it
-  // (selectTower clears selectedWallId per the selection store contract)
-  const wallId = selection.selectedWallId ?? room.closetWall?.id ?? null;
-
+  closet.setTowerWall(added.id, targetWallId, 0.5);
   selection.selectTower(added.id);
-
-  // Place on the selected wall, or fall back to the closet wall
-  if (wallId) {
-    closet.setTowerWall(added.id, wallId, 0.5);
-  }
 }
 
 function nudgeTowerLeft() {
@@ -1171,6 +1190,12 @@ const isPendingLShape = computed(() => {
 });
 
 function addCustomPartHandler(type: string) {
+  const targetWallId = resolveTargetWallId();
+  if (!targetWallId) {
+    showSelectionWarning.value = true;
+    return;
+  }
+
   const isLShapeVertical = type.toLowerCase() === "l shape vertical";
   if (isLShapeVertical) {
     pendingCustomPart.value = type;
@@ -1184,8 +1209,7 @@ function addCustomPartHandler(type: string) {
       tower && (!tower.partType || tower.partType === "cabinet")
         ? tower.id
         : undefined;
-    const wallId =
-      tower?.wallId ?? selection.selectedWallId ?? room.closetWall?.id ?? null;
+    const wallId = targetWallId;
     const newPart = closet.addCustomPart(
       type,
       attachedId,
@@ -1205,8 +1229,7 @@ function addCustomPartHandler(type: string) {
       tower && (!tower.partType || tower.partType === "cabinet")
         ? tower.id
         : undefined;
-    const wallId =
-      tower?.wallId ?? selection.selectedWallId ?? room.closetWall?.id ?? null;
+    const wallId = targetWallId;
     const newPart = closet.addCustomPart(
       type,
       attachedId,
@@ -1223,7 +1246,7 @@ function addCustomPartHandler(type: string) {
   if (tower && (!tower.partType || tower.partType === "cabinet")) {
     pendingCustomPart.value = type;
   } else {
-    const wallId = selection.selectedWallId ?? room.closetWall?.id ?? null;
+    const wallId = targetWallId;
     const newPart = closet.addCustomPart(type);
     selection.selectTower(newPart.id);
     if (wallId) {
@@ -1241,7 +1264,7 @@ function confirmCustomPartSide(side: "left" | "right") {
     tower && (!tower.partType || tower.partType === "cabinet")
       ? tower.id
       : undefined;
-  const wallId = selection.selectedWallId ?? room.closetWall?.id ?? null;
+  const wallId = resolveTargetWallId();
 
   const newPart = closet.addCustomPart(
     pendingCustomPart.value,
@@ -1314,6 +1337,26 @@ onMounted(() => {
     }
   });
 });
+
+function openElevationView() {
+  currentElevationWallId.value =
+    selectedTower.value?.wallId ??
+    selection.selectedWallId ??
+    room.walls[0]?.id ??
+    null;
+  showElevation.value = true;
+}
+
+function onElevationWallChange(wallId: string | null) {
+  if (wallId) {
+    currentElevationWallId.value = wallId;
+  }
+}
+
+function closeElevationView() {
+  showElevation.value = false;
+  currentElevationWallId.value = null;
+}
 </script>
 
 <template>
@@ -1466,7 +1509,7 @@ onMounted(() => {
           <button
             v-if="!showElevation"
             class="elevation-open-btn"
-            @click="showElevation = true"
+            @click="openElevationView"
           >
             Elevation
           </button>
@@ -1485,9 +1528,13 @@ onMounted(() => {
           <FloorPlan
             :elevation-only="true"
             :initial-wall-id="
-              selectedTower?.wallId ?? selection.selectedWallId ?? undefined
+              currentElevationWallId ??
+              selectedTower?.wallId ??
+              selection.selectedWallId ??
+              undefined
             "
-            @close="showElevation = false"
+            @wall-change="onElevationWallChange"
+            @close="closeElevationView"
           />
         </div>
         <div
@@ -2035,6 +2082,22 @@ onMounted(() => {
           </button>
           <button class="modal-btn secondary" @click="cancelCustomPartSide()">
             Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Warning Dialog for Unselected Wall/Cabinet -->
+    <div
+      v-if="showSelectionWarning"
+      class="modal-overlay"
+      @click.self="showSelectionWarning = false"
+    >
+      <div class="modal-dialog">
+        <h3 class="modal-title">Select a wall or a cabinet</h3>
+        <div class="modal-actions">
+          <button class="modal-btn" @click="showSelectionWarning = false">
+            OK
           </button>
         </div>
       </div>

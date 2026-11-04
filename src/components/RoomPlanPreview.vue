@@ -1076,8 +1076,15 @@ function sanitizeAllTowerPositionsInPlan() {
         <!-- Wall label (number) -->
         <g
           :transform="`translate(${wallMidpoint(wall)[0]}, ${wallMidpoint(wall)[1]})`"
+          style="cursor: pointer"
+          @click="selectWall(wall.id)"
         >
-          <circle r="4.5" fill="#f59e0b" stroke="#0f172a" stroke-width="0.6" />
+          <circle
+            r="4.5"
+            :fill="selectionStore.selectedWallId === wall.id ? '#f59e0b' : '#fbbf24'"
+            stroke="#0f172a"
+            stroke-width="0.6"
+          />
           <text
             text-anchor="middle"
             dominant-baseline="central"

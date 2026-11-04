@@ -49,7 +49,10 @@ const props = defineProps<{
   elevationOnly?: boolean;
   initialWallId?: string;
 }>();
-const emit = defineEmits<{ (e: "close"): void }>();
+const emit = defineEmits<{
+  (e: "close"): void;
+  (e: "wallChange", wallId: string | null): void;
+}>();
 
 const roomStore = useRoomStore();
 const appStore = useAppStore();
@@ -464,6 +467,14 @@ function onSelectedItemSideInput(
 const showElevationOverlay = ref(false);
 const elevationWallId = ref<string | null>(null);
 const elevationSvgRef = ref<SVGSVGElement | null>(null);
+
+watch(
+  elevationWallId,
+  (newWallId) => {
+    emit("wallChange", newWallId);
+  },
+  { immediate: true },
+);
 
 const ELEVATION_VIEW_WIDTH = 980;
 const ELEVATION_VIEW_HEIGHT = 620;
@@ -3192,6 +3203,7 @@ watch(
   () => props.initialWallId,
   (newWallId) => {
     if (!props.elevationOnly || !newWallId) return;
+    if (elevationWallId.value === newWallId) return;
     const wall = roomStore.walls.find((w) => w.id === newWallId);
     if (!wall) return;
     if (!elevationClosetBlocksByWall[wall.id]) {
