@@ -1767,6 +1767,8 @@ function elevationHorizontalBoundsForWall(
 
   let startAdjacentDepth = 0;
   let endAdjacentDepth = 0;
+  let startAdjacentHasDoors = false;
+  let endAdjacentHasDoors = false;
 
   for (const tower of closetStore.towers) {
     const isAtStart = startAdjacentWalls.some((w) => w.id === tower.wallId);
@@ -1851,6 +1853,12 @@ function elevationHorizontalBoundsForWall(
           bridgeW +
           otherOutset;
         startAdjacentDepth = Math.max(startAdjacentDepth, totalAdjDepth);
+        if (
+          tower.doorMode === "with_doors" &&
+          (!tower.partType || tower.partType.toLowerCase() === "cabinet")
+        ) {
+          startAdjacentHasDoors = true;
+        }
       }
     }
 
@@ -1917,6 +1925,12 @@ function elevationHorizontalBoundsForWall(
           bridgeW +
           otherOutset;
         endAdjacentDepth = Math.max(endAdjacentDepth, totalAdjDepth);
+        if (
+          tower.doorMode === "with_doors" &&
+          (!tower.partType || tower.partType.toLowerCase() === "cabinet")
+        ) {
+          endAdjacentHasDoors = true;
+        }
       }
     }
   }
@@ -1940,9 +1954,13 @@ function elevationHorizontalBoundsForWall(
     selectedOnWall?.partType?.toLowerCase() === "panel" ||
     selectedOnWall?.partType?.toLowerCase() === "filler";
   const startCornerClearance =
-    startAdjacentDepth > 0 && isCornerClearancePart ? 0.875 : 0;
+    startAdjacentDepth > 0 && isCornerClearancePart && startAdjacentHasDoors
+      ? 0.875
+      : 0;
   const endCornerClearance =
-    endAdjacentDepth > 0 && isCornerClearancePart ? 0.875 : 0;
+    endAdjacentDepth > 0 && isCornerClearancePart && endAdjacentHasDoors
+      ? 0.875
+      : 0;
 
   const minLeftCm = startAdjacentDepth + startCornerClearance;
   const maxRightCm = Math.max(

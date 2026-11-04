@@ -217,6 +217,8 @@ const clearances = computed(() => {
   // 0 means no adjacent tower blocks that corner.
   let startAdjacentDepth = 0;
   let endAdjacentDepth = 0;
+  let startAdjacentHasDoors = false;
+  let endAdjacentHasDoors = false;
 
   for (const other of room.walls) {
     if (other.id === wall.id) continue;
@@ -424,6 +426,12 @@ const clearances = computed(() => {
           otherOutset;
         // Track the depth that should appear in the nominal display
         startAdjacentDepth = Math.max(startAdjacentDepth, newEffLeft);
+        if (
+          otherTower.doorMode === "with_doors" &&
+          (!otherTower.partType || otherTower.partType.toLowerCase() === "cabinet")
+        ) {
+          startAdjacentHasDoors = true;
+        }
       }
     }
 
@@ -525,6 +533,12 @@ const clearances = computed(() => {
           otherOutset;
         // Track the depth that should appear in the nominal display
         endAdjacentDepth = Math.max(endAdjacentDepth, otherDepth);
+        if (
+          otherTower.doorMode === "with_doors" &&
+          (!otherTower.partType || otherTower.partType.toLowerCase() === "cabinet")
+        ) {
+          endAdjacentHasDoors = true;
+        }
       }
     }
   }
@@ -595,9 +609,13 @@ const clearances = computed(() => {
     tower.partType?.toLowerCase() === "panel" ||
     tower.partType?.toLowerCase() === "filler";
   const startCornerClearance =
-    startAdjacentDepth > 0 && isCornerClearancePart ? 0.875 : 0;
+    startAdjacentDepth > 0 && isCornerClearancePart && startAdjacentHasDoors
+      ? 0.875
+      : 0;
   const endCornerClearance =
-    endAdjacentDepth > 0 && isCornerClearancePart ? 0.875 : 0;
+    endAdjacentDepth > 0 && isCornerClearancePart && endAdjacentHasDoors
+      ? 0.875
+      : 0;
 
   return {
     left: uiLeft < epsilon ? 0 : Math.max(0, uiLeft),
