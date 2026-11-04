@@ -1078,12 +1078,16 @@ function getTowerAccessoriesLayout(tower: Tower) {
   const twoBoxHeights = isTwoBox ? getTwoBoxHeights(geom.heightCm, tower.categoryCode) : null;
   const dividerY = twoBoxHeights ? twoBoxHeights.lowerBoxHeight : 0;
 
-  // For 2-box cabinets without shelf_set (e.g. CSS, CDH): add the fixed box divider shelf
-  // CLH does not show the black divider shelf line
+  // For 2-box cabinets without shelf_set (e.g. CSS, CDH, CLH): add the fixed box divider shelf
+  // CLH shows the black divider shelf line above the hanger
   const isCLH = tower.categoryCode === "CLH" || tower.categoryCode === "CCL";
   const hasShelfSet = tower.accessories.some((a) => a.type === "shelf_set");
-  if (isTwoBox && !hasShelfSet && !isCLH) {
-    const divShelfBottom = dividerY - T / 2;
+  if ((isTwoBox && !hasShelfSet) || (!isTwoBox && isCLH)) {
+    const clhDividerY = twoBoxHeights
+      ? dividerY
+      : getTwoBoxHeights(geom.heightCm, tower.categoryCode).lowerBoxHeight;
+    const shelfY = isTwoBox ? dividerY : clhDividerY;
+    const divShelfBottom = shelfY - T / 2;
     const divShelfTop = divShelfBottom + T;
     const divSegments = splitHorizontalSegments(
       innerLeft,
@@ -1322,9 +1326,13 @@ function getTowerAccessoriesLayout(tower: Tower) {
           }
         }
 
-        // Hanging rod mounted at the divider position without showing the black shelf line.
-        // The silver rod is placed at dividerY and extends edge-to-edge across the cabinet.
-        const rodCentreY = isTwoBoxCLH ? dividerY : innerTop - rodRadius;
+        // CLH: Fixed shelf line above the hanger (at dividerY).
+        // Hanging rod placed below the fixed shelf line with GAP_ABOVE clearance.
+        const clhShelfY = isTwoBoxCLH
+          ? dividerY
+          : getTwoBoxHeights(geom.heightCm, tower.categoryCode).lowerBoxHeight;
+        const sectionTop = clhShelfY - T / 2;
+        const rodCentreY = sectionTop - GAP_ABOVE - T / 2;
         const rodBottom = rodCentreY - rodRadius;
         const rodTop = rodCentreY + rodRadius;
 

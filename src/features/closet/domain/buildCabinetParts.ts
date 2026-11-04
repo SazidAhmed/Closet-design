@@ -408,8 +408,23 @@ function buildRods(
   }
 
   if (isCLH && !isTwoBox) {
-    const sectionTop = H / 2 - T;
-    const rodY = sectionTop - rodRadius - 0.2;
+    const { lowerBoxHeight } = getTwoBoxHeights(H, tower.categoryCode);
+    const dividerY = -H / 2 + bottomGap + lowerBoxHeight;
+
+    if (!parts.some((p) => p.id === `shelf_${tower.id}_div`)) {
+      parts.push({
+        id: `shelf_${tower.id}_div`,
+        type: "shelf",
+        dims: { x: innerW, y: T, z: iD },
+        transform: { pos: [centerX, dividerY, T / 2], rot: [0, 0, 0] },
+        materialId: "classic-white",
+        towerId: tower.id,
+        meta: { isFixed: true },
+      });
+    }
+
+    const sectionTop = dividerY - T / 2;
+    const rodY = sectionTop - GAP_ABOVE - T / 2;
 
     parts.push({
       id: `rod_${tower.id}_${rod.position}`,
@@ -458,9 +473,9 @@ function buildRods(
       }
     }
 
-    // 3. In lower box: hanging rod mounted directly under divider shelf (no extra shelf)
+    // 3. In lower box: hanging rod mounted below divider shelf with clearance
     const sectionTop = dividerY - T / 2;
-    const rodY = sectionTop - rodRadius - 0.2;
+    const rodY = sectionTop - GAP_ABOVE - T / 2;
 
     parts.push({
       id: `rod_${tower.id}_${rod.position}`,
