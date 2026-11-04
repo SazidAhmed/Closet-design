@@ -782,7 +782,7 @@ function addCategoryTower(category: ClosetCatalogCategory) {
   if (!added) return;
 
   closet.setTowerWall(added.id, targetWallId, 0.5);
-  selection.selectTower(added.id);
+  selection.clearAll();
 }
 
 function nudgeTowerLeft() {

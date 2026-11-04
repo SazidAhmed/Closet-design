@@ -103,7 +103,7 @@ describe('BuildCloset cabinet placement & elevation wall selection', () => {
     expect(wrapper.text()).not.toContain('Select a wall or a cabinet')
   })
 
-  it('adds cabinet to the selected wall when not in elevation view', async () => {
+  it('adds cabinet to the selected wall and deselects wall and newly added cabinet', async () => {
     const { closet, selection } = setupStores()
 
     const wrapper = mount(BuildCloset, {
@@ -132,10 +132,13 @@ describe('BuildCloset cabinet placement & elevation wall selection', () => {
     // Should add tower to wall-2
     expect(closet.towers.length).toBe(1)
     expect(closet.towers[0].wallId).toBe('wall-2')
-    expect(selection.selectedTowerId).toBe(closet.towers[0].id)
+
+    // Newly added cabinet and wall must be deselected
+    expect(selection.selectedTowerId).toBeNull()
+    expect(selection.selectedWallId).toBeNull()
   })
 
-  it('adds cabinet to the selected cabinet\'s wall when not in elevation view', async () => {
+  it('adds cabinet to the selected cabinet\'s wall and deselects all', async () => {
     const { closet, selection } = setupStores()
 
     // Pre-populate with a tower on wall-3 with valid catalogId
@@ -182,10 +185,14 @@ describe('BuildCloset cabinet placement & elevation wall selection', () => {
     // Should add new tower to wall-3
     expect(closet.towers.length).toBe(2)
     expect(closet.towers[1].wallId).toBe('wall-3')
+
+    // Selected cabinet and newly added cabinet must both be deselected
+    expect(selection.selectedTowerId).toBeNull()
+    expect(selection.selectedWallId).toBeNull()
   })
 
-  it('adds cabinet to the opened elevation view wall when in elevation view', async () => {
-    const { closet } = setupStores()
+  it('adds cabinet to the opened elevation view wall and deselects cabinet', async () => {
+    const { closet, selection } = setupStores()
 
     const wrapper = mount(BuildCloset, {
       attachTo: document.body,
@@ -222,5 +229,9 @@ describe('BuildCloset cabinet placement & elevation wall selection', () => {
     expect(wrapper.text()).not.toContain('Select a wall or a cabinet')
     expect(closet.towers.length).toBe(1)
     expect(closet.towers[0].wallId).toBe('wall-4')
+
+    // Deselected
+    expect(selection.selectedTowerId).toBeNull()
+    expect(selection.selectedWallId).toBeNull()
   })
 })
