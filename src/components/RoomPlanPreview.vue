@@ -75,6 +75,21 @@ function wallMidpoint(wall: {
   ];
 }
 
+/** Midpoint centered within the wall's physical thickness (between inside and outside faces) */
+function wallCenter(wall: {
+  position: [number, number];
+  angle: number;
+  length: number;
+  thickness: number;
+}): [number, number] {
+  const t = wall.thickness;
+  const perpAngle = wall.angle - Math.PI / 2;
+  const cos = Math.cos(perpAngle) * (t / 2);
+  const sin = Math.sin(perpAngle) * (t / 2);
+  const mid = wallMidpoint(wall);
+  return [mid[0] + cos, mid[1] + sin];
+}
+
 function wallPolygonPoints(wall: {
   id: string;
   position: [number, number];
@@ -130,19 +145,22 @@ function dimLinePoints(wall: {
   position: [number, number];
   angle: number;
   length: number;
+  thickness: number;
 }) {
-  const offset = 8;
+  const t = wall.thickness;
   const perpAngle = wall.angle - Math.PI / 2;
-  const cos = Math.cos(perpAngle) * offset;
-  const sin = Math.sin(perpAngle) * offset;
+  // Position measurement clearly outside the wall (beyond its outer face)
+  const outerOffset = t + 7;
+  const cos = Math.cos(perpAngle) * outerOffset;
+  const sin = Math.sin(perpAngle) * outerOffset;
   const end = wallEndPoint(wall);
   return {
     x1: wall.position[0] + cos,
     y1: wall.position[1] + sin,
     x2: end[0] + cos,
     y2: end[1] + sin,
-    tx: (wall.position[0] + end[0]) / 2 + cos * 0.64,
-    ty: (wall.position[1] + end[1]) / 2 + sin * 0.64,
+    tx: (wall.position[0] + end[0]) / 2 + cos,
+    ty: (wall.position[1] + end[1]) / 2 + sin,
   };
 }
 
@@ -1075,21 +1093,21 @@ function sanitizeAllTowerPositionsInPlan() {
 
         <!-- Wall label (number) -->
         <g
-          :transform="`translate(${wallMidpoint(wall)[0]}, ${wallMidpoint(wall)[1]})`"
+          :transform="`translate(${wallCenter(wall)[0]}, ${wallCenter(wall)[1]})`"
           style="cursor: pointer"
           @click="selectWall(wall.id)"
         >
           <circle
-            r="4.5"
+            r="2.2"
             :fill="selectionStore.selectedWallId === wall.id ? '#f59e0b' : '#fbbf24'"
             stroke="#0f172a"
-            stroke-width="0.6"
+            stroke-width="0.5"
           />
           <text
             text-anchor="middle"
             dominant-baseline="central"
             fill="#0f172a"
-            font-size="4"
+            font-size="2.8"
             font-weight="700"
           >
             {{ wall.label }}
@@ -1101,6 +1119,7 @@ function sanitizeAllTowerPositionsInPlan() {
           :x="dimLinePoints(wall).tx"
           :y="dimLinePoints(wall).ty"
           text-anchor="middle"
+          dominant-baseline="central"
           fill="#e2e8f0"
           font-size="4"
           font-weight="600"
