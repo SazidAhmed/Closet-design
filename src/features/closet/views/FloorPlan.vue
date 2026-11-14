@@ -4872,6 +4872,7 @@ function dimLinePoints(wall: {
                   @pointerdown="startElevationTowerDrag(tower.id, $event)"
                   @click.stop="selectionStore.selectTower(tower.id)"
                   style="cursor: grab"
+                >
                   <!-- Cabinet interior & carcass -->
                   <template v-if="isCabinet(tower)">
                     <!-- Carcass background -->
@@ -5568,6 +5569,22 @@ function dimLinePoints(wall: {
                   </template>
 
                 </g>
+
+                <!-- Selection Highlight Overlay for Selected Cabinet -->
+                <template
+                  v-for="tower in activeElevationTowers"
+                  :key="`highlight-${tower.id}`"
+                >
+                  <rect
+                    v-if="selectionStore.selectedTowerId === tower.id"
+                    :x="towerElevationRect(tower).x - 2"
+                    :y="towerElevationRect(tower).y - 2"
+                    :width="towerElevationRect(tower).width + 4"
+                    :height="towerElevationRect(tower).height + 4"
+                    class="elevation-tower-selection-highlight"
+                    pointer-events="none"
+                  />
+                </template>
 
                 <!-- Cross-section zones: areas blocked by towers on adjacent walls -->
                 <g
@@ -7365,10 +7382,11 @@ function dimLinePoints(wall: {
 
 /* Selection Highlight */
 .elevation-tower-selection-highlight {
-  fill: none;
-  stroke: #3b82f6;
-  stroke-width: 2px;
-  rx: 2px;
+  fill: rgba(251, 191, 36, 0.12);
+  stroke: #fbbf24;
+  stroke-width: 2.5px;
+  rx: 3px;
+  filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.45));
 }
 
 
