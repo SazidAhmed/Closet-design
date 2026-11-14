@@ -494,4 +494,56 @@ describe('BuildCloset cabinet placement & elevation wall selection', () => {
     expect(tower1.width).toBeCloseTo(22.3125, 3)
     expect(tower1.positionAlongWall).toBeCloseTo(0.1115625, 4)
   })
+
+  it('calculates the blocked area in the elevation view based on Total Depth when cabinet is a corner cabinet', async () => {
+    const { room, closet, selection } = setupStores()
+
+    // Add a corner cabinet on Wall 1 (start connects to Wall 4 at [0, 0])
+    // Depth: 15", Total Depth: 23" (cornerBridgeWidth: 8")
+    closet.towers = [
+      {
+        id: 'corner-tower-1',
+        name: 'Shelves 1',
+        wallId: 'wall-1',
+        width: 30,
+        height: 84,
+        depth: 15,
+        elevation: 0,
+        outset: 0,
+        isCorner: true,
+        cornerPosition: 'right',
+        cornerBridgeWidth: 8,
+        cornerBridgeDepth: 15,
+        positionAlongWall: 0.15, // center at 15", left edge at 0" (at corner with wall-4)
+        accessories: [],
+      } as any,
+    ]
+
+    // Mount FloorPlan with elevation open for Wall 4
+    selection.selectWall('wall-4')
+
+    const wrapper = mount(FloorPlan, {
+      attachTo: document.body,
+      props: {
+        elevationOnly: true,
+        initialWallId: 'wall-4',
+      },
+      global: {
+        stubs: {
+          TopToolbar: true,
+          FooterBar: true,
+        },
+      },
+    })
+
+    await nextTick()
+
+    // Verify adjacent blocked zone in elevation view
+    const blockedZone = wrapper.find('.adj-tower-blocked-zone')
+    expect(blockedZone.exists()).toBe(true)
+
+    // The text inside the blocked zone should reflect Total Depth (23")
+    expect(blockedZone.text()).toContain('Blocked')
+    expect(blockedZone.text()).toContain('23.0000"')
+  })
 })

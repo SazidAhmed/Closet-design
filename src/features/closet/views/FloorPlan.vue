@@ -780,10 +780,36 @@ const adjacentTowerBlockedZones = computed<
           Math.max(0, distFromCorner - cornerMargin) * gapScale;
 
         if (distFromCorner < thresholdDepth - epsilon) {
-          const adjOutset = typeof adjTower.outset === "number" && !isNaN(adjTower.outset) ? adjTower.outset : 0;
+          const isAdjLShapeV = adjTower.partType?.toLowerCase() === "l shape vertical";
+          const isAdjFiller = adjTower.partType?.toLowerCase() === "filler";
+          const adjOutset =
+            typeof adjTower.outset === "number" && !isNaN(adjTower.outset)
+              ? adjTower.outset
+              : isAdjLShapeV
+                ? 20.875
+                : isAdjFiller
+                  ? 14.25
+                  : 0;
           const adjElevation = typeof adjTower.elevation === "number" && !isNaN(adjTower.elevation) ? adjTower.elevation : 0;
           const adjHeight = typeof adjTower.height === "number" && !isNaN(adjTower.height) ? adjTower.height : 0;
-          const totalAdjDepth = adjDepth + adjOutset;
+
+          const isCorner =
+            adjTower.isCorner ||
+            adjTower.cornerPosition === "left" ||
+            adjTower.cornerPosition === "right" ||
+            adjTower.cornerOrientation === "left" ||
+            adjTower.cornerOrientation === "right" ||
+            adjTower.categoryCode === "CCS" ||
+            adjTower.categoryCode === "CCH" ||
+            adjTower.categoryCode === "CCL";
+
+          const bridgeW = isCorner
+            ? typeof adjTower.cornerBridgeWidth === "number" && adjTower.cornerBridgeWidth > 0
+              ? adjTower.cornerBridgeWidth
+              : Math.max(0, 23 - adjDepth)
+            : 0;
+
+          const totalAdjDepth = adjDepth + bridgeW + adjOutset;
 
           maxBlockedDepth = Math.max(
             maxBlockedDepth,
@@ -1876,14 +1902,25 @@ function elevationHorizontalBoundsForWall(
               : isOtherFiller
                 ? 14.25
                 : 0;
+        const isOtherCorner =
+          tower.isCorner ||
+          tower.cornerPosition === "left" ||
+          tower.cornerPosition === "right" ||
+          tower.cornerOrientation === "left" ||
+          tower.cornerOrientation === "right" ||
+          tower.categoryCode === "CCS" ||
+          tower.categoryCode === "CCH" ||
+          tower.categoryCode === "CCL";
+        const otherDepth =
+          typeof tower.depth === "number" && !isNaN(tower.depth) ? tower.depth : 0;
         const bridgeW =
-          tower.isCorner &&
-          typeof tower.cornerBridgeWidth === "number" &&
-          tower.cornerBridgeWidth > 0
-            ? tower.cornerBridgeWidth
+          isOtherCorner
+            ? typeof tower.cornerBridgeWidth === "number" && tower.cornerBridgeWidth > 0
+              ? tower.cornerBridgeWidth
+              : Math.max(0, 23 - otherDepth)
             : 0;
         const totalAdjDepth =
-          (typeof tower.depth === "number" && !isNaN(tower.depth) ? tower.depth : 0) +
+          otherDepth +
           bridgeW +
           otherOutset;
         startAdjacentDepth = Math.max(startAdjacentDepth, totalAdjDepth);
@@ -1948,14 +1985,25 @@ function elevationHorizontalBoundsForWall(
               : isOtherFiller
                 ? 14.25
                 : 0;
+        const isOtherCorner =
+          tower.isCorner ||
+          tower.cornerPosition === "left" ||
+          tower.cornerPosition === "right" ||
+          tower.cornerOrientation === "left" ||
+          tower.cornerOrientation === "right" ||
+          tower.categoryCode === "CCS" ||
+          tower.categoryCode === "CCH" ||
+          tower.categoryCode === "CCL";
+        const otherDepth =
+          typeof tower.depth === "number" && !isNaN(tower.depth) ? tower.depth : 0;
         const bridgeW =
-          tower.isCorner &&
-          typeof tower.cornerBridgeWidth === "number" &&
-          tower.cornerBridgeWidth > 0
-            ? tower.cornerBridgeWidth
+          isOtherCorner
+            ? typeof tower.cornerBridgeWidth === "number" && tower.cornerBridgeWidth > 0
+              ? tower.cornerBridgeWidth
+              : Math.max(0, 23 - otherDepth)
             : 0;
         const totalAdjDepth =
-          (typeof tower.depth === "number" && !isNaN(tower.depth) ? tower.depth : 0) +
+          otherDepth +
           bridgeW +
           otherOutset;
         endAdjacentDepth = Math.max(endAdjacentDepth, totalAdjDepth);
