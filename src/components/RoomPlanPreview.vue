@@ -756,8 +756,18 @@ let dragState: {
   wallThickness: number;
 } | null = null;
 
+let hasDragged = false;
+let dragStartCoords = { x: 0, y: 0 };
+
+function onBackgroundClick() {
+  if (hasDragged) return;
+  selectionStore.clearAll();
+}
+
 function onTowerPointerDown(e: PointerEvent, towerId: string) {
   e.stopPropagation();
+  hasDragged = false;
+  dragStartCoords = { x: e.clientX, y: e.clientY };
   selectionStore.selectTower(towerId);
   const tower = closetStore.towers.find((t) => t.id === towerId);
   const wall = tower?.wallId
@@ -796,6 +806,8 @@ function onHandlePointerDown(
   mode: "depth" | "width-start" | "width-end",
 ) {
   e.stopPropagation();
+  hasDragged = false;
+  dragStartCoords = { x: e.clientX, y: e.clientY };
   selectionStore.selectTower(towerId);
   const tower = closetStore.towers.find((t) => t.id === towerId);
   const wall = tower?.wallId
@@ -830,6 +842,14 @@ function onHandlePointerDown(
 
 function onSvgPointerMove(e: PointerEvent) {
   if (!dragState) return;
+  if (
+    Math.hypot(
+      e.clientX - dragStartCoords.x,
+      e.clientY - dragStartCoords.y,
+    ) > 3
+  ) {
+    hasDragged = true;
+  }
   const tower = closetStore.towers.find((t) => t.id === dragState!.towerId);
   const wall = tower?.wallId
     ? roomStore.walls.find((w) => w.id === tower.wallId)
@@ -971,6 +991,9 @@ function onSvgPointerMove(e: PointerEvent) {
 
 function onSvgPointerUp() {
   dragState = null;
+  setTimeout(() => {
+    hasDragged = false;
+  }, 50);
 }
 
 /**
@@ -997,12 +1020,13 @@ function sanitizeAllTowerPositionsInPlan() {
 </script>
 
 <template>
-  <div class="room-preview-container">
+  <div class="room-preview-container" @click="onBackgroundClick">
     <svg
       :viewBox="viewBox"
       preserveAspectRatio="xMidYMid meet"
       class="room-preview-svg"
       xmlns="http://www.w3.org/2000/svg"
+      @click="onBackgroundClick"
       @pointermove="onSvgPointerMove"
       @pointerup="onSvgPointerUp"
       @pointerleave="onSvgPointerUp"
@@ -1088,14 +1112,14 @@ function sanitizeAllTowerPositionsInPlan() {
           stroke-linejoin="round"
           stroke-linecap="round"
           class="wall-polygon"
-          @click="selectWall(wall.id)"
+          @click.stop="selectWall(wall.id)"
         />
 
         <!-- Wall label (number) -->
         <g
           :transform="`translate(${wallCenter(wall)[0]}, ${wallCenter(wall)[1]})`"
           style="cursor: pointer"
-          @click="selectWall(wall.id)"
+          @click.stop="selectWall(wall.id)"
         >
           <circle
             r="2.2"

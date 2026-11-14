@@ -575,6 +575,23 @@ const elevationTowerDrag = reactive({
   startPointerX: 0,
 });
 
+let elevationHasDragged = false;
+let elevationDragStartClientX = 0;
+
+function onElevationBackgroundClick() {
+  if (
+    elevationTowerDrag.active ||
+    elevationHasDragged ||
+    elevationDrag.active ||
+    elevationClosetDrag.active
+  ) {
+    return;
+  }
+  selectionStore.clearAll();
+  selectedItemId.value = null;
+  selectedElevationClosetId.value = null;
+}
+
 const activeElevationTowers = computed(() => {
   if (!elevationWallId.value) return [];
   return closetStore.towers
@@ -1624,6 +1641,9 @@ function startElevationTowerDrag(towerId: string, e: PointerEvent) {
   selectionStore.selectTower(towerId);
   e.preventDefault();
 
+  elevationHasDragged = false;
+  elevationDragStartClientX = e.clientX;
+
   const pointerPoint = screenToSvg(elevationSvgRef.value, e.clientX, e.clientY);
   const rect = towerElevationRect(tower);
 
@@ -1640,6 +1660,9 @@ function stopElevationTowerDrag() {
   elevationTowerDrag.towerId = "";
   elevationTowerDrag.offsetX = 0;
   elevationTowerDrag.startPointerX = 0;
+  setTimeout(() => {
+    elevationHasDragged = false;
+  }, 50);
 }
 
 const elevationWall = computed(() => {
@@ -2891,6 +2914,9 @@ function onElevationPointerMove(e: PointerEvent) {
   if (horizontalBounds.usableSpanCm <= ELEVATION_BOUNDS_EPSILON_CM) return;
 
   if (elevationTowerDrag.active) {
+    if (Math.abs(e.clientX - elevationDragStartClientX) > 3) {
+      elevationHasDragged = true;
+    }
     const tower = closetStore.towers.find(
       (t) => t.id === elevationTowerDrag.towerId,
     );
@@ -3710,7 +3736,14 @@ function continueDrawing() {
 
 /** Handle canvas click in draw mode */
 function onDrawCanvasClick(e: MouseEvent) {
-  if (isClosed.value || !svgRef.value) return;
+  if (isClosed.value || !svgRef.value) {
+    if (isClosed.value) {
+      selectedItemId.value = null;
+      deselectWall();
+      selectionStore.clearAll();
+    }
+    return;
+  }
 
   // Drawing must be explicitly started from controls (Start Drawing / Add Wall).
   if (!isDrawing.value) {
@@ -4151,10 +4184,6 @@ function dimLinePoints(wall: {
             xmlns="http://www.w3.org/2000/svg"
             @click="onDrawCanvasClick"
             @mousemove="onDrawMouseMove"
-            @click.self="
-              selectedItemId = null;
-              deselectWall();
-            "
           >
             <!-- Grid pattern -->
             <defs>
@@ -4510,6 +4539,7 @@ function dimLinePoints(wall: {
             v-if="showElevationOverlay"
             class="elevation-overlay"
             data-testid="elevation-overlay"
+            @click.self="onElevationBackgroundClick"
           >
             <div class="elevation-header">
               <h4 class="elevation-title">
@@ -4531,10 +4561,7 @@ function dimLinePoints(wall: {
                 class="elevation-svg"
                 :viewBox="`0 0 ${ELEVATION_VIEW_WIDTH} ${ELEVATION_VIEW_HEIGHT}`"
                 xmlns="http://www.w3.org/2000/svg"
-                @click.self="
-                  selectedItemId = null;
-                  selectedElevationClosetId = null;
-                "
+                @click="onElevationBackgroundClick"
               >
                 <defs>
                   <!-- Premium Chrome linear gradient for hanging rods and handles -->

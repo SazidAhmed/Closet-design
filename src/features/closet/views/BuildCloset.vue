@@ -1547,6 +1547,7 @@ function closeElevationView() {
             flex-direction: column;
             margin-bottom: 24px;
           "
+          @click="selection.clearAll()"
         >
           <RoomPlanPreview />
         </div>
