@@ -434,6 +434,13 @@ export const useClosetStore = defineStore('closet', {
           }
         }
 
+        if (wallLengthCm && tower.positionAlongWall !== undefined) {
+          const halfRatio = (tower.width / 2) / wallLengthCm
+          if (halfRatio <= 0.5) {
+            tower.positionAlongWall = Math.max(halfRatio, Math.min(1 - halfRatio, tower.positionAlongWall))
+          }
+        }
+
         // Sync attached parts with cabinet width
         this.towers
           .filter((t) => t.attachedToTowerId === towerId)

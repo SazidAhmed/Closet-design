@@ -276,14 +276,19 @@ const clearances = computed(() => {
 
     const itemLeft = item.leftPosition;
     const itemRight = itemLeft + item.width;
+    const itemCenter = itemLeft + item.width / 2;
 
-    // Item is entirely to the LEFT of the tower (or flush against it) → left boundary
-    if (itemRight <= towerLeft + epsilon) {
+    if (itemCenter < centerIn) {
       effectiveLeft = Math.max(effectiveLeft, itemRight);
-    }
-    // Item is entirely to the RIGHT of the tower (or flush against it) → right boundary
-    if (itemLeft >= towerRight - epsilon) {
+    } else if (itemCenter > centerIn) {
       effectiveRight = Math.min(effectiveRight, itemLeft);
+    } else {
+      if (itemRight <= towerLeft + epsilon) {
+        effectiveLeft = Math.max(effectiveLeft, itemRight);
+      }
+      if (itemLeft >= towerRight - epsilon) {
+        effectiveRight = Math.min(effectiveRight, itemLeft);
+      }
     }
   }
 
@@ -587,13 +592,17 @@ const clearances = computed(() => {
     const otherLeft = otherCenterIn - otherHalfW;
     const otherRight = otherCenterIn + otherHalfW;
 
-    // Other tower is to the left of our tower
-    if (otherRight <= towerLeft + epsilon) {
+    if (otherCenterIn < centerIn) {
       effectiveLeft = Math.max(effectiveLeft, otherRight);
-    }
-    // Other tower is to the right of our tower
-    if (otherLeft >= towerRight - epsilon) {
+    } else if (otherCenterIn > centerIn) {
       effectiveRight = Math.min(effectiveRight, otherLeft);
+    } else {
+      if (otherLeft < towerLeft) {
+        effectiveLeft = Math.max(effectiveLeft, otherRight);
+      }
+      if (otherRight > towerRight) {
+        effectiveRight = Math.min(effectiveRight, otherLeft);
+      }
     }
   }
 
@@ -1249,15 +1258,37 @@ function onDimensionInput(
     const wall = selectedTowerWall.value;
     let finalValue = value;
     const c = clearances.value;
-    if (c) {
-      const maxAvailableWidthIn = c.effectiveRight - c.effectiveLeft;
+    if (c && wall) {
+      const maxAvailableWidthIn = c.maxAllowedRight - c.minAllowedLeft;
       finalValue = Math.min(finalValue, snapTo16th(maxAvailableWidthIn));
-    }
-    closet.setTowerWidth(tower.id, finalValue, wall?.length);
-    if (tower.blindWidth && tower.blindWidth >= finalValue) {
+
+      const limits = selectedTowerLimits.value;
+      if (limits && maxAvailableWidthIn >= limits.minW) {
+        finalValue = Math.max(limits.minW, finalValue);
+      }
+
+      closet.setTowerWidth(tower.id, finalValue, wall.length);
+
+      const halfW = finalValue / 2;
+      const minCenterIn = c.minAllowedLeft + halfW;
+      const maxCenterIn = Math.max(minCenterIn, c.maxAllowedRight - halfW);
+      const currentCenterIn = (tower.positionAlongWall ?? 0.5) * wall.length;
+      const clampedCenterIn = Math.max(
+        minCenterIn,
+        Math.min(maxCenterIn, currentCenterIn),
+      );
+
       closet.updateTower(tower.id, {
-        blindWidth: Math.max(1, snapTo16th(finalValue - 1)),
+        positionAlongWall: clampedCenterIn / wall.length,
       });
+
+      if (tower.blindWidth && tower.blindWidth >= finalValue) {
+        closet.updateTower(tower.id, {
+          blindWidth: Math.max(1, snapTo16th(finalValue - 1)),
+        });
+      }
+    } else {
+      closet.setTowerWidth(tower.id, finalValue, wall?.length);
     }
   } else if (dimension === "depth") {
     closet.setTowerDepth(tower.id, value);

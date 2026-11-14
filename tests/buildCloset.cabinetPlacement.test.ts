@@ -406,4 +406,92 @@ describe('BuildCloset cabinet placement & elevation wall selection', () => {
 
     expect(wrapper.text()).not.toContain('Not enough space')
   })
+
+  it('adjusts position and prevents overlap when increasing cabinet width against wall edge or other cabinets', async () => {
+    const { closet, selection } = setupStores()
+
+    // Tower 1 (Drawers) at left boundary: width = 10, center = 5 (interval [0, 10])
+    // Tower 2 at interval [22.3125, 34.3125] (center = 28.3125, width = 12)
+    closet.towers = [
+      {
+        id: 'tower-1',
+        catalogId: 101,
+        label: 'Drawers 8',
+        wallId: 'wall-1',
+        width: 10,
+        depth: 15,
+        height: 84,
+        doorMode: 'without_doors',
+        categoryCode: 'CAS',
+        categoryName: 'Shelves',
+        accessories: [],
+        positionAlongWall: 5 / 100, // [0, 10]
+      } as any,
+      {
+        id: 'tower-2',
+        catalogId: 101,
+        label: 'Shelves 2',
+        wallId: 'wall-1',
+        width: 12,
+        depth: 15,
+        height: 84,
+        doorMode: 'without_doors',
+        categoryCode: 'CAS',
+        categoryName: 'Shelves',
+        accessories: [],
+        positionAlongWall: 28.3125 / 100, // [22.3125, 34.3125]
+      } as any,
+    ]
+
+    const wrapper = mount(BuildCloset, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          TopToolbar: true,
+          FooterBar: true,
+          RoomPlanPreview: true,
+          FloorPlan: true,
+        },
+      },
+    })
+
+    await nextTick()
+
+    // Select tower-1
+    selection.selectTower('tower-1')
+    await nextTick()
+
+    // Find the Width input field
+    const widthInput = wrapper.findAll('.dimension-control input').at(0)
+    expect(widthInput).toBeTruthy()
+    expect(widthInput!.element).toBeInstanceOf(HTMLInputElement)
+
+    // User increases width from 10 to 22.3125
+    await widthInput!.setValue('22.3125')
+    await widthInput!.trigger('change')
+    await nextTick()
+
+    const tower1 = closet.towers.find((t) => t.id === 'tower-1')!
+    expect(tower1.width).toBeCloseTo(22.3125, 3)
+    // Left edge must stay at 0 (not negative/overlapping left edge!)
+    // Center must shift to 11.15625 -> positionAlongWall = 0.1115625
+    expect(tower1.positionAlongWall).toBeCloseTo(0.1115625, 4)
+
+    const leftEdge = (tower1.positionAlongWall! * 100) - (tower1.width / 2)
+    const rightEdge = (tower1.positionAlongWall! * 100) + (tower1.width / 2)
+    expect(leftEdge).toBeCloseTo(0, 3)
+    expect(rightEdge).toBeCloseTo(22.3125, 3)
+
+    // Right edge must not overlap tower-2 (which starts at 22.3125)
+    expect(rightEdge).toBeLessThanOrEqual(22.3125 + 0.001)
+
+    // If user tries to increase width further to 30 (exceeding available space 22.3125)
+    await widthInput!.setValue('30')
+    await widthInput!.trigger('change')
+    await nextTick()
+
+    // Width should be clamped to 22.3125
+    expect(tower1.width).toBeCloseTo(22.3125, 3)
+    expect(tower1.positionAlongWall).toBeCloseTo(0.1115625, 4)
+  })
 })
