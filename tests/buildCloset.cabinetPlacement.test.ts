@@ -9,6 +9,7 @@ import FloorPlan from '../src/features/closet/views/FloorPlan.vue'
 import { useRoomStore } from '../src/stores/useRoomStore'
 import { useClosetStore } from '../src/stores/useClosetStore'
 import { useSelectionStore } from '../src/stores/useSelectionStore'
+import { setActiveCategories } from '../src/features/closet/domain/closetCatalogs'
 
 describe('BuildCloset cabinet placement & elevation wall selection', () => {
   afterEach(() => {
@@ -43,6 +44,7 @@ describe('BuildCloset cabinet placement & elevation wall selection', () => {
         ],
       } as any,
     ]
+    setActiveCategories(closet.catalogCategories)
 
     // Setup 4 walls
     room.walls = [
@@ -233,5 +235,175 @@ describe('BuildCloset cabinet placement & elevation wall selection', () => {
     // Deselected
     expect(selection.selectedTowerId).toBeNull()
     expect(selection.selectedWallId).toBeNull()
+  })
+
+  it('adds new cabinets sequentially in free area of the wall rather than centering at 0.5', async () => {
+    const { closet, selection } = setupStores()
+
+    const wrapper = mount(BuildCloset, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          TopToolbar: true,
+          FooterBar: true,
+          RoomPlanPreview: true,
+          FloorPlan: true,
+        },
+      },
+    })
+
+    await nextTick()
+
+    // Select wall-1 (length = 100)
+    selection.selectWall('wall-1')
+
+    const categoryCard = wrapper.find('.category-card')
+    // Add first cabinet (Shelves, width = 12)
+    await categoryCard.trigger('click')
+    await nextTick()
+
+    expect(closet.towers.length).toBe(1)
+    expect(closet.towers[0].wallId).toBe('wall-1')
+    expect(closet.towers[0].width).toBe(12)
+    // Placed in free space starting at 0: center = 6 -> positionAlongWall = 0.06
+    expect(closet.towers[0].positionAlongWall).toBeCloseTo(0.06, 3)
+
+    // Select wall-1 again to add a second cabinet
+    selection.selectWall('wall-1')
+    await categoryCard.trigger('click')
+    await nextTick()
+
+    expect(closet.towers.length).toBe(2)
+    expect(closet.towers[1].wallId).toBe('wall-1')
+    expect(closet.towers[1].width).toBe(12)
+    // Placed immediately adjacent in free space [12, 100]: center = 18 -> positionAlongWall = 0.18
+    expect(closet.towers[1].positionAlongWall).toBeCloseTo(0.18, 3)
+  })
+
+  it('adjusts cabinet width to available space when free space is less than cabinet default width', async () => {
+    const { closet, selection } = setupStores()
+
+    // Add a wide existing cabinet on wall-1 that leaves 8" free space at the end
+    // Wall 1 length is 100", existing cabinet takes [0, 92]
+    closet.towers = [
+      {
+        id: 'tower-1',
+        catalogId: 101,
+        label: 'Shelves 1',
+        wallId: 'wall-1',
+        width: 92,
+        depth: 16,
+        height: 84,
+        doorMode: 'without_doors',
+        categoryCode: 'CAS',
+        categoryName: 'Shelves',
+        positionAlongWall: 46 / 100, // center = 46, interval [0, 92], remaining = 8"
+      } as any,
+    ]
+
+    // Set catalog category with default width 12, minW 6
+    closet.catalogCategories = [
+      {
+        doorMode: 'without_doors',
+        categoryCode: 'CAS',
+        categoryName: 'Shelves',
+        catalogs: [
+          {
+            catalogId: 101,
+            code: 'CAS128416',
+            depth: 16,
+            minW: 6,
+            maxW: 48,
+            minH: 72,
+            maxH: 96,
+            minD: 16,
+            maxD: 16,
+            cabinets: [],
+          },
+        ],
+      } as any,
+    ]
+    setActiveCategories(closet.catalogCategories)
+
+    const wrapper = mount(BuildCloset, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          TopToolbar: true,
+          FooterBar: true,
+          RoomPlanPreview: true,
+          FloorPlan: true,
+        },
+      },
+    })
+
+    await nextTick()
+
+    selection.selectWall('wall-1')
+    const categoryCard = wrapper.find('.category-card')
+    await categoryCard.trigger('click')
+    await nextTick()
+
+    // Second cabinet should be added with adjusted width = 8 (since remaining space is 8 < default 12, but >= minW 6)
+    expect(closet.towers.length).toBe(2)
+    const addedTower = closet.towers[1]
+    expect(addedTower.wallId).toBe('wall-1')
+    expect(addedTower.width).toBeCloseTo(8, 2)
+    // Placed in [92, 100]: center = 96 -> positionAlongWall = 0.96
+    expect(addedTower.positionAlongWall).toBeCloseTo(0.96, 3)
+  })
+
+  it('shows "Not enough space" popup and does not add cabinet when free space is less than minimum cabinet width', async () => {
+    const { closet, selection } = setupStores()
+
+    // Add existing cabinet that consumes almost the entire wall, leaving only 6"
+    closet.towers = [
+      {
+        id: 'tower-1',
+        catalogId: 101,
+        label: 'Shelves 1',
+        wallId: 'wall-1',
+        width: 94,
+        depth: 16,
+        height: 84,
+        doorMode: 'without_doors',
+        categoryCode: 'CAS',
+        categoryName: 'Shelves',
+        positionAlongWall: 47 / 100, // center = 47, interval [0, 94], remaining = 6"
+      } as any,
+    ]
+
+    const wrapper = mount(BuildCloset, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          TopToolbar: true,
+          FooterBar: true,
+          RoomPlanPreview: true,
+          FloorPlan: true,
+        },
+      },
+    })
+
+    await nextTick()
+
+    selection.selectWall('wall-1')
+    const categoryCard = wrapper.find('.category-card')
+    await categoryCard.trigger('click')
+    await nextTick()
+
+    // Should NOT add any new cabinet (remains 1)
+    expect(closet.towers.length).toBe(1)
+
+    // Should show popup with "Not enough space"
+    expect(wrapper.text()).toContain('Not enough space')
+
+    // Click OK to dismiss
+    const okBtn = wrapper.findAll('button').find((b) => b.text() === 'OK')
+    expect(okBtn).toBeTruthy()
+    await okBtn!.trigger('click')
+    await nextTick()
+
+    expect(wrapper.text()).not.toContain('Not enough space')
   })
 })

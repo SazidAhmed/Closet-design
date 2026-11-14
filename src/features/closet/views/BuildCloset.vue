@@ -43,6 +43,7 @@ const selectedDoorMode = ref<ClosetDoorMode>("without_doors");
 const showElevation = ref(false);
 const currentElevationWallId = ref<string | null>(null);
 const showSelectionWarning = ref(false);
+const showNoSpaceWarning = ref(false);
 const pendingCustomPart = ref<string | null>(null);
 
 const allowedCustomParts = [
@@ -770,6 +771,198 @@ function resolveTargetWallId(): string | null {
   return null;
 }
 
+function getWallAdjacentBlockedDepths(wall: (typeof room.walls)[number]) {
+  const CONN_TOL = 1;
+  const wallStartPt: [number, number] = [wall.position[0], wall.position[1]];
+  const wallEndPt: [number, number] = [
+    wall.position[0] + Math.cos(wall.angle) * wall.length,
+    wall.position[1] + Math.sin(wall.angle) * wall.length,
+  ];
+
+  const startConnectedWalls: typeof room.walls = [];
+  const endConnectedWalls: typeof room.walls = [];
+
+  for (const other of room.walls) {
+    if (other.id === wall.id) continue;
+    const oStart: [number, number] = [other.position[0], other.position[1]];
+    const oEnd: [number, number] = [
+      other.position[0] + Math.cos(other.angle) * other.length,
+      other.position[1] + Math.sin(other.angle) * other.length,
+    ];
+    const hit = (a: [number, number], b: [number, number]) =>
+      Math.hypot(a[0] - b[0], a[1] - b[1]) <= CONN_TOL;
+
+    if (hit(wallStartPt, oStart) || hit(wallStartPt, oEnd)) {
+      startConnectedWalls.push(other);
+    }
+    if (hit(wallEndPt, oStart) || hit(wallEndPt, oEnd)) {
+      endConnectedWalls.push(other);
+    }
+  }
+
+  let startAdjacentDepth = 0;
+  let endAdjacentDepth = 0;
+  const epsilon = 0.0001;
+
+  for (const otherTower of closet.towers) {
+    const isAtStart = startConnectedWalls.some((w) => w.id === otherTower.wallId);
+    const isAtEnd = endConnectedWalls.some((w) => w.id === otherTower.wallId);
+    if (!isAtStart && !isAtEnd) continue;
+
+    const otherWall = room.walls.find((w) => w.id === otherTower.wallId);
+    if (!otherWall) continue;
+
+    const otherPos = otherTower.positionAlongWall ?? 0.5;
+    const otherCenterIn = otherPos * otherWall.length;
+    const otherHalfW = (otherTower.width || 0) / 2;
+    const otherLeft = otherCenterIn - otherHalfW;
+    const otherRight = otherCenterIn + otherHalfW;
+
+    const oStart: [number, number] = [otherWall.position[0], otherWall.position[1]];
+    const oEnd: [number, number] = [
+      otherWall.position[0] + Math.cos(otherWall.angle) * otherWall.length,
+      otherWall.position[1] + Math.sin(otherWall.angle) * otherWall.length,
+    ];
+    const hit = (a: [number, number], b: [number, number]) =>
+      Math.hypot(a[0] - b[0], a[1] - b[1]) <= CONN_TOL;
+
+    const towerReach = 24;
+
+    if (isAtStart) {
+      let distFromCorner = Infinity;
+      if (hit(wallStartPt, oStart)) {
+        distFromCorner = Math.max(0, otherLeft);
+      } else if (hit(wallStartPt, oEnd)) {
+        distFromCorner = Math.max(0, otherWall.length - otherRight);
+      }
+
+      if (distFromCorner < towerReach - epsilon) {
+        const isOtherLShapeV = otherTower.partType?.toLowerCase() === "l shape vertical";
+        const isOtherFiller = otherTower.partType?.toLowerCase() === "filler";
+        const otherOutset =
+          typeof otherTower.outset === "number" && !isNaN(otherTower.outset)
+            ? otherTower.outset
+            : isOtherLShapeV
+              ? 20.875
+              : isOtherFiller
+                ? 14.25
+                : 0;
+        const otherBridge =
+          otherTower.isCorner &&
+          typeof otherTower.cornerBridgeWidth === "number" &&
+          otherTower.cornerBridgeWidth > 0
+            ? otherTower.cornerBridgeWidth
+            : 0;
+        const newEffLeft =
+          (typeof otherTower.depth === "number" && !isNaN(otherTower.depth)
+            ? otherTower.depth
+            : 0) +
+          otherBridge +
+          otherOutset;
+        startAdjacentDepth = Math.max(startAdjacentDepth, newEffLeft);
+      }
+    }
+
+    if (isAtEnd) {
+      let distFromCorner = Infinity;
+      if (hit(wallEndPt, oStart)) {
+        distFromCorner = Math.max(0, otherLeft);
+      } else if (hit(wallEndPt, oEnd)) {
+        distFromCorner = Math.max(0, otherWall.length - otherRight);
+      }
+
+      if (distFromCorner < towerReach - epsilon) {
+        const isOtherLShapeV = otherTower.partType?.toLowerCase() === "l shape vertical";
+        const isOtherFiller = otherTower.partType?.toLowerCase() === "filler";
+        const otherOutset =
+          typeof otherTower.outset === "number" && !isNaN(otherTower.outset)
+            ? otherTower.outset
+            : isOtherLShapeV
+              ? 20.875
+              : isOtherFiller
+                ? 14.25
+                : 0;
+        const otherBridge =
+          otherTower.isCorner &&
+          typeof otherTower.cornerBridgeWidth === "number" &&
+          otherTower.cornerBridgeWidth > 0
+            ? otherTower.cornerBridgeWidth
+            : 0;
+        const otherDepth =
+          (typeof otherTower.depth === "number" && !isNaN(otherTower.depth)
+            ? otherTower.depth
+            : 0) +
+          otherBridge +
+          otherOutset;
+        endAdjacentDepth = Math.max(endAdjacentDepth, otherDepth);
+      }
+    }
+  }
+
+  return { startAdjacentDepth, endAdjacentDepth };
+}
+
+function findFreeIntervalsOnWall(wallId: string) {
+  const wall = room.walls.find((w) => w.id === wallId);
+  if (!wall) return [];
+
+  const { startAdjacentDepth, endAdjacentDepth } = getWallAdjacentBlockedDepths(wall);
+  const usableStart = Math.max(0, startAdjacentDepth);
+  const usableEnd = Math.max(usableStart, wall.length - endAdjacentDepth);
+
+  const occupied: { start: number; end: number }[] = [];
+
+  for (const t of closet.towers) {
+    if (t.wallId !== wall.id) continue;
+    const center = (t.positionAlongWall ?? 0.5) * wall.length;
+    const halfW = (t.width || 0) / 2;
+    occupied.push({ start: center - halfW, end: center + halfW });
+  }
+
+  for (const item of room.items) {
+    if (item.wallId !== wall.id) continue;
+    if (item.category !== "door" && item.type !== "window") continue;
+    occupied.push({ start: item.leftPosition, end: item.leftPosition + item.width });
+  }
+
+  const clamped = occupied
+    .map((seg) => ({
+      start: Math.max(usableStart, Math.min(usableEnd, seg.start)),
+      end: Math.max(usableStart, Math.min(usableEnd, seg.end)),
+    }))
+    .filter((seg) => seg.end - seg.start > 0.001);
+
+  clamped.sort((a, b) => a.start - b.start);
+
+  const merged: { start: number; end: number }[] = [];
+  for (const seg of clamped) {
+    const last = merged[merged.length - 1];
+    if (last && seg.start <= last.end + 0.001) {
+      last.end = Math.max(last.end, seg.end);
+    } else {
+      merged.push({ ...seg });
+    }
+  }
+
+  const freeIntervals: { start: number; end: number; width: number }[] = [];
+  let cursor = usableStart;
+
+  for (const seg of merged) {
+    if (seg.start > cursor + 0.001) {
+      const width = seg.start - cursor;
+      freeIntervals.push({ start: cursor, end: seg.start, width });
+    }
+    cursor = Math.max(cursor, seg.end);
+  }
+
+  if (usableEnd > cursor + 0.001) {
+    const width = usableEnd - cursor;
+    freeIntervals.push({ start: cursor, end: usableEnd, width });
+  }
+
+  return freeIntervals;
+}
+
 function addCategoryTower(category: ClosetCatalogCategory) {
   const targetWallId = resolveTargetWallId();
   if (!targetWallId) {
@@ -777,11 +970,96 @@ function addCategoryTower(category: ClosetCatalogCategory) {
     return;
   }
 
+  const wall = room.walls.find((w) => w.id === targetWallId);
+  if (!wall) return;
+
+  const limits = getCategoryLimits(category.doorMode, category.categoryCode);
+  const isCorner =
+    category.categoryCode === "CCS" ||
+    category.categoryCode === "CCH" ||
+    category.categoryCode === "CCL";
+  const minW = isCorner ? Math.max(30, limits.minW) : limits.minW;
+  const defaultW = isCorner ? Math.max(40, limits.minW) : Math.max(12, limits.minW);
+
+  const freeIntervals = findFreeIntervalsOnWall(targetWallId);
+  const viableIntervals = freeIntervals.filter((int) => int.width >= minW - 0.001);
+
+  if (viableIntervals.length === 0) {
+    showNoSpaceWarning.value = true;
+    return;
+  }
+
+  let targetInterval: { start: number; end: number; width: number } = viableIntervals[0]!;
+  let placeAtEnd = false;
+  let adjacentFound = false;
+
+  const currentSelectedTower = selectedTower.value;
+  if (currentSelectedTower && currentSelectedTower.wallId === wall.id) {
+    const stCenter = (currentSelectedTower.positionAlongWall ?? 0.5) * wall.length;
+    const stRight = stCenter + currentSelectedTower.width / 2;
+    const stLeft = stCenter - currentSelectedTower.width / 2;
+
+    const rightInterval = viableIntervals.find(
+      (int) => Math.abs(int.start - stRight) < 0.2,
+    );
+    if (rightInterval) {
+      targetInterval = rightInterval;
+      adjacentFound = true;
+    } else {
+      const leftInterval = viableIntervals.find(
+        (int) => Math.abs(int.end - stLeft) < 0.2,
+      );
+      if (leftInterval) {
+        targetInterval = leftInterval;
+        placeAtEnd = true;
+        adjacentFound = true;
+      }
+    }
+  }
+
+  if (!adjacentFound) {
+    const fullFitInterval = viableIntervals.find(
+      (int) => int.width >= defaultW - 0.001,
+    );
+    if (fullFitInterval) {
+      targetInterval = fullFitInterval;
+    } else {
+      targetInterval =
+        viableIntervals
+          .slice()
+          .sort((a, b) => b.width - a.width)[0] ?? viableIntervals[0]!;
+    }
+  }
+
+  const availableSpace = targetInterval.width;
+  let targetWidth = defaultW;
+  if (availableSpace < defaultW - 0.001) {
+    let snappedSpace = snapTo16th(availableSpace);
+    if (snappedSpace > availableSpace + 0.0001) {
+      snappedSpace = snapTo16th(snappedSpace - 1 / 16);
+    }
+    targetWidth = Math.max(minW, snappedSpace);
+  }
+
+  let centerIn: number;
+  if (placeAtEnd) {
+    centerIn = targetInterval.end - targetWidth / 2;
+  } else {
+    centerIn = targetInterval.start + targetWidth / 2;
+  }
+
+  const posAlongWall = centerIn / wall.length;
+
   closet.addTowerFromCatalog(category.doorMode, category.categoryCode);
   const added = closet.towers[closet.towers.length - 1];
   if (!added) return;
 
-  closet.setTowerWall(added.id, targetWallId, 0.5);
+  closet.setTowerWall(added.id, targetWallId, posAlongWall);
+  if (Math.abs(targetWidth - added.width) > 0.001) {
+    closet.setTowerWidth(added.id, targetWidth, wall.length);
+    closet.updateTower(added.id, { positionAlongWall: posAlongWall });
+  }
+
   selection.clearAll();
 }
 
@@ -2098,6 +2376,22 @@ function closeElevationView() {
         <h3 class="modal-title">Select a wall or a cabinet</h3>
         <div class="modal-actions">
           <button class="modal-btn" @click="showSelectionWarning = false">
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Warning Dialog for Not Enough Space -->
+    <div
+      v-if="showNoSpaceWarning"
+      class="modal-overlay"
+      @click.self="showNoSpaceWarning = false"
+    >
+      <div class="modal-dialog">
+        <h3 class="modal-title">Not enough space</h3>
+        <div class="modal-actions">
+          <button class="modal-btn" @click="showNoSpaceWarning = false">
             OK
           </button>
         </div>
