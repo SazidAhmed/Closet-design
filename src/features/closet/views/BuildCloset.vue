@@ -24,7 +24,7 @@ import {
   type CornerPosition,
   isBlindCornerCabinet,
 } from "../domain/types/tower";
-import { snapTo16th } from "../domain/snapUtils";
+import { snapTo16th, parseFractionInput } from "../domain/snapUtils";
 import { Plus, Trash2 } from "lucide-vue-next";
 
 const appStore = useAppStore();
@@ -1197,13 +1197,28 @@ const cornerTotalDepth = computed(() => {
   return undefined;
 });
 
+function onNumberInputKeyDown(event: KeyboardEvent) {
+  if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+    event.preventDefault();
+    const target = event.target as HTMLInputElement;
+    const current = parseFractionInput(target.value);
+    const step = event.shiftKey ? 1 : 0.0625;
+    const delta = event.key === "ArrowUp" ? step : -step;
+    const newVal = Math.max(0, snapTo16th(current + delta));
+    target.value = truncTo4(newVal);
+    target.dispatchEvent(new Event("change"));
+  }
+}
+
 function onTotalDepthInput(event: Event) {
   const tower = selectedTower.value;
   if (!tower) return;
   const target = event.target as HTMLInputElement;
-  const rawValue = Number(target.value);
-  if (!Number.isFinite(rawValue)) return;
-  const value = snapTo16th(rawValue);
+  const value = parseFractionInput(target.value);
+  if (!Number.isFinite(value) || value <= 0) {
+    target.value = truncTo4(cornerTotalDepth.value ?? 23);
+    return;
+  }
 
   closet.setTowerBridgeDimensions(tower.id, {
     bridgeWidth: Math.max(0, value - (tower.depth || 0)),
@@ -1219,9 +1234,17 @@ function onBridgeDimensionInput(
   const tower = selectedTower.value;
   if (!tower) return;
   const target = event.target as HTMLInputElement;
-  const rawValue = Number(target.value);
-  if (!Number.isFinite(rawValue)) return;
-  const value = snapTo16th(rawValue);
+  const value = parseFractionInput(target.value);
+  if (!Number.isFinite(value) || value <= 0) {
+    const currentTower = selectedTower.value;
+    const updatedValue = currentTower
+      ? dimension === "bridgeDepth"
+        ? (currentTower.cornerBridgeDepth ?? currentTower.depth)
+        : currentTower.cornerBridgeWidth
+      : 0;
+    target.value = truncTo4(updatedValue ?? 0);
+    return;
+  }
 
   closet.setTowerBridgeDimensions(tower.id, {
     [dimension]: value,
@@ -1250,8 +1273,15 @@ function onDimensionInput(
   const tower = selectedTower.value;
   if (!tower) return;
   const target = event.target as HTMLInputElement;
-  const rawValue = Number(target.value);
-  if (!Number.isFinite(rawValue)) return;
+  const rawValue = parseFractionInput(target.value);
+  if (!Number.isFinite(rawValue) || rawValue < 0) {
+    const currentTower = selectedTower.value;
+    const updatedValue = currentTower
+      ? (currentTower[dimension] ?? 0)
+      : 0;
+    target.value = truncTo4(updatedValue);
+    return;
+  }
   const value = snapTo16th(rawValue);
 
   if (dimension === "width") {
@@ -1327,8 +1357,8 @@ function onBlindWidthInput(event: Event) {
   const tower = selectedTower.value;
   if (!tower) return;
   const target = event.target as HTMLInputElement;
-  const rawValue = Number(target.value);
-  if (!Number.isFinite(rawValue)) {
+  const rawValue = parseFractionInput(target.value);
+  if (!Number.isFinite(rawValue) || rawValue <= 0) {
     target.value = truncTo4(tower.blindWidth ?? 24);
     return;
   }
@@ -1351,8 +1381,15 @@ function onClearanceInput(side: "left" | "right", event: Event) {
   const target = event.target as HTMLInputElement;
   if (!tower || !wall || !c) return;
 
-  const rawValueIn = Number(target.value);
-  if (!Number.isFinite(rawValueIn)) return;
+  const rawValueIn = parseFractionInput(target.value);
+  if (!Number.isFinite(rawValueIn) || rawValueIn < 0) {
+    const currentClearance = clearances.value;
+    const currentVal = currentClearance
+      ? fromCm(side === "left" ? currentClearance.left : currentClearance.right)
+      : 0;
+    target.value = truncTo4(currentVal);
+    return;
+  }
   const valueIn = snapTo16th(rawValueIn);
 
   const halfW = tower.width / 2;
@@ -1911,26 +1948,14 @@ function closeElevationView() {
             </div>
             <input
               class="number-input"
-              type="number"
-              step="0.0625"
-              :min="
-                selectedTower.partType === 'filler' ||
-                selectedTower.partType?.toLowerCase() === 'toe kick'
-                  ? 1.5
-                  : selectedTower.isCorner ||
-                      selectedTower.cornerPosition === 'left' ||
-                      selectedTower.cornerPosition === 'right'
-                    ? 30
-                    : selectedTowerLimits
-                      ? selectedTowerLimits.minW
-                      : 0
-              "
-              :max="maxAllowedWidth"
+              type="text"
+              inputmode="decimal"
               :value="truncTo4(selectedTower.width)"
               :disabled="selectedTower.partType === 'panel'"
               @change="onDimensionInput('width', $event)"
               @blur="onDimensionInput('width', $event)"
               @keyup.enter="onDimensionInput('width', $event)"
+              @keydown="onNumberInputKeyDown"
             />
           </div>
 
@@ -1941,29 +1966,14 @@ function closeElevationView() {
             </div>
             <input
               class="number-input"
-              type="number"
-              step="0.0625"
-              :min="
-                selectedTower.partType?.toLowerCase() === 'toe kick'
-                  ? 1
-                  : selectedTower.isCorner ||
-                      selectedTower.cornerPosition === 'left' ||
-                      selectedTower.cornerPosition === 'right'
-                    ? selectedTowerLimits
-                      ? Math.max(selectedTowerLimits.minH, 84)
-                      : 84
-                    : selectedTowerLimits
-                      ? selectedTowerLimits.minH
-                      : 0
-              "
-              :max="
-                Math.min(selectedTowerLimits?.maxH ?? Infinity, maxHeightIn)
-              "
+              type="text"
+              inputmode="decimal"
               :value="truncTo4(selectedTower.height)"
               :disabled="false"
               @change="onDimensionInput('height', $event)"
               @blur="onDimensionInput('height', $event)"
               @keyup.enter="onDimensionInput('height', $event)"
+              @keydown="onNumberInputKeyDown"
             />
           </div>
 
@@ -1974,10 +1984,8 @@ function closeElevationView() {
             </div>
             <input
               class="number-input"
-              type="number"
-              step="0.0625"
-              :min="selectedTowerLimits ? selectedTowerLimits.minD : 0"
-              :max="selectedTowerLimits ? selectedTowerLimits.maxD : undefined"
+              type="text"
+              inputmode="decimal"
               :value="truncTo4(selectedTower.depth)"
               :disabled="
                 selectedTower.partType === 'filler' ||
@@ -1986,6 +1994,7 @@ function closeElevationView() {
               @change="onDimensionInput('depth', $event)"
               @blur="onDimensionInput('depth', $event)"
               @keyup.enter="onDimensionInput('depth', $event)"
+              @keydown="onNumberInputKeyDown"
             />
           </div>
 
@@ -1997,14 +2006,13 @@ function closeElevationView() {
             </div>
             <input
               class="number-input"
-              type="number"
-              step="0.0625"
-              min="22"
-              max="24"
+              type="text"
+              inputmode="decimal"
               :value="truncTo4(cornerTotalDepth ?? 23)"
               @change="onTotalDepthInput($event)"
               @blur="onTotalDepthInput($event)"
               @keyup.enter="onTotalDepthInput($event)"
+              @keydown="onNumberInputKeyDown"
             />
           </div>
 
@@ -2022,16 +2030,15 @@ function closeElevationView() {
             </div>
             <input
               class="number-input"
-              type="number"
-              step="0.0625"
-              :min="selectedTowerLimits ? selectedTowerLimits.minD : 0"
-              :max="selectedTowerLimits ? selectedTowerLimits.maxD : undefined"
+              type="text"
+              inputmode="decimal"
               :value="
                 truncTo4(selectedTower.cornerBridgeDepth ?? selectedTower.depth)
               "
               @change="onBridgeDimensionInput('bridgeDepth', $event)"
               @blur="onBridgeDimensionInput('bridgeDepth', $event)"
               @keyup.enter="onBridgeDimensionInput('bridgeDepth', $event)"
+              @keydown="onNumberInputKeyDown"
             />
           </div>
 
@@ -2043,13 +2050,13 @@ function closeElevationView() {
             <input
               id="tower-outset-input"
               class="number-input"
-              type="number"
-              step="0.0625"
-              min="0"
+              type="text"
+              inputmode="decimal"
               :value="truncTo4(selectedTower.outset ?? 0)"
               @change="onDimensionInput('outset', $event)"
               @blur="onDimensionInput('outset', $event)"
               @keyup.enter="onDimensionInput('outset', $event)"
+              @keydown="onNumberInputKeyDown"
             />
           </div>
 
@@ -2061,14 +2068,13 @@ function closeElevationView() {
             <input
               id="tower-elevation-input"
               class="number-input"
-              type="number"
-              step="0.0625"
-              min="0"
-              :max="maxElevationIn"
+              type="text"
+              inputmode="decimal"
               :value="truncTo4(selectedTower.elevation ?? 0)"
               @change="onDimensionInput('elevation', $event)"
               @blur="onDimensionInput('elevation', $event)"
               @keyup.enter="onDimensionInput('elevation', $event)"
+              @keydown="onNumberInputKeyDown"
             />
           </div>
 
@@ -2115,14 +2121,13 @@ function closeElevationView() {
                 <input
                   id="tower-blind-width-input"
                   class="number-input"
-                  type="number"
-                  step="0.0625"
-                  min="1"
-                  :max="Math.max(1, selectedTower.width - 1)"
+                  type="text"
+                  inputmode="decimal"
                   :value="truncTo4(selectedTower.blindWidth ?? 24)"
                   @change="onBlindWidthInput($event)"
                   @blur="onBlindWidthInput($event)"
                   @keyup.enter="onBlindWidthInput($event)"
+                  @keydown="onNumberInputKeyDown"
                 />
               </div>
             </template>
@@ -2310,14 +2315,13 @@ function closeElevationView() {
                 </div>
                 <input
                   class="number-input"
-                  type="number"
-                  step="0.0625"
-                  min="0"
-                  :max="fromCm(clearances.left + clearances.right)"
+                  type="text"
+                  inputmode="decimal"
                   :value="truncTo4(fromCm(clearances.left))"
                   @change="onClearanceInput('left', $event)"
                   @blur="onClearanceInput('left', $event)"
                   @keyup.enter="onClearanceInput('left', $event)"
+                  @keydown="onNumberInputKeyDown"
                 />
               </div>
 
@@ -2328,14 +2332,13 @@ function closeElevationView() {
                 </div>
                 <input
                   class="number-input"
-                  type="number"
-                  step="0.0625"
-                  min="0"
-                  :max="fromCm(clearances.left + clearances.right)"
+                  type="text"
+                  inputmode="decimal"
                   :value="truncTo4(fromCm(clearances.right))"
                   @change="onClearanceInput('right', $event)"
                   @blur="onClearanceInput('right', $event)"
                   @keyup.enter="onClearanceInput('right', $event)"
+                  @keydown="onNumberInputKeyDown"
                 />
               </div>
               <div

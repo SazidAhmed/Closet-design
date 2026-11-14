@@ -546,4 +546,69 @@ describe('BuildCloset cabinet placement & elevation wall selection', () => {
     expect(blockedZone.text()).toContain('Blocked')
     expect(blockedZone.text()).toContain('23.0000"')
   })
+
+  it('allows calculation in dimension input fields based on "+" and "-" between 2 numbers', async () => {
+    const { room, closet, selection } = setupStores()
+
+    closet.towers = [
+      {
+        id: 'tower-calc-1',
+        name: 'Shelves 1',
+        wallId: 'wall-1',
+        partType: 'filler',
+        width: 6,
+        height: 84,
+        depth: 15,
+        elevation: 0,
+        outset: 0,
+        positionAlongWall: 0.5,
+        accessories: [],
+      } as any,
+    ]
+
+    const wrapper = mount(BuildCloset, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          TopToolbar: true,
+          FooterBar: true,
+          RoomPlanPreview: true,
+          FloorPlan: true,
+        },
+      },
+    })
+
+    await nextTick()
+    selection.selectTower('tower-calc-1')
+    await nextTick()
+
+    const widthInput = wrapper.findAll('.dimension-control input').at(0)
+    expect(widthInput).toBeTruthy()
+    expect(widthInput!.element).toBeInstanceOf(HTMLInputElement)
+
+    // User types "4+4" and presses Enter
+    await widthInput!.setValue('4+4')
+    await widthInput!.trigger('keyup.enter')
+    await nextTick()
+
+    const tower = closet.towers.find((t) => t.id === 'tower-calc-1')!
+    expect(tower.width).toBe(8)
+    expect((widthInput!.element as HTMLInputElement).value).toBe('8.0000')
+
+    // User types "10-2" and triggers change
+    await widthInput!.setValue('10-2')
+    await widthInput!.trigger('change')
+    await nextTick()
+
+    expect(tower.width).toBe(8)
+    expect((widthInput!.element as HTMLInputElement).value).toBe('8.0000')
+
+    // User types "12.5 + 3.5" and triggers blur
+    await widthInput!.setValue('12.5 + 3.5')
+    await widthInput!.trigger('blur')
+    await nextTick()
+
+    expect(tower.width).toBe(16)
+    expect((widthInput!.element as HTMLInputElement).value).toBe('16.0000')
+  })
 })
