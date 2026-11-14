@@ -556,6 +556,7 @@ export const useClosetStore = defineStore('closet', {
       tower.isCorner = cornerPosition === 'left' || cornerPosition === 'right'
 
       if (tower.isCorner) {
+        tower.doorHinge = cornerPosition === 'right' ? 'right' : 'left'
         if (tower.width < 30) {
           tower.width = 30
         }

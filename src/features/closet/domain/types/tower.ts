@@ -180,6 +180,34 @@ export function isBlindCornerCabinet(tower: Tower | null | undefined): boolean {
   return isCornerCat || nameHasBlind || isCorner || Boolean(tower.blindOrientation)
 }
 
+/**
+ * Checks whether a tower is a corner cabinet (configured as left/right corner).
+ */
+export function isCornerCabinet(tower: Tower | null | undefined): boolean {
+  if (!tower) return false
+  if (tower.partType && tower.partType !== 'cabinet') return false
+  const code = tower.categoryCode
+  const isCornerCat = code === 'CCS' || code === 'CCH' || code === 'CCL'
+  const isCorner = Boolean(
+    tower.isCorner ||
+    tower.cornerPosition === 'left' ||
+    tower.cornerPosition === 'right' ||
+    tower.cornerOrientation === 'left' ||
+    tower.cornerOrientation === 'right'
+  )
+  return isCornerCat || isCorner
+}
+
+/**
+ * Checks whether a tower should render an elevation split (either as a blind corner cabinet
+ * or as a corner cabinet based on bridge depth).
+ */
+export function hasTowerElevationSplit(tower: Tower | null | undefined): boolean {
+  if (!tower) return false
+  if (tower.partType && tower.partType !== 'cabinet') return false
+  return isBlindCornerCabinet(tower) || isCornerCabinet(tower)
+}
+
 export type TowerBlindLayout = {
   orientation: 'left' | 'right'
   blindWidth: number
@@ -187,18 +215,58 @@ export type TowerBlindLayout = {
   blindOffsetFromLeft: number
   doorOffsetFromLeft: number
   splitOffsetFromLeft: number
+  panelLabel?: string
+  isCorner?: boolean
 }
 
 export function getTowerBlindLayout(tower: Tower): TowerBlindLayout {
   const totalW = tower.width
-  const rawBlindW =
-    typeof tower.blindWidth === 'number' && !isNaN(tower.blindWidth)
-      ? tower.blindWidth
-      : 24
+  const code = tower.categoryCode
+  const isBlindCat = code === 'CCS' || code === 'CCH' || code === 'CCL'
+  const nameHasBlind = Boolean(
+    tower.categoryName?.toLowerCase().includes('blind') ||
+    tower.label?.toLowerCase().includes('blind')
+  )
+  const isBlindType = isBlindCat || nameHasBlind || Boolean(tower.blindWidth !== undefined && !tower.cornerPosition)
+
+  const isCorner = Boolean(
+    tower.isCorner ||
+    tower.cornerPosition === 'left' ||
+    tower.cornerPosition === 'right' ||
+    tower.cornerOrientation === 'left' ||
+    tower.cornerOrientation === 'right'
+  )
+
+  let orientation: 'left' | 'right' = 'left'
+  let rawBlindW = 24
+  let panelLabel = 'Blind'
+
+  if (isCorner && !isBlindType) {
+    // Corner cabinet based on Bridge Depth
+    orientation =
+      tower.cornerPosition === 'right' || tower.cornerOrientation === 'right'
+        ? 'right'
+        : 'left'
+    rawBlindW =
+      typeof tower.cornerBridgeDepth === 'number' && !isNaN(tower.cornerBridgeDepth)
+        ? tower.cornerBridgeDepth
+        : typeof tower.depth === 'number' && !isNaN(tower.depth)
+        ? tower.depth
+        : 15
+    panelLabel = 'Bridge'
+  } else {
+    // Blind corner cabinet based on Blind Width
+    orientation = tower.blindOrientation ?? 'left'
+    rawBlindW =
+      typeof tower.blindWidth === 'number' && !isNaN(tower.blindWidth)
+        ? tower.blindWidth
+        : 24
+    panelLabel = 'Blind'
+  }
+
   const maxBlindW = Math.max(1, totalW - 1)
   const blindWidth = Math.max(1, Math.min(maxBlindW, rawBlindW))
   const doorWidth = Math.max(0, totalW - blindWidth)
-  const orientation = tower.blindOrientation ?? 'left'
 
   let blindOffset = 0
   let doorOffset = 0
@@ -221,6 +289,8 @@ export function getTowerBlindLayout(tower: Tower): TowerBlindLayout {
     blindOffsetFromLeft: blindOffset,
     doorOffsetFromLeft: doorOffset,
     splitOffsetFromLeft: splitOffset,
+    panelLabel,
+    isCorner: isCorner && !isBlindType,
   }
 }
 

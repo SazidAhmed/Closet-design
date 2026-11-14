@@ -36,6 +36,8 @@ import { useSelectionStore } from "../../../stores/useSelectionStore";
 import {
   type Tower,
   isBlindCornerCabinet,
+  isCornerCabinet,
+  hasTowerElevationSplit,
   getTowerBlindLayout,
 } from "../domain/types/tower";
 import type {
@@ -1015,10 +1017,12 @@ function towerBlindElevationLayout(tower: Tower) {
   const blind = getTowerBlindLayout(tower);
   const rect = towerElevationRect(tower);
   const scale = elevationLayout.value.scale;
-  const doorH = (tower.doorHeight || (tower.height - 4.5)) * scale;
+  const bottomGap = towerBottomGap(tower);
+  const effectiveDoorH = tower.doorHeight || (tower.height - bottomGap);
+  const doorH = effectiveDoorH * scale;
   const doorY =
     rect.y +
-    ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * scale);
+    ((tower.height - bottomGap - effectiveDoorH) * scale);
 
   const blindWidthPx = blind.blindWidth * scale;
   const doorWidthPx = blind.doorWidth * scale;
@@ -1027,7 +1031,9 @@ function towerBlindElevationLayout(tower: Tower) {
   const splitX = rect.x + blind.splitOffsetFromLeft * scale;
 
   const defaultHinge = blind.orientation === "left" ? "left" : "right";
-  const effectiveHinge = tower.doorHinge || defaultHinge;
+  const effectiveHinge = blind.isCorner
+    ? defaultHinge
+    : (tower.doorHinge || defaultHinge);
 
   return {
     ...blind,
@@ -5361,9 +5367,9 @@ function dimLinePoints(wall: {
                   </g>
 
                   <!-- Door (if applicable) -->
-                  <g v-if="isCabinetWithDoors(tower)" class="elevation-door">
-                    <!-- Blind Corner Cabinet with Doors -->
-                    <template v-if="isBlindCornerCabinet(tower)">
+                  <g v-if="isCabinetWithDoors(tower) || hasTowerElevationSplit(tower)" class="elevation-door">
+                    <!-- Blind Corner Cabinet or Corner Cabinet with Elevation Split -->
+                    <template v-if="hasTowerElevationSplit(tower)">
                       <!-- Blind panel (non-door area) -->
                       <rect
                         :x="towerBlindElevationLayout(tower).blindX"
@@ -5411,7 +5417,7 @@ function dimLinePoints(wall: {
                         />
                       </g>
 
-                      <!-- Diagonal Dashed Lines (Single Door Hinge indicator on door) -->
+                      <!-- Diagonal Dashed Lines (Arrow / Door swing indicator) -->
                       <template v-if="towerBlindElevationLayout(tower).effectiveHinge === 'right'">
                         <!-- Right Hinge: Vertex meets on right edge of door (Blind Right default) -->
                         <line
@@ -5476,13 +5482,13 @@ function dimLinePoints(wall: {
                       >
                         {{ formatLength(towerBlindElevationLayout(tower).doorWidth) }}
                       </text>
-                      <!-- Blind width in the blind panel -->
+                      <!-- Blind / Bridge width in the blind panel -->
                       <text
                         :x="towerBlindElevationLayout(tower).blindX + (towerBlindElevationLayout(tower).blindWidthPx / 2)"
                         :y="towerBlindElevationLayout(tower).doorY + (towerBlindElevationLayout(tower).doorH * 0.75)"
                         class="elevation-door-label-middle"
                       >
-                        Blind {{ formatLength(towerBlindElevationLayout(tower).blindWidth) }}
+                        {{ towerBlindElevationLayout(tower).panelLabel || 'Blind' }} {{ formatLength(towerBlindElevationLayout(tower).blindWidth) }}
                       </text>
                     </template>
 

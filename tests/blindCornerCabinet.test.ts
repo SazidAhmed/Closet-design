@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import {
   isBlindCornerCabinet,
+  isCornerCabinet,
+  hasTowerElevationSplit,
   getTowerBlindLayout,
   type Tower,
 } from '../src/features/closet/domain/types/tower'
@@ -239,6 +241,135 @@ describe('Blind Corner Cabinet with Doors', () => {
       const tower = closet.towers[0]
       expect(tower.blindOrientation).toBe('left')
       expect(tower.doorHinge).toBe('left')
+    })
+  })
+
+  describe('Corner Cabinet split based on Bridge Depth', () => {
+    it('identifies corner cabinet and activates elevation split', () => {
+      const tower: Tower = {
+        id: 'corner-1',
+        label: 'Shelves 1',
+        width: 30,
+        height: 84,
+        depth: 15,
+        doorMode: 'without_doors',
+        categoryCode: 'CAS',
+        cornerPosition: 'left',
+        cornerBridgeDepth: 16,
+        isCorner: true,
+        accessories: [],
+      }
+      expect(isCornerCabinet(tower)).toBe(true)
+      expect(hasTowerElevationSplit(tower)).toBe(true)
+    })
+
+    it('computes Left Corner layout based on Bridge Depth with panelLabel "Bridge"', () => {
+      const tower: Tower = {
+        id: 'corner-left-1',
+        label: 'Shelves 1',
+        width: 30,
+        height: 84,
+        depth: 15,
+        doorMode: 'without_doors',
+        categoryCode: 'CAS',
+        cornerPosition: 'left',
+        cornerBridgeDepth: 16,
+        isCorner: true,
+        accessories: [],
+      }
+
+      const layout = getTowerBlindLayout(tower)
+      expect(layout.orientation).toBe('left')
+      expect(layout.blindWidth).toBe(16) // Bridge depth
+      expect(layout.doorWidth).toBe(14) // 30 - 16
+      expect(layout.blindOffsetFromLeft).toBe(0)
+      expect(layout.splitOffsetFromLeft).toBe(16)
+      expect(layout.doorOffsetFromLeft).toBe(16)
+      expect(layout.panelLabel).toBe('Bridge')
+      expect(layout.isCorner).toBe(true)
+    })
+
+    it('computes Right Corner layout based on Bridge Depth', () => {
+      const tower: Tower = {
+        id: 'corner-right-1',
+        label: 'Shelves 1',
+        width: 30,
+        height: 84,
+        depth: 15,
+        doorMode: 'without_doors',
+        categoryCode: 'CAS',
+        cornerPosition: 'right',
+        cornerBridgeDepth: 16,
+        isCorner: true,
+        accessories: [],
+      }
+
+      const layout = getTowerBlindLayout(tower)
+      expect(layout.orientation).toBe('right')
+      expect(layout.blindWidth).toBe(16) // Bridge depth
+      expect(layout.doorWidth).toBe(14) // 30 - 16
+      expect(layout.doorOffsetFromLeft).toBe(0)
+      expect(layout.splitOffsetFromLeft).toBe(14)
+      expect(layout.blindOffsetFromLeft).toBe(14)
+      expect(layout.panelLabel).toBe('Bridge')
+      expect(layout.isCorner).toBe(true)
+    })
+
+    it('falls back to tower.depth if cornerBridgeDepth is not provided', () => {
+      const tower: Tower = {
+        id: 'corner-fallback',
+        label: 'Shelves 1',
+        width: 30,
+        height: 84,
+        depth: 18,
+        doorMode: 'without_doors',
+        categoryCode: 'CAS',
+        cornerPosition: 'left',
+        isCorner: true,
+        accessories: [],
+      }
+
+      const layout = getTowerBlindLayout(tower)
+      expect(layout.blindWidth).toBe(18) // Falls back to depth
+      expect(layout.doorWidth).toBe(12) // 30 - 18
+      expect(layout.panelLabel).toBe('Bridge')
+    })
+
+    it('does not split standard non-corner cabinets without doors', () => {
+      const tower: Tower = {
+        id: 'standard-tower',
+        label: 'Shelves 1',
+        width: 30,
+        height: 84,
+        depth: 15,
+        doorMode: 'without_doors',
+        categoryCode: 'CAS',
+        accessories: [],
+      }
+      expect(isCornerCabinet(tower)).toBe(false)
+      expect(hasTowerElevationSplit(tower)).toBe(false)
+    })
+
+    it('sets doorHinge to right when switching to right corner in store', () => {
+      const closet = useClosetStore()
+      closet.towers = [
+        {
+          id: 'corner-store-test',
+          label: 'Shelves 1',
+          width: 30,
+          height: 84,
+          depth: 15,
+          doorMode: 'without_doors',
+          categoryCode: 'CAS',
+          doorHinge: 'left',
+          accessories: [],
+        },
+      ]
+
+      closet.setTowerCornerPosition('corner-store-test', 'right')
+      const updated = closet.towers[0]
+      expect(updated.cornerPosition).toBe('right')
+      expect(updated.doorHinge).toBe('right')
     })
   })
 })
