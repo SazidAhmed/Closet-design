@@ -1,5 +1,9 @@
+// @vitest-environment jsdom
+
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
+import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import {
   isBlindCornerCabinet,
   isCornerCabinet,
@@ -8,6 +12,9 @@ import {
   type Tower,
 } from '../src/features/closet/domain/types/tower'
 import { useClosetStore } from '../src/stores/useClosetStore'
+import { useRoomStore } from '../src/stores/useRoomStore'
+import { useSelectionStore } from '../src/stores/useSelectionStore'
+import FloorPlan from '../src/features/closet/views/FloorPlan.vue'
 
 describe('Blind Corner Cabinet with Doors', () => {
   beforeEach(() => {
@@ -370,6 +377,132 @@ describe('Blind Corner Cabinet with Doors', () => {
       const updated = closet.towers[0]
       expect(updated.cornerPosition).toBe('right')
       expect(updated.doorHinge).toBe('right')
+    })
+
+    it('renders shelves and no door face or hinge lines for corner cabinets without doors in elevation view', async () => {
+      const room = useRoomStore()
+      const closet = useClosetStore()
+      const selection = useSelectionStore()
+
+      room.walls = [
+        { id: 'wall-1', label: '1', position: [0, 0], length: 100, angle: 0 },
+        { id: 'wall-2', label: '2', position: [100, 0], length: 100, angle: Math.PI / 2 },
+      ] as any
+
+      closet.towers = [
+        {
+          id: 'corner-without-doors',
+          label: 'Shelves 1',
+          wallId: 'wall-1',
+          width: 30,
+          height: 84,
+          depth: 15,
+          positionAlongWall: 0.5,
+          doorMode: 'without_doors',
+          categoryCode: 'CAS',
+          cornerPosition: 'right',
+          cornerBridgeDepth: 15,
+          isCorner: true,
+          accessories: [
+            { type: 'shelf_set', count: 4 },
+          ],
+        },
+      ]
+
+      selection.selectWall('wall-1')
+
+      const wrapper = mount(FloorPlan, {
+        attachTo: document.body,
+        props: {
+          elevationOnly: true,
+          initialWallId: 'wall-1',
+        },
+        global: {
+          stubs: {
+            TopToolbar: true,
+            FooterBar: true,
+          },
+        },
+      })
+
+      await nextTick()
+
+      // The blind/bridge panel should exist (covering the bridge into the corner)
+      const blindPanel = wrapper.find('.elevation-blind-panel')
+      expect(blindPanel.exists()).toBe(true)
+
+      // The door face should NOT exist for corner cabinets without doors
+      const doorFaces = wrapper.findAll('.elevation-door-face:not(.elevation-blind-panel)')
+      expect(doorFaces.length).toBe(0)
+
+      // The diagonal hinge lines should NOT exist
+      const hingeLines = wrapper.findAll('.elevation-door-hinge-line')
+      expect(hingeLines.length).toBe(0)
+
+      // Shelves SHOULD be visible
+      const shelves = wrapper.findAll('.elevation-shelf, .elevation-shelf-fixed')
+      expect(shelves.length).toBeGreaterThan(0)
+    })
+
+    it('renders door face and hinge lines for corner cabinets with doors in elevation view', async () => {
+      const room = useRoomStore()
+      const closet = useClosetStore()
+      const selection = useSelectionStore()
+
+      room.walls = [
+        { id: 'wall-1', label: '1', position: [0, 0], length: 100, angle: 0 },
+        { id: 'wall-2', label: '2', position: [100, 0], length: 100, angle: Math.PI / 2 },
+      ] as any
+
+      closet.towers = [
+        {
+          id: 'corner-with-doors',
+          label: 'Corner Shelves 1',
+          wallId: 'wall-1',
+          width: 40,
+          height: 84,
+          depth: 23,
+          positionAlongWall: 0.5,
+          doorMode: 'with_doors',
+          categoryCode: 'CCS',
+          cornerPosition: 'right',
+          isCorner: true,
+          doorHinge: 'right',
+          accessories: [
+            { type: 'shelf_set', count: 4 },
+          ],
+        },
+      ]
+
+      selection.selectWall('wall-1')
+
+      const wrapper = mount(FloorPlan, {
+        attachTo: document.body,
+        props: {
+          elevationOnly: true,
+          initialWallId: 'wall-1',
+        },
+        global: {
+          stubs: {
+            TopToolbar: true,
+            FooterBar: true,
+          },
+        },
+      })
+
+      await nextTick()
+
+      // The blind/bridge panel should exist
+      const blindPanel = wrapper.find('.elevation-blind-panel')
+      expect(blindPanel.exists()).toBe(true)
+
+      // The door face SHOULD exist for corner cabinets with doors
+      const doorFaces = wrapper.findAll('.elevation-door-face:not(.elevation-blind-panel)')
+      expect(doorFaces.length).toBeGreaterThan(0)
+
+      // The diagonal hinge lines SHOULD exist
+      const hingeLines = wrapper.findAll('.elevation-door-hinge-line')
+      expect(hingeLines.length).toBeGreaterThan(0)
     })
   })
 })

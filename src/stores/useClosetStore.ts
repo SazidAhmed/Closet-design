@@ -59,8 +59,12 @@ export const useClosetStore = defineStore('closet', {
     totalTowerWidth: (state) => state.towers.reduce((sum, t) => sum + (Number(t.width) || 0), 0),
     innerCabinetWidth: (state) => Math.max(0, state.cabinet.width - state.cabinet.thickness * 2),
     /** Catalog categories filtered by door mode — from live API or static fallback. */
-    catalogCategoriesForMode: (state) => (doorMode: ClosetDoorMode) =>
-      state.catalogCategories.filter((c) => c.doorMode === doorMode),
+    catalogCategoriesForMode: (state) => (doorMode: ClosetDoorMode) => {
+      if (state.catalogCategories && state.catalogCategories.length > 0) {
+        setActiveCategories(state.catalogCategories)
+      }
+      return state.catalogCategories.filter((c) => c.doorMode === doorMode)
+    },
     /** @deprecated Backward compat: shelf count from first tower's shelf_set accessory. */
     shelves: (state): number => {
       const firstTower = state.towers[0]
@@ -85,10 +89,12 @@ export const useClosetStore = defineStore('closet', {
 
       const CACHE_KEY = 'closet-catalog-categories-cache-v6'
 
-      // 1. If already in Pinia memory state and not forcing refresh -> skip network request completely
-      if (this.catalogCategories.length > 0 && !forceRefresh) {
+      // 1. If already in Pinia memory state, ensure activeCategories is synced immediately
+      if (this.catalogCategories.length > 0) {
         setActiveCategories(this.catalogCategories)
-        return
+        if (!forceRefresh) {
+          return
+        }
       }
 
       // 2. Check localStorage cache if not forcing refresh
@@ -126,10 +132,10 @@ export const useClosetStore = defineStore('closet', {
             loadCatalogCategories('with_doors'),
           ])
           const allCategories = [...withoutDoors, ...withDoors]
-          this.catalogCategories = allCategories
-          setActiveCategories(allCategories)
-
           if (allCategories.length > 0) {
+            this.catalogCategories = allCategories
+            setActiveCategories(allCategories)
+
             try {
               localStorage.setItem(CACHE_KEY, JSON.stringify(allCategories))
               console.log('[useClosetStore] Saved catalog categories & cabinets to localStorage cache.')
@@ -217,6 +223,9 @@ export const useClosetStore = defineStore('closet', {
     },
 
     addTowerFromCatalog(doorMode: ClosetDoorMode, categoryCode: ClosetCatalogCategoryCode) {
+      if (this.catalogCategories && this.catalogCategories.length > 0) {
+        setActiveCategories(this.catalogCategories)
+      }
       const idx = this.towers.length + 1
       this.towers.push(createTowerFromCategory(doorMode, categoryCode, idx))
     },

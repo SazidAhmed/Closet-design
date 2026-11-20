@@ -7,11 +7,18 @@ import {
   type ClosetCatalogCategory,
   type ClosetDoorMode,
 } from '../domain/closetCatalogs'
+import { getActivePinia } from 'pinia'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
 function getAuthHeaders(): Record<string, string> {
-  const token = localStorage.getItem('access_token')
+  let token = typeof localStorage !== 'undefined' ? localStorage.getItem('access_token') : null
+  if (!token) {
+    try {
+      const pinia = getActivePinia()
+      token = (pinia?.state?.value as any)?.app?.token || null
+    } catch {}
+  }
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 

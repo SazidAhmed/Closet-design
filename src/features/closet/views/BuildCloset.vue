@@ -15,6 +15,7 @@ import {
   getCornerTotalDepth,
   isOneBoxAvailable,
   resolveCatalogForTower,
+  setActiveCategories,
   type ClosetCatalogCategory,
   type ClosetCatalogCategoryCode,
   type ClosetCatalogLimits,
@@ -973,6 +974,9 @@ function findFreeIntervalsOnWall(wallId: string) {
 }
 
 function addCategoryTower(category: ClosetCatalogCategory) {
+  if (visibleCategories.value && visibleCategories.value.length > 0) {
+    setActiveCategories(visibleCategories.value);
+  }
   const targetWallId = resolveTargetWallId();
   if (!targetWallId) {
     showSelectionWarning.value = true;
@@ -1495,6 +1499,16 @@ function categoryTitle(category: ClosetCatalogCategory): string {
 }
 
 function categoryDepthRange(category: ClosetCatalogCategory): string {
+  if (category.catalogs && category.catalogs.length > 0) {
+    const validCatalogs = category.catalogs.filter((c) => c.code !== "LOADING");
+    if (validCatalogs.length > 0) {
+      const minD = Math.min(...validCatalogs.map((c) => c.minD));
+      const maxD = Math.max(...validCatalogs.map((c) => c.maxD));
+      if (minD !== Infinity && maxD !== -Infinity && (minD > 0 || maxD > 0)) {
+        return `${fmt(minD)} - ${fmt(maxD)}`;
+      }
+    }
+  }
   const limits = getCategoryLimits(category.doorMode, category.categoryCode);
   return `${fmt(limits.minD)} - ${fmt(limits.maxD)}`;
 }

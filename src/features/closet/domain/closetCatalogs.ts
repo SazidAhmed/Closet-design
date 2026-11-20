@@ -1,5 +1,6 @@
 import type { Accessory, ShelfSetAccessory, ShoeShelfAccessory, DrawerAccessory, Tower, CornerPosition } from "./types/tower";
 import { createTowerId, isBlindCornerCabinet } from "./types/tower";
+import { getActivePinia } from "pinia";
 
 // No longer converting to cm, internal units are now inches.
 // The entry function directly assigns the inch values.
@@ -103,8 +104,124 @@ function entry(
   };
 }
 
-// This holds the currently active categories (from API).
-let activeCategories: ClosetCatalogCategory[] = [];
+export const CLOSET_CATALOG_CATEGORIES: ClosetCatalogCategory[] = [
+  {
+    doorMode: "without_doors",
+    categoryCode: "CAS",
+    categoryName: "Shelves",
+    cornerCatalogIds: [214, 215, 216, 217],
+    catalogs: [
+      entry(205, "CAS128415-459615", 12, 45, 15, 16, 84, 96),
+      entry(204, "CAS128418-459618", 12, 45, 18, 20, 84, 96),
+      entry(199, "CAS128421-459621", 12, 45, 21, 23, 84, 96),
+      entry(214, "CRB058418-159618", 1, 16, 18, 22, 84, 96),
+      entry(215, "CRB058415-159615", 1, 16, 15, 16, 84, 96),
+      entry(216, "CLB058418-159618", 1, 16, 18, 22, 84, 96),
+      entry(217, "CLB058415-159615", 1, 16, 15, 16, 84, 96),
+    ],
+  },
+  {
+    doorMode: "without_doors",
+    categoryCode: "CDH",
+    categoryName: "Double Hanging",
+    cornerCatalogIds: [214, 215, 216, 217],
+    catalogs: [
+      entry(207, "CDH128415-459615", 12, 45, 15, 16, 84, 96),
+      entry(206, "CDH128418-459618", 12, 45, 18, 20, 84, 96),
+      entry(200, "CDH128421-459621", 12, 45, 21, 23, 84, 96),
+      entry(214, "CRB058418-159618", 1, 16, 18, 22, 84, 96),
+      entry(215, "CRB058415-159615", 1, 16, 15, 16, 84, 96),
+      entry(216, "CLB058418-159618", 1, 16, 18, 22, 84, 96),
+      entry(217, "CLB058415-159615", 1, 16, 15, 16, 84, 96),
+    ],
+  },
+  {
+    doorMode: "without_doors",
+    categoryCode: "CLH",
+    categoryName: "Long Hanging",
+    cornerCatalogIds: [214, 215, 216, 217],
+    catalogs: [
+      entry(209, "CLH128415-459615", 12, 45, 15, 16, 84, 96),
+      entry(208, "CLH128418-459618", 12, 45, 18, 20, 84, 96),
+      entry(201, "CLH128421-459621", 12, 45, 21, 23, 84, 96),
+      entry(214, "CRB058418-159618", 1, 16, 18, 22, 84, 96),
+      entry(215, "CRB058415-159615", 1, 16, 15, 16, 84, 96),
+      entry(216, "CLB058418-159618", 1, 16, 18, 22, 84, 96),
+      entry(217, "CLB058415-159615", 1, 16, 15, 16, 84, 96),
+    ],
+  },
+  {
+    doorMode: "without_doors",
+    categoryCode: "CRD",
+    categoryName: "Drawers",
+    catalogs: [
+      entry(211, "CRD128415-429615", 12, 42, 15, 16, 84, 96),
+      entry(210, "CRD128418-429618", 12, 42, 18, 20, 84, 96),
+      entry(202, "CRD128421-429621", 12, 42, 21, 23, 84, 96),
+    ],
+  },
+  {
+    doorMode: "without_doors",
+    categoryCode: "CSS",
+    categoryName: "Shoe Shelves",
+    catalogs: [
+      entry(213, "CSS128415-459615", 12, 45, 15, 16, 84, 96),
+      entry(212, "CSS128418-459618", 12, 45, 18, 20, 84, 96),
+      entry(203, "CSS128421-459621", 12, 45, 21, 23, 84, 96),
+    ],
+  },
+  {
+    doorMode: "with_doors",
+    categoryCode: "CAS",
+    categoryName: "Shelves",
+    catalogs: [entry(190, "CAS128423-429623", 12, 42, 23, 23, 84, 96)],
+  },
+  {
+    doorMode: "with_doors",
+    categoryCode: "CDH",
+    categoryName: "Double Hanging",
+    catalogs: [entry(192, "CDH128423-429623", 12, 42, 23, 23, 84, 96)],
+  },
+  {
+    doorMode: "with_doors",
+    categoryCode: "CLH",
+    categoryName: "Long Hanging",
+    catalogs: [entry(194, "CLH128423-429623", 12, 42, 23, 23, 84, 96)],
+  },
+  {
+    doorMode: "with_doors",
+    categoryCode: "CRD",
+    categoryName: "Rollouts",
+    catalogs: [entry(196, "CRD128423-429623", 12, 42, 23, 23, 84, 96)],
+  },
+  {
+    doorMode: "with_doors",
+    categoryCode: "CSS",
+    categoryName: "Shoe Shelves",
+    catalogs: [entry(197, "CSS128423-429623", 12, 42, 23, 23, 84, 96)],
+  },
+  {
+    doorMode: "with_doors",
+    categoryCode: "CCS",
+    categoryName: "Blind Corner Shelves",
+    catalogs: [entry(191, "CCS4084-4696", 40, 46, 40, 46, 84, 96)],
+  },
+  {
+    doorMode: "with_doors",
+    categoryCode: "CCH",
+    categoryName: "Blind Corner Double Hanging",
+    catalogs: [entry(193, "CCH4084-4696", 40, 46, 40, 46, 84, 96)],
+  },
+  {
+    doorMode: "with_doors",
+    categoryCode: "CCL",
+    categoryName: "Blind Corner Long Hanging",
+    catalogs: [entry(195, "CCL4084-4696", 40, 46, 40, 46, 84, 96)],
+  },
+];
+
+// This holds the currently active categories (from API, initialized with static defaults).
+let activeCategories: ClosetCatalogCategory[] = [...CLOSET_CATALOG_CATEGORIES];
 
 export function setActiveCategories(categories: ClosetCatalogCategory[]): void {
   if (Array.isArray(categories) && categories.length > 0) {
@@ -124,11 +241,65 @@ export function getCategoryByCode(
   doorMode: ClosetDoorMode,
   categoryCode: ClosetCatalogCategoryCode,
 ): ClosetCatalogCategory {
-  const category = activeCategories.find(
+  let category = activeCategories.find(
     (entry) =>
       (entry.doorMode === doorMode || (entry as any).door_mode === doorMode) &&
       (entry.categoryCode === categoryCode || (entry as any).category_code === categoryCode || (entry as any).code === categoryCode),
   );
+
+  // 1. If not found or loading dummy in activeCategories, check Pinia store
+  if (!category || category.catalogs.length === 0 || category.catalogs[0]?.code === 'LOADING') {
+    try {
+      const pinia = getActivePinia();
+      const storeCats = (pinia?.state?.value as any)?.closet?.catalogCategories;
+      if (Array.isArray(storeCats) && storeCats.length > 0) {
+        setActiveCategories(storeCats);
+        const foundInStore = storeCats.find(
+          (entry: any) =>
+            (entry.doorMode === doorMode || entry.door_mode === doorMode) &&
+            (entry.categoryCode === categoryCode || entry.category_code === categoryCode || entry.code === categoryCode),
+        );
+        if (foundInStore) {
+          category = foundInStore;
+        }
+      }
+    } catch {}
+  }
+
+  // 2. If still not found, check localStorage cache
+  if (!category || category.catalogs.length === 0 || category.catalogs[0]?.code === 'LOADING') {
+    try {
+      const CACHE_KEY = 'closet-catalog-categories-cache-v6';
+      const cachedRaw = typeof localStorage !== 'undefined' ? localStorage.getItem(CACHE_KEY) : null;
+      if (cachedRaw) {
+        const parsed = JSON.parse(cachedRaw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setActiveCategories(parsed);
+          const foundInCache = parsed.find(
+            (entry: any) =>
+              (entry.doorMode === doorMode || entry.door_mode === doorMode) &&
+              (entry.categoryCode === categoryCode || entry.category_code === categoryCode || entry.code === categoryCode),
+          );
+          if (foundInCache) {
+            category = foundInCache;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // 3. Fallback to default static categories
+  if (!category || category.catalogs.length === 0 || category.catalogs[0]?.code === 'LOADING') {
+    const fallback = CLOSET_CATALOG_CATEGORIES.find(
+      (entry) =>
+        (entry.doorMode === doorMode || (entry as any).door_mode === doorMode) &&
+        (entry.categoryCode === categoryCode || (entry as any).category_code === categoryCode || (entry as any).code === categoryCode),
+    );
+    if (fallback) {
+      category = fallback;
+    }
+  }
+
   if (!category) {
     // Return a safe dummy category so the UI does not crash while loading
     return {
@@ -155,16 +326,20 @@ export function getCategoryLimits(
   categoryCode: ClosetCatalogCategoryCode,
 ): ClosetCatalogLimits {
   const category = getCategoryByCode(doorMode, categoryCode);
+  const standardCatalogs = category.catalogs.filter(
+    (c) => !category.cornerCatalogIds?.includes(c.catalogId),
+  );
+  const pool = standardCatalogs.length > 0 ? standardCatalogs : category.catalogs;
   
-  let minW = Math.min(...category.catalogs.map((catalog) => catalog.minW));
+  let minW = Math.min(...pool.map((catalog) => catalog.minW));
 
   return {
     minW,
-    maxW: Math.max(...category.catalogs.map((catalog) => catalog.maxW)),
-    minD: Math.min(...category.catalogs.map((catalog) => catalog.minD)),
-    maxD: Math.max(...category.catalogs.map((catalog) => catalog.maxD)),
-    minH: Math.min(...category.catalogs.map((catalog) => catalog.minH)),
-    maxH: Math.max(...category.catalogs.map((catalog) => catalog.maxH)),
+    maxW: Math.max(...pool.map((catalog) => catalog.maxW)),
+    minD: Math.min(...pool.map((catalog) => catalog.minD)),
+    maxD: Math.max(...pool.map((catalog) => catalog.maxD)),
+    minH: Math.min(...pool.map((catalog) => catalog.minH)),
+    maxH: Math.max(...pool.map((catalog) => catalog.maxH)),
   };
 }
 
@@ -203,27 +378,30 @@ export function resolveCatalogForTower(
     return category.catalogs[0]!;
   }
 
-  const matchedCatalog = category.catalogs.find(
-    (catalog) => depth >= catalog.minD && depth <= catalog.maxD,
+  const standardCatalogs = category.catalogs.filter(
+    (c) => !category.cornerCatalogIds?.includes(c.catalogId),
+  );
+  const pool = standardCatalogs.length > 0 ? standardCatalogs : category.catalogs;
+
+  const depthInInches = depth > 30 ? depth / 2.54 : depth;
+
+  const matchedCatalog = pool.find(
+    (catalog) => depthInInches >= catalog.minD && depthInInches <= catalog.maxD,
   );
   if (matchedCatalog) return matchedCatalog;
 
   return (
-    category.catalogs.find((catalog) => depth <= catalog.maxD) ??
-    category.catalogs[category.catalogs.length - 1]!
+    pool.find((catalog) => depthInInches <= catalog.maxD) ??
+    pool[pool.length - 1]!
   );
 }
 
 export function clampTowerWidth(tower: Tower, width: number): number {
   if (!tower.doorMode || !tower.categoryCode) return width;
+  const limits = getCategoryLimits(tower.doorMode, tower.categoryCode);
   const isCorner = tower.isCorner ?? (tower.cornerPosition === 'left' || tower.cornerPosition === 'right' || tower.cornerOrientation === 'left' || tower.cornerOrientation === 'right');
-  const position = tower.cornerPosition ?? tower.cornerOrientation ?? (isCorner ? 'left' : 'none');
-  const catalog = resolveCatalogForTower(tower.doorMode, tower.categoryCode, tower.depth, isCorner, position);
-  
-  let minW = catalog.minW;
-  minW = isCorner ? Math.max(minW, 30) : minW;
-  
-  return clamp(width, minW, catalog.maxW);
+  const minW = isCorner ? Math.max(limits.minW, 30) : limits.minW;
+  return clamp(width, minW, limits.maxW);
 }
 
 export function clampTowerDepth(tower: Tower, depth: number): number {
@@ -254,6 +432,16 @@ export function refreshTowerCatalog(tower: Tower): { switched: boolean; catalog:
   const switched = tower.catalogId !== catalog.catalogId;
   tower.catalogId = catalog.catalogId;
   tower.catalogCode = catalog.code;
+
+  // Auto-heal temporary "Loading..." labels or category names
+  const category = getCategoryByCode(tower.doorMode, tower.categoryCode);
+  if (category && category.categoryName && category.categoryName !== 'Loading...') {
+    tower.categoryName = category.categoryName;
+    if (tower.label && tower.label.startsWith('Loading...')) {
+      tower.label = tower.label.replace('Loading...', category.categoryName);
+    }
+  }
+
   return { switched, catalog };
 }
 

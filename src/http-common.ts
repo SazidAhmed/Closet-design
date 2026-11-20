@@ -1,4 +1,5 @@
 import { router } from "./router"; // Closet project router path
+import { getActivePinia } from "pinia";
 
 // Dynamically determine backend URL based on current host
 const getBackendURL = () => {
@@ -27,8 +28,14 @@ class ApiClient {
       "Content-Type": "application/json",
     };
 
-    // Inject auth token from localStorage if present
-    const token = localStorage.getItem("access_token");
+    // Inject auth token from localStorage or Pinia store if present
+    let token = typeof localStorage !== "undefined" ? localStorage.getItem("access_token") : null;
+    if (!token) {
+      try {
+        const pinia = getActivePinia();
+        token = (pinia?.state?.value as any)?.app?.token || null;
+      } catch {}
+    }
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }

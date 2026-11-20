@@ -6,6 +6,7 @@ import { defineStore } from 'pinia'
 import { watch } from 'vue'
 import { useClosetStore } from './useClosetStore'
 import { useRoomStore } from './useRoomStore'
+import { setActiveCategories } from '../features/closet/domain/closetCatalogs'
 
 const STORAGE_KEY = 'closet-design-save'
 const SLOTS_KEY = 'closet-design-slots'
@@ -66,6 +67,9 @@ export const useHistoryStore = defineStore('history', {
         }
         closet.$patch(JSON.parse(snap.closet))
         room.$patch(parsedRoom)
+        if (closet.catalogCategories && closet.catalogCategories.length > 0) {
+          setActiveCategories(closet.catalogCategories)
+        }
       } finally {
         this._replaying = false
       }

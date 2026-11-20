@@ -12,8 +12,15 @@ export const useAppStore = defineStore('app', {
     currentStep: 'type' as AppStep,
     viewMode: '3d' as ViewMode,
     units: 'in' as 'cm' | 'in',
+    token: (typeof window !== 'undefined' ? (localStorage.getItem('access_token') || '') : '') as string,
   }),
   actions: {
+    setToken(token: string) {
+      this.token = token
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('access_token', token)
+      }
+    },
     setStep(step: AppStep) {
       this.currentStep = step
     },

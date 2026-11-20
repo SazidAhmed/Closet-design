@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAppStore } from '../stores/useAppStore'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -54,6 +55,10 @@ router.beforeEach((to) => {
 
   if (urlToken) {
     localStorage.setItem('access_token', urlToken)
+    try {
+      const appStore = useAppStore()
+      appStore.setToken(urlToken)
+    } catch {}
   }
 
   if (urlToken || storedToken) {

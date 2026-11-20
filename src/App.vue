@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from "vue";
 import { useHistoryStore } from "./stores/useHistoryStore";
+import { useAppStore } from "./stores/useAppStore";
 
 const history = useHistoryStore();
+const appStore = useAppStore();
 
 function onKeydown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key === "z") {
@@ -27,8 +29,9 @@ onMounted(() => {
   const params = new URLSearchParams(window.location.search);
   const token = params.get("token");
   if (token) {
-    // Save the token for API authentication
+    // Save the token for API authentication in both localStorage and Pinia
     localStorage.setItem("access_token", token);
+    appStore.setToken(token);
 
     // Remove the token from the URL for security (so it isn't copied/shared)
     params.delete("token");
