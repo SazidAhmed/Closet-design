@@ -542,6 +542,13 @@ export const useClosetStore = defineStore('closet', {
       }
     },
 
+    setTowerGlassDoor(towerId: string, isGlassDoor: boolean) {
+      const tower = this.towers.find((t) => t.id === towerId)
+      if (tower) {
+        tower.isGlassDoor = isGlassDoor
+      }
+    },
+
     setTowerBoxCount(towerId: string, boxCount: 1 | 2) {
       const tower = this.towers.find((t) => t.id === towerId)
       if (!tower || !tower.doorMode || !tower.categoryCode) return

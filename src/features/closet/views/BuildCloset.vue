@@ -1378,6 +1378,13 @@ function onBlindWidthInput(event: Event) {
   target.value = truncTo4(value);
 }
 
+function onGlassDoorToggle(event: Event) {
+  const tower = selectedTower.value;
+  if (!tower) return;
+  const target = event.target as HTMLInputElement;
+  closet.setTowerGlassDoor(tower.id, target.checked);
+}
+
 function onClearanceInput(side: "left" | "right", event: Event) {
   const tower = selectedTower.value;
   const wall = selectedTowerWall.value;
@@ -2220,6 +2227,45 @@ function closeElevationView() {
                 </button>
               </div>
             </template>
+
+            <!-- Glass Door Checkbox (for cabinets with doors) -->
+            <div
+              class="glass-door-toggle-section"
+              style="margin-top: 12px; padding-top: 4px"
+            >
+              <label
+                class="glass-door-label"
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                  cursor: pointer;
+                  user-select: none;
+                "
+              >
+                <input
+                  type="checkbox"
+                  class="glass-door-checkbox"
+                  :checked="Boolean(selectedTower.isGlassDoor)"
+                  @change="onGlassDoorToggle($event)"
+                  style="
+                    width: 16px;
+                    height: 16px;
+                    accent-color: #fbbf24;
+                    cursor: pointer;
+                  "
+                />
+                <span
+                  style="
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: #e2e8f0;
+                  "
+                >
+                  Glass Door
+                </span>
+              </label>
+            </div>
           </div>
 
           <!-- Box Count Toggle (Without Doors only) -->

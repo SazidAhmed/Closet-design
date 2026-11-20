@@ -1050,6 +1050,69 @@ function towerBlindElevationLayout(tower: Tower) {
   };
 }
 
+function getGlassDoorRects(
+  tower: Tower,
+): Array<{ x: number; y: number; width: number; height: number }> {
+  if (!tower.isGlassDoor || !isCabinetWithDoors(tower)) return [];
+  const scale = elevationLayout.value.scale;
+  const isBlind = hasTowerElevationSplit(tower);
+
+  if (isBlind) {
+    const layout = towerBlindElevationLayout(tower);
+    const w = layout.doorWidthPx;
+    const h = layout.doorH;
+    const margin = Math.min(w * 0.25, 2.25 * scale);
+    if (w <= margin * 2 || h <= margin * 2) return [];
+    return [
+      {
+        x: layout.doorX + margin,
+        y: layout.doorY + margin,
+        width: w - margin * 2,
+        height: h - margin * 2,
+      },
+    ];
+  }
+
+  const rect = towerElevationRect(tower);
+  const bottomGap = towerBottomGap(tower);
+  const effectiveDoorH = tower.doorHeight || (tower.height - bottomGap);
+  const totalH = effectiveDoorH * scale;
+  const totalW = (tower.doorWidth || tower.width) * scale;
+  const doorY = rect.y + (tower.height - bottomGap - effectiveDoorH) * scale;
+  const doorX = rect.x;
+
+  if (tower.doorCount === 2) {
+    const leafW = totalW / 2;
+    const margin = Math.min(leafW * 0.25, 2.25 * scale);
+    if (leafW <= margin * 2 || totalH <= margin * 2) return [];
+    return [
+      {
+        x: doorX + margin,
+        y: doorY + margin,
+        width: leafW - margin * 2,
+        height: totalH - margin * 2,
+      },
+      {
+        x: doorX + leafW + margin,
+        y: doorY + margin,
+        width: leafW - margin * 2,
+        height: totalH - margin * 2,
+      },
+    ];
+  }
+
+  const margin = Math.min(totalW * 0.25, 2.25 * scale);
+  if (totalW <= margin * 2 || totalH <= margin * 2) return [];
+  return [
+    {
+      x: doorX + margin,
+      y: doorY + margin,
+      width: totalW - margin * 2,
+      height: totalH - margin * 2,
+    },
+  ];
+}
+
 function hasAttachedToeKick(tower: Tower): boolean {
   return closetStore.towers.some(
     (t) =>
@@ -5393,6 +5456,20 @@ function dimLinePoints(wall: {
                         @click.stop="selectionStore.selectTower(tower.id)"
                       />
 
+                      <!-- Glass Door Inner Rectangle -->
+                      <template v-if="isCabinetWithDoors(tower) && tower.isGlassDoor">
+                        <rect
+                          v-for="(glassRect, gIdx) in getGlassDoorRects(tower)"
+                          :key="`blind-glass-${tower.id}-${gIdx}`"
+                          :x="glassRect.x"
+                          :y="glassRect.y"
+                          :width="glassRect.width"
+                          :height="glassRect.height"
+                          class="elevation-glass-door-pane"
+                          pointer-events="none"
+                        />
+                      </template>
+
                       <!-- Split line dividing door/opening and blind panel -->
                       <line
                         :x1="towerBlindElevationLayout(tower).splitX"
@@ -5458,32 +5535,6 @@ function dimLinePoints(wall: {
                             pointer-events="none"
                           />
                         </template>
-
-                        <!-- Labels -->
-                        <!-- Cabinet label centered at the top -->
-                        <text
-                          :x="towerElevationRect(tower).x + (towerElevationRect(tower).width / 2)"
-                          :y="towerBlindElevationLayout(tower).doorY + 14"
-                          class="elevation-door-label-top"
-                        >
-                          {{ tower.label }}
-                        </text>
-                        <!-- Total cabinet width centered directly below label to prevent overlap -->
-                        <text
-                          :x="towerElevationRect(tower).x + (towerElevationRect(tower).width / 2)"
-                          :y="towerBlindElevationLayout(tower).doorY + 26"
-                          class="elevation-door-label-top"
-                        >
-                          {{ formatLength(tower.width) }}
-                        </text>
-                        <!-- Usable door width in the door panel -->
-                        <text
-                          :x="towerBlindElevationLayout(tower).doorX + (towerBlindElevationLayout(tower).doorWidthPx / 2)"
-                          :y="towerBlindElevationLayout(tower).doorY + (towerBlindElevationLayout(tower).doorH * 0.75)"
-                          class="elevation-door-label-middle"
-                        >
-                          {{ formatLength(towerBlindElevationLayout(tower).doorWidth) }}
-                        </text>
                       </template>
 
                       <!-- Blind / Bridge width in the blind panel -->
@@ -5507,6 +5558,20 @@ function dimLinePoints(wall: {
                       :class="{ selected: selectionStore.selectedTowerId === tower.id }"
                       @click.stop="selectionStore.selectTower(tower.id)"
                     />
+                    
+                    <!-- Glass Door Inner Rectangle(s) -->
+                    <template v-if="tower.isGlassDoor">
+                      <rect
+                        v-for="(glassRect, gIdx) in getGlassDoorRects(tower)"
+                        :key="`std-glass-${tower.id}-${gIdx}`"
+                        :x="glassRect.x"
+                        :y="glassRect.y"
+                        :width="glassRect.width"
+                        :height="glassRect.height"
+                        class="elevation-glass-door-pane"
+                        pointer-events="none"
+                      />
+                    </template>
                     
                     <!-- Horizontal Dashed Lines for Shelves Behind Door -->
                     <g
@@ -5605,29 +5670,6 @@ function dimLinePoints(wall: {
                         pointer-events="none"
                       />
                     </template>
-                    
-                    <!-- Labels -->
-                    <text
-                      :x="towerElevationRect(tower).x + ((tower.doorWidth || tower.width) * elevationLayout.scale / 2)"
-                      :y="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale) + 16"
-                      class="elevation-door-label-top"
-                    >
-                      {{ tower.label }}
-                    </text>
-                    <text
-                      :x="towerElevationRect(tower).x + ((tower.doorWidth || tower.width) * elevationLayout.scale) - 8"
-                      :y="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale) + 16"
-                      class="elevation-door-label-top-right"
-                    >
-                      {{ formatLength(tower.width) }}
-                    </text>
-                    <text
-                      :x="towerElevationRect(tower).x + ((tower.doorWidth || tower.width) * elevationLayout.scale / 2)"
-                      :y="towerElevationRect(tower).y + ((tower.height - 4.5 - (tower.doorHeight || (tower.height - 4.5))) * elevationLayout.scale) + ((tower.doorHeight || (tower.height - 4.5)) * elevationLayout.scale * 0.75)"
-                      class="elevation-door-label-middle"
-                    >
-                      {{ formatLength(tower.doorWidth || tower.width) }}
-                    </text>
                     </template>
                   </g>
                   </template>
@@ -7417,6 +7459,13 @@ function dimLinePoints(wall: {
 }
 .elevation-door-face:hover {
   fill: #fdf6e3;
+}
+
+.elevation-glass-door-pane {
+  fill: rgba(219, 234, 254, 0.45);
+  stroke: #1e293b;
+  stroke-width: 1.5px;
+  rx: 1px;
 }
 
 .elevation-blind-panel {

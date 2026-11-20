@@ -104,6 +104,7 @@ export function exportForBackend(state: ClosetStateV2) {
       blindWidth: t.blindWidth,
       cabinetId: t.cabinetId,
       cabinetCode: t.cabinetCode,
+      isGlassDoor: Boolean(t.isGlassDoor),
       width: clamp(Number(t.width) || 0, 20, 200),
       depth: clamp(Number(t.depth) || 0, 20, 100),
       height: clamp(Number(t.height) || 0, 50, 300),
