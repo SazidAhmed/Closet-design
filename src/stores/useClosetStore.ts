@@ -48,17 +48,86 @@ type ClosetStoreState = ClosetStateV2 & {
   currentClosetName: string
 }
 
+const CLOSET_STORE_KEY = 'closet-store-data-v1'
+
+function loadPersistedClosetData(): {
+  closets: ClosetRecord[]
+  currentClosetId: string | null
+  currentClosetName: string
+  towers: Tower[]
+} {
+  if (typeof localStorage === 'undefined') {
+    return { closets: [], currentClosetId: null, currentClosetName: '', towers: [] }
+  }
+  try {
+    const raw = localStorage.getItem(CLOSET_STORE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      const closets: ClosetRecord[] = Array.isArray(parsed.closets) ? parsed.closets : []
+      const currentClosetId = parsed.currentClosetId ?? null
+      const currentClosetName = parsed.currentClosetName ?? ''
+      let towers: Tower[] = Array.isArray(parsed.towers) ? parsed.towers : []
+
+      if (towers.length === 0 && currentClosetId && closets.length > 0) {
+        const found = closets.find((c) => c.id === currentClosetId)
+        const foundShelves = found?.shelves || found?.towers
+        if (Array.isArray(foundShelves) && foundShelves.length > 0) {
+          towers = foundShelves
+        }
+      }
+
+      return { closets, currentClosetId, currentClosetName, towers }
+    }
+
+    const histRaw = localStorage.getItem('closet-design-save')
+    if (histRaw) {
+      const parsedHist = JSON.parse(histRaw)
+      if (parsedHist.closet) {
+        const parsedCloset = JSON.parse(parsedHist.closet)
+        const closets: ClosetRecord[] = Array.isArray(parsedCloset.closets) ? parsedCloset.closets : []
+        const currentClosetId = parsedCloset.currentClosetId ?? null
+        const currentClosetName = parsedCloset.currentClosetName ?? ''
+        let towers: Tower[] = Array.isArray(parsedCloset.towers) ? parsedCloset.towers : []
+
+        if (towers.length === 0 && currentClosetId && closets.length > 0) {
+          const found = closets.find((c) => c.id === currentClosetId)
+          const foundShelves = found?.shelves || found?.towers
+          if (Array.isArray(foundShelves) && foundShelves.length > 0) {
+            towers = foundShelves
+          }
+        }
+
+        return { closets, currentClosetId, currentClosetName, towers }
+      }
+    }
+  } catch (e) {
+    console.warn('[useClosetStore] loadPersistedClosetData error:', e)
+  }
+  return { closets: [], currentClosetId: null, currentClosetName: '', towers: [] }
+}
+
 export const useClosetStore = defineStore('closet', {
-  state: (): ClosetStoreState => ({
-    ...createDefaultClosetState(),
-    closets: [],
-    currentClosetId: null,
-    currentClosetName: '',
-    catalogCategories: [],
-    customParts: [],
-    catalogsLoading: false,
-    _catalogsPromise: null,
-  }),
+  state: (): ClosetStoreState => {
+    const persisted = loadPersistedClosetData()
+    const defaultState = createDefaultClosetState()
+
+    const initialClosets = persisted.closets.length > 0 ? persisted.closets : []
+    const initialId = persisted.currentClosetId ?? null
+    const initialName = persisted.currentClosetName ?? ''
+    const initialTowers = persisted.towers.length > 0 ? persisted.towers : defaultState.towers
+
+    return {
+      ...defaultState,
+      closets: initialClosets,
+      currentClosetId: initialId,
+      currentClosetName: initialName,
+      towers: initialTowers,
+      catalogCategories: [],
+      customParts: [],
+      catalogsLoading: false,
+      _catalogsPromise: null,
+    }
+  },
 
   getters: {
     exportForBackend: (state) => exportForBackend(state),
@@ -230,6 +299,7 @@ export const useClosetStore = defineStore('closet', {
         t.width = evenWidth
       }
       this.towers = allTowers
+      this.syncCurrentCloset()
     },
 
     addTowerFromCatalog(doorMode: ClosetDoorMode, categoryCode: ClosetCatalogCategoryCode) {
@@ -238,6 +308,7 @@ export const useClosetStore = defineStore('closet', {
       }
       const idx = this.towers.length + 1
       this.towers.push(createTowerFromCategory(doorMode, categoryCode, idx))
+      this.syncCurrentCloset()
     },
 
     addCustomPart(partType: string, attachedToTowerId?: string, wallLength?: number, side?: 'left' | 'right', orientation?: 'left' | 'right') {
@@ -362,12 +433,16 @@ export const useClosetStore = defineStore('closet', {
         orientation: isLShapeHorizontal ? undefined : (orientation || (isLShapeVertical ? 'left' : undefined)),
       };
       this.towers.push(newPart);
+      this.syncCurrentCloset();
       return newPart;
     },
 
     removeTower(towerId: string) {
       const idx = this.towers.findIndex((t) => t.id === towerId)
-      if (idx !== -1) this.towers.splice(idx, 1)
+      if (idx !== -1) {
+        this.towers.splice(idx, 1)
+        this.syncCurrentCloset()
+      }
     },
 
     /** Move a tower left (-1) or right (+1) in the array. */
@@ -377,7 +452,10 @@ export const useClosetStore = defineStore('closet', {
       if (idx < 0 || target < 0 || target >= this.towers.length) return
       // Splice-based swap to avoid TS strict indexing issues
       const [removed] = this.towers.splice(idx, 1)
-      if (removed) this.towers.splice(target, 0, removed)
+      if (removed) {
+        this.towers.splice(target, 0, removed)
+        this.syncCurrentCloset()
+      }
     },
 
     /**
@@ -389,6 +467,7 @@ export const useClosetStore = defineStore('closet', {
       if (tower) {
         tower.wallId = wallId
         tower.positionAlongWall = positionAlongWall
+        this.syncCurrentCloset()
       }
     },
 
@@ -415,6 +494,7 @@ export const useClosetStore = defineStore('closet', {
           part.positionAlongWall = Math.max(partHalfRatio, Math.min(1 - partHalfRatio, partCurrent + actualDelta))
         })
       }
+      this.syncCurrentCloset()
     },
 
     updateTower(towerId: string, partial: Partial<Omit<Tower, 'id' | 'accessories'>>) {
@@ -433,6 +513,7 @@ export const useClosetStore = defineStore('closet', {
             }
           })
         }
+        this.syncCurrentCloset()
       }
     },
 
@@ -469,6 +550,7 @@ export const useClosetStore = defineStore('closet', {
 
         // Refresh cabinet after width change (also auto-forces 2-box if needed)
         refreshTowerCabinet(tower)
+        this.syncCurrentCloset()
       }
     },
 
@@ -502,6 +584,7 @@ export const useClosetStore = defineStore('closet', {
             part.outset = snapTo16th((tower.outset ?? 0) + tower.depth)
           }
         })
+      this.syncCurrentCloset()
     },
 
     setTowerHeight(towerId: string, height: number) {
@@ -521,6 +604,7 @@ export const useClosetStore = defineStore('closet', {
               part.height = tower.height;
             }
           })
+        this.syncCurrentCloset()
       }
     },
 
@@ -528,6 +612,7 @@ export const useClosetStore = defineStore('closet', {
       const tower = this.towers.find((t) => t.id === towerId)
       if (tower) {
         tower.doorGap = snapTo16th(gap)
+        this.syncCurrentCloset()
       }
     },
 
@@ -535,6 +620,7 @@ export const useClosetStore = defineStore('closet', {
       const tower = this.towers.find((t) => t.id === towerId)
       if (tower) {
         tower.doorThickness = snapTo16th(thickness)
+        this.syncCurrentCloset()
       }
     },
 
@@ -542,6 +628,7 @@ export const useClosetStore = defineStore('closet', {
       const tower = this.towers.find((t) => t.id === towerId)
       if (tower) {
         tower.doorWidth = snapTo16th(width)
+        this.syncCurrentCloset()
       }
     },
 
@@ -549,6 +636,7 @@ export const useClosetStore = defineStore('closet', {
       const tower = this.towers.find((t) => t.id === towerId)
       if (tower) {
         tower.doorHeight = snapTo16th(height)
+        this.syncCurrentCloset()
       }
     },
 
@@ -556,6 +644,7 @@ export const useClosetStore = defineStore('closet', {
       const tower = this.towers.find((t) => t.id === towerId)
       if (tower) {
         tower.isGlassDoor = isGlassDoor
+        this.syncCurrentCloset()
       }
     },
 
@@ -571,6 +660,7 @@ export const useClosetStore = defineStore('closet', {
       }
 
       refreshTowerCabinet(tower)
+      this.syncCurrentCloset()
     },
 
     setTowerCornerPosition(towerId: string, cornerPosition: CornerPosition) {
@@ -605,12 +695,14 @@ export const useClosetStore = defineStore('closet', {
 
       refreshTowerCatalog(tower)
       refreshTowerCabinet(tower)
+      this.syncCurrentCloset()
     },
 
     setTowerOrientation(towerId: string, orientation: 'left' | 'right') {
       const tower = this.towers.find((t) => t.id === towerId)
       if (!tower) return
       tower.orientation = orientation
+      this.syncCurrentCloset()
     },
 
     setTowerBridgeDimensions(
@@ -631,6 +723,7 @@ export const useClosetStore = defineStore('closet', {
       }
 
       refreshBridgeCabinetForTower(tower)
+      this.syncCurrentCloset()
     },
 
     setTowerOutset(towerId: string, outset: number) {
@@ -643,6 +736,7 @@ export const useClosetStore = defineStore('closet', {
           .forEach((part) => {
             part.outset = snapTo16th(tower.outset! + tower.depth)
           })
+        this.syncCurrentCloset()
       }
     },
 
@@ -661,30 +755,39 @@ export const useClosetStore = defineStore('closet', {
               }
             })
         }
+        this.syncCurrentCloset()
       }
     },
 
     // ── Accessories ───────────────────────────────────────────────────────
     setTowerAccessories(towerId: string, accessories: Accessory[]) {
       const tower = this.towers.find((t) => t.id === towerId)
-      if (tower) tower.accessories = accessories
+      if (tower) {
+        tower.accessories = accessories
+        this.syncCurrentCloset()
+      }
     },
 
     addAccessory(towerId: string, accessory: Accessory) {
       const tower = this.towers.find((t) => t.id === towerId)
-      if (tower) tower.accessories.push(accessory)
+      if (tower) {
+        tower.accessories.push(accessory)
+        this.syncCurrentCloset()
+      }
     },
 
     removeAccessory(towerId: string, index: number) {
       const tower = this.towers.find((t) => t.id === towerId)
       if (tower && index >= 0 && index < tower.accessories.length) {
         tower.accessories.splice(index, 1)
+        this.syncCurrentCloset()
       }
     },
 
     /** Replace all towers (e.g. when applying a preset). */
     setTowers(towers: Tower[]) {
       this.towers = towers
+      this.syncCurrentCloset()
     },
 
     // ── Materials ─────────────────────────────────────────────────────────
@@ -697,25 +800,152 @@ export const useClosetStore = defineStore('closet', {
     },
 
     // ── Closet Management ────────────────────────────────────────────────
-    createCloset(name: string): ClosetRecord {
+    syncCurrentCloset() {
+      if (!Array.isArray(this.closets)) {
+        this.closets = []
+      }
+
+      const towersCopy: Tower[] = JSON.parse(JSON.stringify(this.towers || []))
+      const now = new Date().toISOString()
+
+      let active = this.currentClosetId
+        ? this.closets.find((c) => c.id === this.currentClosetId)
+        : null
+
+      if (!active && this.currentClosetName) {
+        active = this.closets.find(
+          (c) => c.name.toLowerCase() === this.currentClosetName.toLowerCase()
+        )
+        if (active) {
+          this.currentClosetId = active.id
+        }
+      }
+
+      if (active) {
+        active.name = this.currentClosetName || active.name
+        active.shelves = towersCopy
+        active.towers = towersCopy
+        active.cabinet = this.cabinet ? { ...this.cabinet } : undefined
+        active.materials = this.materials ? { ...this.materials } : undefined
+        active.updatedAt = now
+      } else if (this.currentClosetName || towersCopy.length > 0) {
+        const name = this.currentClosetName || 'My Closet'
+        const id =
+          typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `closet-${Date.now()}`
+        const record: ClosetRecord = {
+          id,
+          name,
+          createdAt: now,
+          updatedAt: now,
+          shelves: towersCopy,
+          towers: towersCopy,
+          cabinet: this.cabinet ? { ...this.cabinet } : undefined,
+          materials: this.materials ? { ...this.materials } : undefined,
+        }
+        this.closets.push(record)
+        this.currentClosetId = id
+        this.currentClosetName = name
+      }
+
+      this.saveToLocalStorage()
+    },
+
+    saveToLocalStorage() {
+      if (typeof localStorage === 'undefined') return
+      try {
+        const payload = {
+          closets: this.closets,
+          currentClosetId: this.currentClosetId,
+          currentClosetName: this.currentClosetName,
+          towers: this.towers,
+          cabinet: this.cabinet,
+          materials: this.materials,
+          doorOptions: this.doorOptions,
+          units: this.units,
+          closetType: this.closetType,
+        }
+        localStorage.setItem(CLOSET_STORE_KEY, JSON.stringify(payload))
+      } catch (e) {
+        console.warn('[useClosetStore] Failed to save to localStorage:', e)
+      }
+    },
+
+    loadFromLocalStorage(): boolean {
+      if (typeof localStorage === 'undefined') return false
+      try {
+        const data = loadPersistedClosetData()
+        if (Array.isArray(data.closets) && data.closets.length > 0) {
+          this.closets = data.closets
+        }
+        if (data.currentClosetId) {
+          this.currentClosetId = data.currentClosetId
+        }
+        if (data.currentClosetName) {
+          this.currentClosetName = data.currentClosetName
+        }
+        if (Array.isArray(data.towers) && data.towers.length > 0) {
+          this.towers = data.towers
+        } else if (this.currentClosetId && this.closets.length > 0) {
+          const current = this.closets.find((c) => c.id === this.currentClosetId)
+          const currentShelves = current?.shelves || current?.towers
+          if (Array.isArray(currentShelves) && currentShelves.length > 0) {
+            this.towers = JSON.parse(JSON.stringify(currentShelves))
+          }
+        }
+        return true
+      } catch (e) {
+        console.warn('[useClosetStore] loadFromLocalStorage error:', e)
+      }
+      return false
+    },
+
+    createCloset(name: string, reuseExisting = true): ClosetRecord {
       const trimmed = name.trim() || 'My Closet'
+      if (!Array.isArray(this.closets)) {
+        this.closets = []
+      }
+
+      if (reuseExisting) {
+        const existing = this.closets.find(
+          (c) => c.name.toLowerCase() === trimmed.toLowerCase()
+        )
+        if (existing) {
+          this.currentClosetId = existing.id
+          this.currentClosetName = existing.name
+          const existingShelves = existing.shelves || existing.towers
+          if (Array.isArray(existingShelves) && existingShelves.length > 0) {
+            this.towers = JSON.parse(JSON.stringify(existingShelves))
+          } else if (Array.isArray(this.towers) && this.towers.length > 0) {
+            existing.shelves = JSON.parse(JSON.stringify(this.towers))
+            existing.towers = JSON.parse(JSON.stringify(this.towers))
+          }
+          this.saveToLocalStorage()
+          return existing
+        }
+      }
+
       const id =
         typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
           ? crypto.randomUUID()
           : `closet-${Date.now()}`
       const now = new Date().toISOString()
+      const towersCopy: Tower[] = JSON.parse(JSON.stringify(this.towers || []))
       const closetRecord: ClosetRecord = {
         id,
         name: trimmed,
         createdAt: now,
         updatedAt: now,
-      }
-      if (!Array.isArray(this.closets)) {
-        this.closets = []
+        shelves: towersCopy,
+        towers: towersCopy,
+        cabinet: this.cabinet ? { ...this.cabinet } : undefined,
+        materials: this.materials ? { ...this.materials } : undefined,
       }
       this.closets.push(closetRecord)
       this.currentClosetId = id
       this.currentClosetName = trimmed
+      this.saveToLocalStorage()
       return closetRecord
     },
 
@@ -733,6 +963,7 @@ export const useClosetStore = defineStore('closet', {
           existing.updatedAt = new Date().toISOString()
         }
       }
+      this.saveToLocalStorage()
     },
 
     setCurrentCloset(id: string) {
@@ -741,8 +972,13 @@ export const useClosetStore = defineStore('closet', {
         const found = this.closets.find((c) => c.id === id)
         if (found) {
           this.currentClosetName = found.name
+          const shelves = found.shelves || found.towers
+          if (Array.isArray(shelves)) {
+            this.towers = JSON.parse(JSON.stringify(shelves))
+          }
         }
       }
+      this.saveToLocalStorage()
     },
 
     // ── Bulk reset ────────────────────────────────────────────────────────

@@ -680,13 +680,11 @@ onMounted(async () => {
   await closet.loadCatalogs(true);
   await closet.loadCustomParts();
 
-  if (
-    closet.towers.length > 0 &&
-    closet.towers.every((tower) => !tower.catalogId)
-  ) {
-    closet.setTowers([]);
-    selection.selectTower(null);
-    return;
+  if (closet.towers.length === 0 && closet.currentCloset) {
+    const saved = closet.currentCloset.shelves || closet.currentCloset.towers;
+    if (Array.isArray(saved) && saved.length > 0) {
+      closet.setTowers(JSON.parse(JSON.stringify(saved)));
+    }
   }
 
   if (!selection.selectedTowerId && closet.towers[0]) {

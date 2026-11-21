@@ -24,6 +24,9 @@ vi.mock('vue-router', () => ({
 
 describe('Closet Name Feature', () => {
   beforeEach(() => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.clear()
+    }
     setActivePinia(createPinia())
     pushMock.mockClear()
   })
@@ -78,6 +81,101 @@ describe('Closet Name Feature', () => {
       expect(Array.isArray(exported.closets)).toBe(true)
       expect(exported.closets.length).toBe(1)
       expect(exported.closets[0].name).toBe('Guest Closet')
+    })
+
+    it('stores all shelf/tower information inside the closet object in closets array', () => {
+      const closet = useClosetStore()
+      closet.createCloset('testing')
+
+      // Set towers with detailed shelf properties
+      closet.setTowers([
+        {
+          id: 'tower-shelves-1',
+          label: 'Shelves 1',
+          width: 12,
+          height: 84,
+          depth: 15,
+          outset: 0,
+          elevation: 0,
+          doorMode: 'without_doors',
+          categoryCode: 'CAS',
+          categoryName: 'Shelves',
+          catalogId: 200,
+          catalogCode: 'CAS128415',
+          boxCount: 2,
+          wallId: 'wall-1',
+          positionAlongWall: 0.25,
+          accessories: [],
+        } as any,
+      ])
+
+      expect(closet.closets.length).toBe(1)
+      const currentCloset = closet.closets[0]
+      expect(currentCloset.name).toBe('testing')
+      expect(Array.isArray(currentCloset.shelves)).toBe(true)
+      expect(currentCloset.shelves!.length).toBe(1)
+      expect(currentCloset.shelves![0].label).toBe('Shelves 1')
+      expect(currentCloset.shelves![0].width).toBe(12)
+      expect(currentCloset.shelves![0].height).toBe(84)
+      expect(currentCloset.shelves![0].depth).toBe(15)
+      expect(currentCloset.shelves![0].wallId).toBe('wall-1')
+      expect(currentCloset.shelves![0].positionAlongWall).toBe(0.25)
+      expect(currentCloset.shelves![0].categoryCode).toBe('CAS')
+      expect(currentCloset.shelves![0].catalogCode).toBe('CAS128415')
+    })
+
+    it('persists shelf information in localStorage and re-hydrates across reload', () => {
+      const closet = useClosetStore()
+      closet.createCloset('testing')
+      closet.setTowers([
+        {
+          id: 'tower-shelves-1',
+          label: 'Shelves 1',
+          width: 12,
+          height: 84,
+          depth: 15,
+          wallId: 'wall-1',
+          positionAlongWall: 0.35,
+          accessories: [],
+        } as any,
+      ])
+
+      // Simulate a page refresh: create fresh Pinia instance and store
+      setActivePinia(createPinia())
+      const reloadedCloset = useClosetStore()
+
+      expect(reloadedCloset.closets.length).toBe(1)
+      expect(reloadedCloset.currentClosetName).toBe('testing')
+      expect(reloadedCloset.towers.length).toBe(1)
+      expect(reloadedCloset.towers[0].label).toBe('Shelves 1')
+      expect(reloadedCloset.towers[0].width).toBe(12)
+      expect(reloadedCloset.towers[0].height).toBe(84)
+      expect(reloadedCloset.towers[0].depth).toBe(15)
+      expect(reloadedCloset.towers[0].wallId).toBe('wall-1')
+    })
+
+    it('keeps existing shelves when re-entering Build Closet with the same name from FloorPlan', () => {
+      const closet = useClosetStore()
+      closet.createCloset('testing')
+      closet.setTowers([
+        {
+          id: 'tower-shelves-1',
+          label: 'Shelves 1',
+          width: 12,
+          height: 84,
+          depth: 15,
+          wallId: 'wall-1',
+          positionAlongWall: 0.35,
+          accessories: [],
+        } as any,
+      ])
+
+      // Re-enter with same closet name (e.g. user went back to floor plan and clicked Proceed on "testing")
+      const reentered = closet.createCloset('testing')
+      expect(reentered.name).toBe('testing')
+      expect(closet.closets.length).toBe(1)
+      expect(closet.towers.length).toBe(1)
+      expect(closet.towers[0].label).toBe('Shelves 1')
     })
   })
 

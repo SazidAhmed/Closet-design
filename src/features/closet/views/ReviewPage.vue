@@ -182,8 +182,8 @@ function downloadJSON() {
     </div>
 
     <FooterBar
-      back-label="Back to Design Closet"
-      back-route="/closet/design"
+      back-label="Back to Build Closet"
+      back-route="/closet/build"
       forward-label="Start Over"
       forward-route="/closet/type"
       :show-view-toggle="false"

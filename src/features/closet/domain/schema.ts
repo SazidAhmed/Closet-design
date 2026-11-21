@@ -32,6 +32,16 @@ export type ClosetRecord = {
   name: string
   createdAt: string
   updatedAt: string
+  /** All shelves configured in this closet */
+  shelves?: Tower[]
+  /** Alias for shelves to preserve domain model consistency */
+  towers?: Tower[]
+  /** Room layout associated with this closet */
+  room?: Room
+  /** Cabinet base dimensions */
+  cabinet?: CabinetDimensions
+  /** Selected finishes / materials */
+  materials?: ClosetMaterials
 }
 
 export type ClosetStateV2 = {
@@ -89,7 +99,11 @@ export function exportForBackend(state: ClosetStateV2) {
     units: state.units,
     closetType: state.closetType,
     closetName: state.currentClosetName || '',
-    closets: state.closets || [],
+    closets: (state.closets || []).map((c) => ({
+      ...c,
+      shelves: c.shelves || c.towers || [],
+      towers: c.towers || c.shelves || [],
+    })),
     cabinet: {
       width: clamp(Number(state.cabinet.width) || 0, 30, 600),
       height: clamp(Number(state.cabinet.height) || 0, 100, 300),

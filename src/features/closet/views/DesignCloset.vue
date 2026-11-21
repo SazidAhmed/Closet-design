@@ -52,10 +52,6 @@ function swatchStyle(colorHex: string, textureUrl?: string) {
 onMounted(async () => {
   appStore.setStep("design");
 
-  // Keep design viewport focused on room context and wall openings.
-  if (closet.towers.length > 0) {
-    closet.setTowers([]);
-  }
   selection.selectTower(null);
 
   // Load live catalog data from the backend.

@@ -67,6 +67,9 @@ export const useHistoryStore = defineStore('history', {
         }
         closet.$patch(JSON.parse(snap.closet))
         room.$patch(parsedRoom)
+        if (closet.syncCurrentCloset) {
+          closet.syncCurrentCloset()
+        }
         if (closet.catalogCategories && closet.catalogCategories.length > 0) {
           setActiveCategories(closet.catalogCategories)
         }
@@ -107,6 +110,10 @@ export const useHistoryStore = defineStore('history', {
       try {
         const snap = this._takeSnapshot()
         localStorage.setItem(STORAGE_KEY, JSON.stringify(snap))
+        const closet = useClosetStore()
+        if (closet.saveToLocalStorage) {
+          closet.saveToLocalStorage()
+        }
       } catch { /* quota exceeded — silently ignore */ }
     },
 
@@ -202,7 +209,7 @@ export const useHistoryStore = defineStore('history', {
       this._saveTimer = setTimeout(() => {
         this.saveToLocalStorage()
         this._saveTimer = null
-      }, 1500)
+      }, 300)
     },
 
     // ── Cross-tab sync ───────────────────────────────────────────────────
