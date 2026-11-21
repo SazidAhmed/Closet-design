@@ -144,6 +144,37 @@ function handleNew() {
   letter-spacing: 0.01em;
 }
 
+:slotted(.toolbar-title-wrap),
+:deep(.toolbar-title-wrap) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+:slotted(.toolbar-title-text),
+:deep(.toolbar-title-text) {
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+:slotted(.toolbar-title-badge),
+:deep(.toolbar-title-badge) {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 12px;
+  background: rgba(251, 191, 36, 0.14);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  border-radius: 9999px;
+  color: #fbbf24;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .toolbar-logo {
   cursor: pointer;
   padding: 4px 8px;

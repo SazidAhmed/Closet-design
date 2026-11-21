@@ -27,6 +27,13 @@ export type CabinetDimensions = {
 
 // ---- v2 state -------------------------------------------------------------
 
+export type ClosetRecord = {
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
+}
+
 export type ClosetStateV2 = {
   schemaVersion: 2
   units: Units
@@ -36,6 +43,9 @@ export type ClosetStateV2 = {
   towers: Tower[]
   materials: ClosetMaterials
   doorOptions: ArchitecturalDoorOptions
+  closets?: ClosetRecord[]
+  currentClosetId?: string | null
+  currentClosetName?: string
 }
 
 export function createDefaultClosetState(): ClosetStateV2 {
@@ -43,6 +53,9 @@ export function createDefaultClosetState(): ClosetStateV2 {
     schemaVersion: 2,
     units: 'cm',
     closetType: 'walk_in',
+    closets: [],
+    currentClosetId: null,
+    currentClosetName: '',
     room: createDefaultRoom(),
     cabinet: {
       width: 244,
@@ -75,6 +88,8 @@ export function exportForBackend(state: ClosetStateV2) {
     schemaVersion: CLOSET_SCHEMA_VERSION,
     units: state.units,
     closetType: state.closetType,
+    closetName: state.currentClosetName || '',
+    closets: state.closets || [],
     cabinet: {
       width: clamp(Number(state.cabinet.width) || 0, 30, 600),
       height: clamp(Number(state.cabinet.height) || 0, 100, 300),

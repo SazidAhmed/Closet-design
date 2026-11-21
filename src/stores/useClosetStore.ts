@@ -8,6 +8,7 @@ import {
   exportForBackend,
   type ClosetStateV2,
   type CabinetDimensions,
+  type ClosetRecord,
 } from '../features/closet/domain/schema'
 import { validateCloset } from '../features/closet/domain/validateCloset'
 import { snapTo16th } from '../features/closet/domain/snapUtils'
@@ -41,11 +42,18 @@ type ClosetStoreState = ClosetStateV2 & {
   catalogsLoading: boolean
   /** Promise tracking the ongoing API request for catalogs. */
   _catalogsPromise: Promise<void> | null
+  /** Closets created by the user */
+  closets: ClosetRecord[]
+  currentClosetId: string | null
+  currentClosetName: string
 }
 
 export const useClosetStore = defineStore('closet', {
   state: (): ClosetStoreState => ({
     ...createDefaultClosetState(),
+    closets: [],
+    currentClosetId: null,
+    currentClosetName: '',
     catalogCategories: [],
     customParts: [],
     catalogsLoading: false,
@@ -58,6 +66,8 @@ export const useClosetStore = defineStore('closet', {
     towerById: (state) => (id: string) => state.towers.find((t) => t.id === id),
     totalTowerWidth: (state) => state.towers.reduce((sum, t) => sum + (Number(t.width) || 0), 0),
     innerCabinetWidth: (state) => Math.max(0, state.cabinet.width - state.cabinet.thickness * 2),
+    currentCloset: (state) => state.closets?.find((c) => c.id === state.currentClosetId) || null,
+    activeClosetTitle: (state) => state.currentClosetName || '',
     /** Catalog categories filtered by door mode — from live API or static fallback. */
     catalogCategoriesForMode: (state) => (doorMode: ClosetDoorMode) => {
       if (state.catalogCategories && state.catalogCategories.length > 0) {
@@ -684,6 +694,55 @@ export const useClosetStore = defineStore('closet', {
 
     setDoorOptions(partial: Partial<ArchitecturalDoorOptions>) {
       Object.assign(this.doorOptions, partial)
+    },
+
+    // ── Closet Management ────────────────────────────────────────────────
+    createCloset(name: string): ClosetRecord {
+      const trimmed = name.trim() || 'My Closet'
+      const id =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `closet-${Date.now()}`
+      const now = new Date().toISOString()
+      const closetRecord: ClosetRecord = {
+        id,
+        name: trimmed,
+        createdAt: now,
+        updatedAt: now,
+      }
+      if (!Array.isArray(this.closets)) {
+        this.closets = []
+      }
+      this.closets.push(closetRecord)
+      this.currentClosetId = id
+      this.currentClosetName = trimmed
+      return closetRecord
+    },
+
+    addCloset(name: string): ClosetRecord {
+      return this.createCloset(name)
+    },
+
+    setClosetName(name: string) {
+      const trimmed = name.trim()
+      this.currentClosetName = trimmed
+      if (this.currentClosetId && Array.isArray(this.closets)) {
+        const existing = this.closets.find((c) => c.id === this.currentClosetId)
+        if (existing) {
+          existing.name = trimmed
+          existing.updatedAt = new Date().toISOString()
+        }
+      }
+    },
+
+    setCurrentCloset(id: string) {
+      this.currentClosetId = id
+      if (Array.isArray(this.closets)) {
+        const found = this.closets.find((c) => c.id === id)
+        if (found) {
+          this.currentClosetName = found.name
+        }
+      }
     },
 
     // ── Bulk reset ────────────────────────────────────────────────────────

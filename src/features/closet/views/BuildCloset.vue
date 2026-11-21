@@ -43,6 +43,15 @@ function truncTo4(value: number): string {
 const selectedDoorMode = ref<ClosetDoorMode>("without_doors");
 const showElevation = ref(false);
 const currentElevationWallId = ref<string | null>(null);
+
+const closetTitle = computed(() => {
+  return (
+    closet.currentClosetName ||
+    (closet.closets && closet.closets.length > 0
+      ? closet.closets[closet.closets.length - 1].name
+      : "")
+  );
+});
 const showSelectionWarning = ref(false);
 const showNoSpaceWarning = ref(false);
 const pendingCustomPart = ref<string | null>(null);
@@ -1729,7 +1738,14 @@ function closeElevationView() {
 <template>
   <div class="build-page">
     <TopToolbar>
-      <template #title>Build Closet</template>
+      <template #title>
+        <div class="toolbar-title-wrap">
+          <span class="toolbar-title-text">Build Closet</span>
+          <span v-if="closetTitle" class="toolbar-title-badge">
+            {{ closetTitle }}
+          </span>
+        </div>
+      </template>
     </TopToolbar>
 
     <div class="build-body">

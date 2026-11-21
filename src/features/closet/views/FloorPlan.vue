@@ -18,11 +18,10 @@ const sharedSelectedElevationClosetId = _ref<string | null>(null);
 
 <script setup lang="ts">
 import TopToolbar from "../../../components/TopToolbar.vue";
-import FooterBar from "../../../components/FooterBar.vue";
 import { useRoomStore } from "../../../stores/useRoomStore";
 import { useAppStore } from "../../../stores/useAppStore";
 import { useClosetStore } from "../../../stores/useClosetStore";
-import { onMounted, onUnmounted, computed, ref, reactive, watch } from "vue";
+import { onMounted, onUnmounted, computed, ref, reactive, watch, nextTick } from "vue";
 import { useRouter } from "vue-router";
 import { ROOM_CONSTRAINTS } from "../domain/constraints";
 import {
@@ -68,6 +67,40 @@ const router = useRouter();
 function navigateToBuild() {
   historyStore.saveToLocalStorage();
   router.push("/closet/build");
+}
+
+const showClosetNameDialog = ref(false);
+const closetNameInput = ref("");
+const closetNameInputRef = ref<HTMLInputElement | null>(null);
+
+const closetTitle = computed(() => {
+  return (
+    closetStore.currentClosetName ||
+    (closetStore.closets && closetStore.closets.length > 0
+      ? closetStore.closets[closetStore.closets.length - 1].name
+      : "")
+  );
+});
+
+function handleBuildClosetClick() {
+  closetNameInput.value = closetStore.currentClosetName || "";
+  showClosetNameDialog.value = true;
+  nextTick(() => {
+    closetNameInputRef.value?.focus();
+    closetNameInputRef.value?.select();
+  });
+}
+
+function cancelClosetNameDialog() {
+  showClosetNameDialog.value = false;
+}
+
+function confirmClosetNameAndProceed() {
+  const name = closetNameInput.value.trim();
+  if (!name) return;
+  closetStore.createCloset(name);
+  showClosetNameDialog.value = false;
+  navigateToBuild();
 }
 
 const quickPresetId = ref<string | null>(DEFAULT_QUICK_ROOM_PRESET_ID);
@@ -4213,7 +4246,14 @@ function dimLinePoints(wall: {
       @open="historyStore.loadFromLocalStorage()"
       @new="roomStore.setRoom(roomStore.$state)"
     >
-      <template #title>Floor Plan</template>
+      <template #title>
+        <div class="toolbar-title-wrap">
+          <span class="toolbar-title-text">Floor Plan</span>
+          <span v-if="closetTitle" class="toolbar-title-badge">
+            {{ closetTitle }}
+          </span>
+        </div>
+      </template>
     </TopToolbar>
 
     <div :class="['floorplan-body', { 'elevation-only': props.elevationOnly }]">
@@ -4274,7 +4314,7 @@ function dimLinePoints(wall: {
               />
             </div>
 
-            <button class="build-closet-btn" @click="navigateToBuild">
+            <button class="build-closet-btn" @click="handleBuildClosetClick">
               Build Closet
             </button>
 
@@ -6439,16 +6479,49 @@ function dimLinePoints(wall: {
           </div>
         </div>
       </div>
-    </Teleport>
 
-    <FooterBar
-      v-if="!props.elevationOnly"
-      back-label="Back to Select Closet Type"
-      back-route="/closet/type"
-      forward-label="Design Closet"
-      forward-route="/closet/design"
-      :show-view-toggle="true"
-    />
+      <!-- Enter Closet Name Dialog -->
+      <div
+        v-if="showClosetNameDialog"
+        class="dialog-overlay"
+        @click.self="cancelClosetNameDialog"
+      >
+        <div class="dialog-box closet-name-dialog-box">
+          <h3 class="dialog-title">Enter Closet Name</h3>
+          <p class="dialog-desc">
+            Provide a name for this closet to organize and build your design.
+          </p>
+
+          <div class="dialog-input-group">
+            <input
+              ref="closetNameInputRef"
+              v-model="closetNameInput"
+              type="text"
+              class="dialog-text-input"
+              placeholder="Enter closet name"
+              @keydown.enter.prevent="confirmClosetNameAndProceed"
+              @keydown.esc="cancelClosetNameDialog"
+            />
+          </div>
+
+          <div class="dialog-actions">
+            <button
+              class="dialog-btn cancel"
+              @click="cancelClosetNameDialog"
+            >
+              Cancel
+            </button>
+            <button
+              class="dialog-btn apply"
+              :disabled="!closetNameInput.trim()"
+              @click="confirmClosetNameAndProceed"
+            >
+              Proceed
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -7635,8 +7708,48 @@ function dimLinePoints(wall: {
   color: #fbbf24;
 }
 
-.dialog-btn.apply:hover {
+.dialog-btn.apply:hover:not(:disabled) {
   background: rgba(251, 191, 36, 0.25);
+}
+
+.dialog-btn.apply:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: rgba(251, 191, 36, 0.08);
+  color: #94a3b8;
+}
+
+.closet-name-dialog-box {
+  min-width: 380px;
+  max-width: 440px;
+  width: 100%;
+}
+
+.dialog-input-group {
+  margin-bottom: 24px;
+}
+
+.dialog-text-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.85);
+  color: #f1f5f9;
+  font-size: 14px;
+  font-weight: 500;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.dialog-text-input:focus {
+  border-color: #fbbf24;
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.2);
+}
+
+.dialog-text-input::placeholder {
+  color: #64748b;
 }
 
 /* ─── Elevation info bar ──────────────────────────────────────────────── */
