@@ -190,19 +190,26 @@ function handleNew() {
 
 :slotted(.toolbar-title-wrap),
 :deep(.toolbar-title-wrap) {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 10px;
+  width: 100%;
+  gap: 12px;
 }
 
 :slotted(.toolbar-title-text),
 :deep(.toolbar-title-text) {
+  grid-column: 2;
+  justify-self: center;
   color: #e2e8f0;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 :slotted(.toolbar-title-badge),
 :deep(.toolbar-title-badge) {
+  grid-column: 1;
+  justify-self: center;
   display: inline-flex;
   align-items: center;
   padding: 3px 12px;

@@ -1741,10 +1741,10 @@ function closeElevationView() {
     <TopToolbar :save-status="saveStatus" @save="handleSaveDesign" @open="openDesignModal">
       <template #title>
         <div class="toolbar-title-wrap">
-          <span class="toolbar-title-text">Build Closet</span>
           <span v-if="closetTitle" class="toolbar-title-badge">
             {{ closetTitle }}
           </span>
+          <span class="toolbar-title-text">Build Closet</span>
         </div>
       </template>
     </TopToolbar>

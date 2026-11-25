@@ -4252,10 +4252,10 @@ function dimLinePoints(wall: {
     >
       <template #title>
         <div class="toolbar-title-wrap">
-          <span class="toolbar-title-text">Floor Plan</span>
           <span v-if="closetTitle" class="toolbar-title-badge">
             {{ closetTitle }}
           </span>
+          <span class="toolbar-title-text">Floor Plan</span>
         </div>
       </template>
     </TopToolbar>
