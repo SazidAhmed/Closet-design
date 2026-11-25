@@ -18,6 +18,7 @@ const sharedSelectedElevationClosetId = _ref<string | null>(null);
 
 <script setup lang="ts">
 import TopToolbar from "../../../components/TopToolbar.vue";
+import OpenDesignModal from "../../../components/OpenDesignModal.vue";
 import { useRoomStore } from "../../../stores/useRoomStore";
 import { useAppStore } from "../../../stores/useAppStore";
 import { useClosetStore } from "../../../stores/useClosetStore";
@@ -60,7 +61,7 @@ const roomStore = useRoomStore();
 const appStore = useAppStore();
 const historyStore = useHistoryStore();
 const closetStore = useClosetStore();
-const { saveStatus, handleSaveDesign } = useSaveCloset();
+const { saveStatus, handleSaveDesign, isOpenModalOpen, openDesignModal, closeDesignModal } = useSaveCloset();
 const selectionStore = useSelectionStore();
 const router = useRouter();
 
@@ -4246,7 +4247,7 @@ function dimLinePoints(wall: {
       @undo="historyStore.undo()"
       @redo="historyStore.redo()"
       @save="handleSaveDesign"
-      @open="historyStore.loadFromLocalStorage()"
+      @open="openDesignModal"
       @new="roomStore.setRoom(roomStore.$state)"
     >
       <template #title>
@@ -4258,6 +4259,11 @@ function dimLinePoints(wall: {
         </div>
       </template>
     </TopToolbar>
+    <OpenDesignModal
+      v-if="!props.elevationOnly"
+      :open="isOpenModalOpen"
+      @close="closeDesignModal"
+    />
 
     <div :class="['floorplan-body', { 'elevation-only': props.elevationOnly }]">
       <!-- Left Sidebar: Add Architecture -->

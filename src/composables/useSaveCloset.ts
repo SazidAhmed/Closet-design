@@ -6,7 +6,16 @@ export type SaveDesignStatus = 'idle' | 'saving' | 'saved' | 'unauthenticated' |
 export function useSaveCloset() {
   const closet = useClosetStore()
   const saveStatus = ref<SaveDesignStatus>('idle')
+  const isOpenModalOpen = ref(false)
   let resetTimer: ReturnType<typeof setTimeout> | null = null
+
+  function openDesignModal() {
+    isOpenModalOpen.value = true
+  }
+
+  function closeDesignModal() {
+    isOpenModalOpen.value = false
+  }
 
   function scheduleReset(delay = 2500) {
     if (resetTimer) clearTimeout(resetTimer)
@@ -33,5 +42,8 @@ export function useSaveCloset() {
   return {
     saveStatus,
     handleSaveDesign,
+    isOpenModalOpen,
+    openDesignModal,
+    closeDesignModal,
   }
 }

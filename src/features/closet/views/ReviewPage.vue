@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from "vue";
 import TopToolbar from "../../../components/TopToolbar.vue";
+import OpenDesignModal from "../../../components/OpenDesignModal.vue";
 import FooterBar from "../../../components/FooterBar.vue";
 import { useClosetStore } from "../../../stores/useClosetStore";
 import { useRoomStore } from "../../../stores/useRoomStore";
@@ -12,7 +13,7 @@ import { Download, Share2, Send } from "lucide-vue-next";
 const closet = useClosetStore();
 const roomStore = useRoomStore();
 const appStore = useAppStore();
-const { saveStatus, handleSaveDesign } = useSaveCloset();
+const { saveStatus, handleSaveDesign, isOpenModalOpen, openDesignModal, closeDesignModal } = useSaveCloset();
 
 onMounted(() => {
   appStore.setStep("review");
@@ -51,9 +52,10 @@ function downloadJSON() {
 
 <template>
   <div class="review-page">
-    <TopToolbar :save-status="saveStatus" @save="handleSaveDesign">
+    <TopToolbar :save-status="saveStatus" @save="handleSaveDesign" @open="openDesignModal">
       <template #title>Review Design</template>
     </TopToolbar>
+    <OpenDesignModal :open="isOpenModalOpen" @close="closeDesignModal" />
 
     <div class="review-body">
       <div class="review-content">

@@ -902,8 +902,8 @@ export const useClosetStore = defineStore('closet', {
         const { default: ClosetService } = await import('../services/ClosetService')
         const { useRoomStore } = await import('./useRoomStore')
         const roomStore = useRoomStore()
-        const roomPayload = roomStore.room
-          ? JSON.parse(JSON.stringify({ ...roomStore.room, items: roomStore.items }))
+        const roomPayload = roomStore.$state
+          ? JSON.parse(JSON.stringify(roomStore.$state))
           : active?.room
         const payload = {
           id: this.currentClosetId || active?.id,
@@ -1005,6 +1005,70 @@ export const useClosetStore = defineStore('closet', {
         return { saved: false, reason: 'error' }
       }
       return { saved: true, data }
+    },
+
+    async openClosetDesign(record: {
+      id: string
+      name: string
+      shelves?: any[]
+      towers?: any[]
+      room?: any
+      cabinet?: any
+      materials?: any
+      createdAt?: string
+      created_at?: string
+      updatedAt?: string
+      updated_at?: string
+    }) {
+      const shelvesSource = record.shelves || record.towers || []
+      const clonedTowers: Tower[] = JSON.parse(JSON.stringify(shelvesSource))
+
+      this.currentClosetId = record.id
+      this.currentClosetName = record.name || 'My Closet'
+      this.towers = clonedTowers
+
+      if (record.cabinet && typeof record.cabinet === 'object') {
+        Object.assign(this.cabinet, JSON.parse(JSON.stringify(record.cabinet)))
+      }
+      if (record.materials && typeof record.materials === 'object') {
+        Object.assign(this.materials, JSON.parse(JSON.stringify(record.materials)))
+      }
+
+      if (record.room && typeof record.room === 'object' && Array.isArray(record.room.walls)) {
+        const { useRoomStore } = await import('./useRoomStore')
+        const roomStore = useRoomStore()
+        roomStore.setRoom(JSON.parse(JSON.stringify(record.room)))
+      }
+
+      try {
+        const { useSelectionStore } = await import('./useSelectionStore')
+        const selectionStore = useSelectionStore()
+        selectionStore.selectTower(null)
+      } catch {
+        // Ignore if selection store is not active in unit tests
+      }
+
+      const existingIdx = this.closets.findIndex(
+        (c) => c.id === record.id || c.name.toLowerCase() === this.currentClosetName.toLowerCase()
+      )
+      const normalizedRecord: ClosetRecord = {
+        id: record.id,
+        name: this.currentClosetName,
+        createdAt: record.createdAt || record.created_at || new Date().toISOString(),
+        updatedAt: record.updatedAt || record.updated_at || new Date().toISOString(),
+        shelves: clonedTowers,
+        towers: JSON.parse(JSON.stringify(clonedTowers)),
+        room: record.room ? JSON.parse(JSON.stringify(record.room)) : undefined,
+        cabinet: this.cabinet ? { ...this.cabinet } : undefined,
+        materials: this.materials ? { ...this.materials } : undefined,
+      }
+      if (existingIdx !== -1) {
+        this.closets[existingIdx] = normalizedRecord
+      } else {
+        this.closets.push(normalizedRecord)
+      }
+
+      this.persistToLocalStorageOnly()
     },
 
     async loadFromBackend(): Promise<boolean> {

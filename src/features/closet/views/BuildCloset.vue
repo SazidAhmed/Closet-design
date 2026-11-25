@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import TopToolbar from "../../../components/TopToolbar.vue";
+import OpenDesignModal from "../../../components/OpenDesignModal.vue";
 import FooterBar from "../../../components/FooterBar.vue";
 import RoomPlanPreview from "../../../components/RoomPlanPreview.vue";
 import FloorPlan from "./FloorPlan.vue";
@@ -34,7 +35,7 @@ const closet = useClosetStore();
 const room = useRoomStore();
 const selection = useSelectionStore();
 const { fmt, fromCm } = useUnit();
-const { saveStatus, handleSaveDesign } = useSaveCloset();
+const { saveStatus, handleSaveDesign, isOpenModalOpen, openDesignModal, closeDesignModal } = useSaveCloset();
 
 /** Format a number to 4 decimal places (snapped to 1/16th inch). */
 function truncTo4(value: number): string {
@@ -1737,7 +1738,7 @@ function closeElevationView() {
 
 <template>
   <div class="build-page">
-    <TopToolbar :save-status="saveStatus" @save="handleSaveDesign">
+    <TopToolbar :save-status="saveStatus" @save="handleSaveDesign" @open="openDesignModal">
       <template #title>
         <div class="toolbar-title-wrap">
           <span class="toolbar-title-text">Build Closet</span>
@@ -1747,6 +1748,7 @@ function closeElevationView() {
         </div>
       </template>
     </TopToolbar>
+    <OpenDesignModal :open="isOpenModalOpen" @close="closeDesignModal" />
 
     <div class="build-body">
       <aside class="builder-panel catalog-panel">
