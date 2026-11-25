@@ -19,8 +19,10 @@ const appStore = useAppStore();
 
 const isLoading = ref(false);
 const isOpening = ref(false);
+const isDeleting = ref(false);
 const errorMessage = ref("");
 const pendingDesign = ref<ClosetRecord | null>(null);
+const pendingDeleteDesign = ref<ClosetRecord | null>(null);
 const remoteDesigns = ref<ClosetRecord[]>([]);
 
 const hasAuthToken = computed(() => {
@@ -44,11 +46,13 @@ watch(
   async (isOpen) => {
     if (!isOpen) {
       pendingDesign.value = null;
+      pendingDeleteDesign.value = null;
       errorMessage.value = "";
       return;
     }
 
     pendingDesign.value = null;
+    pendingDeleteDesign.value = null;
     errorMessage.value = "";
     remoteDesigns.value = [];
 
@@ -101,11 +105,44 @@ function formatDate(dateStr?: string): string {
 }
 
 function requestOpenDesign(design: ClosetRecord) {
+  pendingDeleteDesign.value = null;
   pendingDesign.value = design;
+}
+
+function requestDeleteDesign(design: ClosetRecord) {
+  pendingDesign.value = null;
+  pendingDeleteDesign.value = design;
 }
 
 function cancelConfirmation() {
   pendingDesign.value = null;
+  pendingDeleteDesign.value = null;
+}
+
+async function confirmDeleteDesign() {
+  if (!pendingDeleteDesign.value || isDeleting.value) return;
+  const target = pendingDeleteDesign.value;
+  isDeleting.value = true;
+  errorMessage.value = "";
+
+  try {
+    const { default: ClosetService } = await import(
+      "../services/ClosetService"
+    );
+    await ClosetService.deleteCloset(target.id);
+
+    remoteDesigns.value = remoteDesigns.value.filter((d) => d.id !== target.id);
+    closet.closets = closet.closets.filter((c) => c.id !== target.id);
+    if (closet.currentClosetId === target.id) {
+      closet.currentClosetId = null;
+    }
+    closet.persistToLocalStorageOnly();
+    pendingDeleteDesign.value = null;
+  } catch {
+    errorMessage.value = "Failed to delete the selected design.";
+  } finally {
+    isDeleting.value = false;
+  }
 }
 
 async function confirmOpenDesign() {
@@ -191,6 +228,37 @@ async function confirmOpenDesign() {
           </div>
         </div>
 
+        <!-- Delete Confirmation view -->
+        <div v-else-if="pendingDeleteDesign" class="confirm-box">
+          <div class="confirm-icon-wrap danger">
+            <AlertTriangle :size="28" class="confirm-icon-danger" />
+          </div>
+          <h3 class="confirm-title">Delete Design?</h3>
+          <p class="confirm-message">
+            Are you sure you want to delete the design?
+          </p>
+          <p class="confirm-target">
+            Selected design: <strong>{{ pendingDeleteDesign.name }}</strong>
+          </p>
+          <div class="confirm-actions">
+            <button
+              class="btn-secondary"
+              :disabled="isDeleting"
+              @click="cancelConfirmation"
+            >
+              Cancel
+            </button>
+            <button
+              class="btn-danger"
+              data-testid="confirm-delete-yes"
+              :disabled="isDeleting"
+              @click="confirmDeleteDesign"
+            >
+              {{ isDeleting ? "Deleting..." : "Yes" }}
+            </button>
+          </div>
+        </div>
+
         <!-- Loading state -->
         <div v-else-if="isLoading" class="state-box">
           <Loader2 :size="28" class="spin-icon" />
@@ -231,13 +299,22 @@ async function confirmOpenDesign() {
                 </span>
               </div>
             </div>
-            <button
-              class="open-btn"
-              :data-testid="`open-design-btn-${design.id}`"
-              @click="requestOpenDesign(design)"
-            >
-              Open
-            </button>
+            <div class="row-actions">
+              <button
+                class="open-btn"
+                :data-testid="`open-design-btn-${design.id}`"
+                @click="requestOpenDesign(design)"
+              >
+                Open
+              </button>
+              <button
+                class="delete-btn"
+                :data-testid="`delete-design-btn-${design.id}`"
+                @click="requestDeleteDesign(design)"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -416,6 +493,13 @@ async function confirmOpenDesign() {
   color: #94a3b8;
 }
 
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .open-btn {
   padding: 6px 14px;
   border-radius: 7px;
@@ -432,6 +516,24 @@ async function confirmOpenDesign() {
 .open-btn:hover {
   background: #fbbf24;
   color: #0f172a;
+}
+
+.delete-btn {
+  padding: 6px 12px;
+  border-radius: 7px;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.14);
+  color: #f87171;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.delete-btn:hover {
+  background: #ef4444;
+  color: #ffffff;
 }
 
 .confirm-box {
@@ -453,8 +555,16 @@ async function confirmOpenDesign() {
   margin-bottom: 12px;
 }
 
+.confirm-icon-wrap.danger {
+  background: rgba(239, 68, 68, 0.16);
+}
+
 .confirm-icon {
   color: #fbbf24;
+}
+
+.confirm-icon-danger {
+  color: #f87171;
 }
 
 .confirm-title {
@@ -485,7 +595,8 @@ async function confirmOpenDesign() {
 }
 
 .btn-secondary,
-.btn-primary {
+.btn-primary,
+.btn-danger {
   padding: 8px 18px;
   border-radius: 8px;
   font-size: 13px;
@@ -512,8 +623,18 @@ async function confirmOpenDesign() {
   background: #f59e0b;
 }
 
+.btn-danger {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #dc2626;
+}
+
 .btn-secondary:disabled,
-.btn-primary:disabled {
+.btn-primary:disabled,
+.btn-danger:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

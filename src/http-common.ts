@@ -83,6 +83,14 @@ class ApiClient {
   post(endpoint: string, data?: any, options?: any) {
     return this.request("POST", endpoint, data, options);
   }
+
+  put(endpoint: string, data?: any, options?: any) {
+    return this.request("PUT", endpoint, data, options);
+  }
+
+  delete(endpoint: string, options?: any) {
+    return this.request("DELETE", endpoint, undefined, options);
+  }
 }
 
 const apiClient = new ApiClient();

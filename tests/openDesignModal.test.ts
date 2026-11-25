@@ -100,4 +100,43 @@ describe('OpenDesignModal', () => {
     expect(store.towers[0].accessories).toHaveLength(1)
     expect(wrapper.emitted('close')).toBeTruthy()
   })
+
+  it('asks confirmation before deleting and deletes design from database on Yes', async () => {
+    localStorage.setItem('access_token', 'mock_token_abc')
+
+    const savedDesigns = [
+      {
+        id: 'closet-db-delete',
+        name: 'To Delete',
+        shelves: [],
+        created_at: '2026-11-23T19:15:56Z',
+        updated_at: '2026-11-23T19:25:55Z',
+      },
+    ]
+
+    vi.mocked(ClosetService.getClosets).mockResolvedValueOnce(savedDesigns)
+    vi.mocked(ClosetService.deleteCloset).mockResolvedValueOnce({ success: true })
+
+    const wrapper = mount(OpenDesignModal, {
+      props: { open: true },
+    })
+
+    await flushPromises()
+
+    const deleteBtn = wrapper.find('[data-testid="delete-design-btn-closet-db-delete"]')
+    expect(deleteBtn.exists()).toBe(true)
+    expect(deleteBtn.text()).toBe('Delete')
+
+    await deleteBtn.trigger('click')
+    expect(wrapper.text()).toContain('Are you sure you want to delete the design?')
+
+    const yesBtn = wrapper.find('[data-testid="confirm-delete-yes"]')
+    expect(yesBtn.exists()).toBe(true)
+    await yesBtn.trigger('click')
+    await vi.dynamicImportSettled()
+    await flushPromises()
+
+    expect(ClosetService.deleteCloset).toHaveBeenCalledWith('closet-db-delete')
+    expect(wrapper.text()).not.toContain('To Delete')
+  })
 })
