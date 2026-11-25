@@ -668,6 +668,11 @@ export const useClosetStore = defineStore('closet', {
       const tower = this.towers.find((t) => t.id === towerId)
       if (!tower) return
 
+      const code = tower.categoryCode?.toUpperCase()
+      if (cornerPosition !== 'none' && (code === 'CRD' || code === 'CSS')) {
+        return
+      }
+
       tower.cornerPosition = cornerPosition
       tower.cornerOrientation = cornerPosition === 'left' || cornerPosition === 'right' ? cornerPosition : undefined
       tower.isCorner = cornerPosition === 'left' || cornerPosition === 'right'

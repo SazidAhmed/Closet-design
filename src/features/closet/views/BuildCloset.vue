@@ -1167,6 +1167,8 @@ const showCornerSection = computed(() => {
   const tower = selectedTower.value;
   if (!tower) return false;
   if (tower.partType && tower.partType !== "cabinet") return false;
+  const code = tower.categoryCode?.toUpperCase();
+  if (code === "CRD" || code === "CSS") return false;
   return tower.doorMode === "without_doors";
 });
 

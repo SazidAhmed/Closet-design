@@ -178,4 +178,42 @@ describe("CRD Cabinet domain and rendering", () => {
       expect(shelf.transform.pos[1]).toBeGreaterThan(divShelf!.transform.pos[1]);
     }
   });
+
+  it("prevents Drawers (CRD) and Shoe Shelves (CSS) from being set as corner cabinets", async () => {
+    const { setActivePinia, createPinia } = await import("pinia");
+    const { useClosetStore } = await import("../src/stores/useClosetStore");
+    setActivePinia(createPinia());
+
+    const store = useClosetStore();
+    store.towers = [
+      {
+        id: "tower_crd_no_corner",
+        label: "Drawers 1",
+        width: 24,
+        depth: 15,
+        height: 84,
+        doorMode: "without_doors",
+        categoryCode: "CRD",
+        accessories: [],
+      },
+      {
+        id: "tower_css_no_corner",
+        label: "Shoe Shelves 1",
+        width: 24,
+        depth: 15,
+        height: 84,
+        doorMode: "without_doors",
+        categoryCode: "CSS",
+        accessories: [],
+      },
+    ];
+
+    store.setTowerCornerPosition("tower_crd_no_corner", "left");
+    store.setTowerCornerPosition("tower_css_no_corner", "right");
+
+    expect(store.towers[0].isCorner).toBeFalsy();
+    expect(store.towers[0].cornerPosition).toBeUndefined();
+    expect(store.towers[1].isCorner).toBeFalsy();
+    expect(store.towers[1].cornerPosition).toBeUndefined();
+  });
 });
