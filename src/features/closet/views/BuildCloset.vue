@@ -2174,22 +2174,14 @@ function closeElevationView() {
             </template>
 
             <template v-if="!isBlindCornerCabinet(selectedTower)">
-              <div class="dimension-head">
-                <label>Door Hinge</label>
-              </div>
-
               <div
-                style="
-                  font-size: 10px;
-                  color: #ff9999;
-                  margin-top: 4px;
-                  padding-bottom: 8px;
+                v-if="
+                  (towerOneDoor === 1 && towerTwoDoors === 1) ||
+                  selectedTower.doorCount !== 2
                 "
+                class="dimension-head"
               >
-                Debug Doors: one={{ towerOneDoor }}, two={{ towerTwoDoors }},
-                cabId={{ selectedTower?.cabinetId }}, catId={{
-                  selectedTower?.catalogId
-                }}
+                <label>Door Hinge</label>
               </div>
 
               <div
