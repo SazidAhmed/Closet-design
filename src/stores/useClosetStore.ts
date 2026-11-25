@@ -49,6 +49,7 @@ type ClosetStoreState = ClosetStateV2 & {
 }
 
 const CLOSET_STORE_KEY = 'closet-store-data-v1'
+let _saveBackendDebounceTimer: any = null
 
 function loadPersistedClosetData(): {
   closets: ClosetRecord[]
@@ -867,9 +868,212 @@ export const useClosetStore = defineStore('closet', {
           closetType: this.closetType,
         }
         localStorage.setItem(CLOSET_STORE_KEY, JSON.stringify(payload))
+
+        // Trigger debounced cloud sync if user has an active session token
+        if (localStorage.getItem('access_token')) {
+          if (_saveBackendDebounceTimer) {
+            clearTimeout(_saveBackendDebounceTimer)
+          }
+          _saveBackendDebounceTimer = setTimeout(() => {
+            this.saveCurrentClosetToBackend().catch(() => {})
+          }, 1500)
+        }
       } catch (e) {
         console.warn('[useClosetStore] Failed to save to localStorage:', e)
       }
+    },
+
+    async saveCurrentClosetToBackend() {
+      const { useAppStore } = await import('./useAppStore')
+      const appStore = useAppStore()
+      const hasToken =
+        (typeof localStorage !== 'undefined' && Boolean(localStorage.getItem('access_token'))) ||
+        Boolean(appStore.token)
+      if (!hasToken) {
+        return null
+      }
+      const active = this.currentClosetId
+        ? this.closets.find((c) => c.id === this.currentClosetId)
+        : null
+      if (!active && (!this.towers || this.towers.length === 0) && !this.currentClosetName) {
+        return null
+      }
+      try {
+        const { default: ClosetService } = await import('../services/ClosetService')
+        const { useRoomStore } = await import('./useRoomStore')
+        const roomStore = useRoomStore()
+        const roomPayload = roomStore.room
+          ? JSON.parse(JSON.stringify({ ...roomStore.room, items: roomStore.items }))
+          : active?.room
+        const payload = {
+          id: this.currentClosetId || active?.id,
+          name: this.currentClosetName || active?.name || 'My Closet',
+          shelves: this.towers,
+          room: roomPayload,
+          cabinet: this.cabinet ? { ...this.cabinet } : undefined,
+          materials: this.materials ? { ...this.materials } : undefined,
+          total_price: 0.00,
+          status: 'draft',
+        }
+        const saved = await ClosetService.saveCloset(payload)
+        if (saved && saved.id) {
+          const oldId = this.currentClosetId
+          const savedNameLower = (saved.name || payload.name).toLowerCase()
+          this.currentClosetId = saved.id
+          if (saved.name) {
+            this.currentClosetName = saved.name
+          }
+
+          // Deduplicate local closets so only one entry exists per (id / name)
+          const matchingIndices: number[] = []
+          this.closets.forEach((c, i) => {
+            if (c.id === saved.id || c.id === oldId || c.name.toLowerCase() === savedNameLower) {
+              matchingIndices.push(i)
+            }
+          })
+
+          const updatedRecord: ClosetRecord = {
+            id: saved.id,
+            name: saved.name || payload.name,
+            createdAt: saved.created_at || (matchingIndices.length ? this.closets[matchingIndices[0]].createdAt : new Date().toISOString()),
+            updatedAt: saved.updated_at || new Date().toISOString(),
+            shelves: JSON.parse(JSON.stringify(this.towers || [])),
+            towers: JSON.parse(JSON.stringify(this.towers || [])),
+            room: roomPayload,
+            cabinet: this.cabinet ? { ...this.cabinet } : undefined,
+            materials: this.materials ? { ...this.materials } : undefined,
+          }
+
+          if (matchingIndices.length > 0) {
+            this.closets[matchingIndices[0]] = updatedRecord
+            for (let k = matchingIndices.length - 1; k >= 1; k--) {
+              this.closets.splice(matchingIndices[k], 1)
+            }
+          } else {
+            this.closets.push(updatedRecord)
+          }
+
+          this.persistToLocalStorageOnly()
+        }
+        return saved
+      } catch (e) {
+        console.warn('[useClosetStore] saveCurrentClosetToBackend error:', e)
+        return null
+      }
+    },
+
+    persistToLocalStorageOnly() {
+      if (typeof localStorage === 'undefined') return
+      try {
+        const payload = {
+          closets: this.closets,
+          currentClosetId: this.currentClosetId,
+          currentClosetName: this.currentClosetName,
+          towers: this.towers,
+          cabinet: this.cabinet,
+          materials: this.materials,
+          doorOptions: this.doorOptions,
+          units: this.units,
+          closetType: this.closetType,
+        }
+        localStorage.setItem(CLOSET_STORE_KEY, JSON.stringify(payload))
+      } catch (e) {
+        console.warn('[useClosetStore] Failed to persist to localStorage:', e)
+      }
+    },
+
+    async saveCurrentClosetExplicitly(): Promise<{
+      saved: boolean
+      reason?: 'unauthenticated' | 'error'
+      data?: any
+    }> {
+      this.syncCurrentCloset()
+      if (_saveBackendDebounceTimer) {
+        clearTimeout(_saveBackendDebounceTimer)
+        _saveBackendDebounceTimer = null
+      }
+      const { useAppStore } = await import('./useAppStore')
+      const appStore = useAppStore()
+      const hasToken =
+        (typeof localStorage !== 'undefined' && Boolean(localStorage.getItem('access_token'))) ||
+        Boolean(appStore.token)
+      if (!hasToken) {
+        return { saved: false, reason: 'unauthenticated' }
+      }
+      const data = await this.saveCurrentClosetToBackend()
+      if (!data) {
+        return { saved: false, reason: 'error' }
+      }
+      return { saved: true, data }
+    },
+
+    async loadFromBackend(): Promise<boolean> {
+      if (typeof localStorage === 'undefined' || !localStorage.getItem('access_token')) {
+        return false
+      }
+      try {
+        const { default: ClosetService } = await import('../services/ClosetService')
+        const remoteClosets = await ClosetService.getClosets()
+        if (Array.isArray(remoteClosets) && remoteClosets.length > 0) {
+          for (const remote of remoteClosets) {
+            const existingIdx = this.closets.findIndex(
+              (c) => c.id === remote.id || c.name.toLowerCase() === remote.name.toLowerCase()
+            )
+            const shelvesData = remote.shelves || remote.towers || []
+            const record: ClosetRecord = {
+              id: remote.id,
+              name: remote.name,
+              createdAt: remote.created_at,
+              updatedAt: remote.updated_at,
+              shelves: shelvesData,
+              towers: shelvesData,
+              cabinet: remote.cabinet,
+              materials: remote.materials,
+            }
+            if (existingIdx !== -1) {
+              this.closets[existingIdx] = { ...this.closets[existingIdx], ...record }
+            } else {
+              this.closets.push(record)
+            }
+          }
+
+          if (this.towers.length === 0 && this.closets.length > 0) {
+            const current = this.currentClosetId
+              ? this.closets.find((c) => c.id === this.currentClosetId)
+              : this.closets[0]
+            if (current) {
+              this.currentClosetId = current.id
+              this.currentClosetName = current.name
+              const shelves = current.shelves || current.towers
+              if (Array.isArray(shelves) && shelves.length > 0) {
+                this.towers = JSON.parse(JSON.stringify(shelves))
+              }
+            }
+          }
+
+          this.saveToLocalStorage()
+          return true
+        }
+      } catch (e) {
+        console.warn('[useClosetStore] loadFromBackend error:', e)
+      }
+      return false
+    },
+
+    async syncAllWithBackend(): Promise<any[]> {
+      if (typeof localStorage === 'undefined' || !localStorage.getItem('access_token')) {
+        return []
+      }
+      try {
+        const { default: ClosetService } = await import('../services/ClosetService')
+        if (Array.isArray(this.closets) && this.closets.length > 0) {
+          const synced = await ClosetService.syncClosets(this.closets)
+          return synced
+        }
+      } catch (e) {
+        console.warn('[useClosetStore] syncAllWithBackend error:', e)
+      }
+      return []
     },
 
     loadFromLocalStorage(): boolean {

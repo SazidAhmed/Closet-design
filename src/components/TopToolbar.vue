@@ -13,6 +13,15 @@ import {
   LogIn,
 } from "lucide-vue-next";
 
+const props = withDefaults(
+  defineProps<{
+    saveStatus?: "idle" | "saving" | "saved" | "unauthenticated" | "error";
+  }>(),
+  {
+    saveStatus: "idle",
+  }
+);
+
 const router = useRouter();
 
 const emit = defineEmits<{
@@ -51,9 +60,44 @@ function handleNew() {
         <button class="toolbar-btn" title="Open Design" @click="$emit('open')">
           <FolderOpen :size="18" />
         </button>
-        <button class="toolbar-btn" title="Save Design" @click="$emit('save')">
+        <button
+          class="toolbar-btn"
+          :class="{
+            'is-saving': props.saveStatus === 'saving',
+            'is-saved': props.saveStatus === 'saved',
+            'is-save-warn': props.saveStatus === 'unauthenticated' || props.saveStatus === 'error',
+          }"
+          :disabled="props.saveStatus === 'saving'"
+          :title="
+            props.saveStatus === 'saving'
+              ? 'Saving Design...'
+              : props.saveStatus === 'saved'
+                ? 'Saved to Database'
+                : props.saveStatus === 'unauthenticated'
+                  ? 'Saved locally (Sign in to save to database)'
+                  : props.saveStatus === 'error'
+                    ? 'Save failed — try again'
+                    : 'Save Design'
+          "
+          @click="$emit('save')"
+        >
           <Save :size="18" />
         </button>
+        <span
+          v-if="props.saveStatus !== 'idle'"
+          class="save-status-pill"
+          :class="`status-${props.saveStatus}`"
+        >
+          {{
+            props.saveStatus === "saving"
+              ? "Saving..."
+              : props.saveStatus === "saved"
+                ? "Saved"
+                : props.saveStatus === "unauthenticated"
+                  ? "Sign in to save"
+                  : "Save failed"
+          }}
+        </span>
 
         <div class="toolbar-divider" />
 
@@ -226,6 +270,51 @@ function handleNew() {
 .toolbar-btn:active {
   background: rgba(255, 255, 255, 0.12);
   transform: scale(0.96);
+}
+
+.toolbar-btn.is-saving {
+  color: #fbbf24;
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.toolbar-btn.is-saved {
+  background: rgba(34, 197, 94, 0.18);
+  color: #4ade80;
+}
+
+.toolbar-btn.is-save-warn {
+  background: rgba(251, 191, 36, 0.16);
+  color: #fbbf24;
+}
+
+.save-status-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
+.save-status-pill.status-saving {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+
+.save-status-pill.status-saved {
+  background: rgba(34, 197, 94, 0.18);
+  color: #4ade80;
+}
+
+.save-status-pill.status-unauthenticated {
+  background: rgba(251, 191, 36, 0.16);
+  color: #fbbf24;
+}
+
+.save-status-pill.status-error {
+  background: rgba(239, 68, 68, 0.18);
+  color: #f87171;
 }
 
 .sign-in-btn {

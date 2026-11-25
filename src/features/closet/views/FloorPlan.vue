@@ -21,6 +21,7 @@ import TopToolbar from "../../../components/TopToolbar.vue";
 import { useRoomStore } from "../../../stores/useRoomStore";
 import { useAppStore } from "../../../stores/useAppStore";
 import { useClosetStore } from "../../../stores/useClosetStore";
+import { useSaveCloset } from "../../../composables/useSaveCloset";
 import { onMounted, onUnmounted, computed, ref, reactive, watch, nextTick } from "vue";
 import { useRouter } from "vue-router";
 import { ROOM_CONSTRAINTS } from "../domain/constraints";
@@ -59,6 +60,7 @@ const roomStore = useRoomStore();
 const appStore = useAppStore();
 const historyStore = useHistoryStore();
 const closetStore = useClosetStore();
+const { saveStatus, handleSaveDesign } = useSaveCloset();
 const selectionStore = useSelectionStore();
 const router = useRouter();
 
@@ -4240,9 +4242,10 @@ function dimLinePoints(wall: {
   >
     <TopToolbar
       v-if="!props.elevationOnly"
+      :save-status="saveStatus"
       @undo="historyStore.undo()"
       @redo="historyStore.redo()"
-      @save="historyStore.saveToLocalStorage()"
+      @save="handleSaveDesign"
       @open="historyStore.loadFromLocalStorage()"
       @new="roomStore.setRoom(roomStore.$state)"
     >

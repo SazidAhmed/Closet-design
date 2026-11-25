@@ -31,5 +31,70 @@ export default {
       console.error(`Custom Parts API Error:`, error.response?.data || error.message);
       throw error;
     }
+  },
+
+  /**
+   * Get all closets designed by the authenticated user.
+   */
+  async getClosets(): Promise<any[]> {
+    try {
+      const response = await http.get(`/closets`);
+      return response.data?.data || [];
+    } catch (error: any) {
+      console.error(`Get Closets API Error:`, error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Get a single closet design by ID.
+   */
+  async getClosetById(id: string): Promise<any> {
+    try {
+      const response = await http.get(`/closets/${id}`);
+      return response.data?.data;
+    } catch (error: any) {
+      console.error(`Get Closet By ID API Error:`, error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Save (create or update) a closet design with its shelves/towers.
+   */
+  async saveCloset(payload: any): Promise<any> {
+    try {
+      const response = await http.post(`/closets`, payload);
+      return response.data?.data;
+    } catch (error: any) {
+      console.error(`Save Closet API Error:`, error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Delete a closet design by ID.
+   */
+  async deleteCloset(id: string): Promise<any> {
+    try {
+      const response = await http.delete(`/closets/${id}`);
+      return response.data;
+    } catch (error: any) {
+      console.error(`Delete Closet API Error:`, error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Bulk sync all closets between frontend and backend.
+   */
+  async syncClosets(closets: any[]): Promise<any[]> {
+    try {
+      const response = await http.post(`/closets/sync`, { closets });
+      return response.data?.data || [];
+    } catch (error: any) {
+      console.error(`Sync Closets API Error:`, error.response?.data || error.message);
+      throw error;
+    }
   }
 };

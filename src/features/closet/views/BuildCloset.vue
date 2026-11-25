@@ -9,6 +9,7 @@ import { useClosetStore } from "../../../stores/useClosetStore";
 import { useRoomStore } from "../../../stores/useRoomStore";
 import { useSelectionStore } from "../../../stores/useSelectionStore";
 import { useUnit } from "../../../composables/useUnit";
+import { useSaveCloset } from "../../../composables/useSaveCloset";
 import {
   getCategoriesForDoorMode,
   getCategoryLimits,
@@ -33,6 +34,7 @@ const closet = useClosetStore();
 const room = useRoomStore();
 const selection = useSelectionStore();
 const { fmt, fromCm } = useUnit();
+const { saveStatus, handleSaveDesign } = useSaveCloset();
 
 /** Format a number to 4 decimal places (snapped to 1/16th inch). */
 function truncTo4(value: number): string {
@@ -1735,7 +1737,7 @@ function closeElevationView() {
 
 <template>
   <div class="build-page">
-    <TopToolbar>
+    <TopToolbar :save-status="saveStatus" @save="handleSaveDesign">
       <template #title>
         <div class="toolbar-title-wrap">
           <span class="toolbar-title-text">Build Closet</span>

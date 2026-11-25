@@ -5,12 +5,14 @@ import FooterBar from "../../../components/FooterBar.vue";
 import { useClosetStore } from "../../../stores/useClosetStore";
 import { useRoomStore } from "../../../stores/useRoomStore";
 import { useAppStore } from "../../../stores/useAppStore";
+import { useSaveCloset } from "../../../composables/useSaveCloset";
 import { getMaterial, getHandle } from "../domain/materials/catalog";
 import { Download, Share2, Send } from "lucide-vue-next";
 
 const closet = useClosetStore();
 const roomStore = useRoomStore();
 const appStore = useAppStore();
+const { saveStatus, handleSaveDesign } = useSaveCloset();
 
 onMounted(() => {
   appStore.setStep("review");
@@ -49,7 +51,7 @@ function downloadJSON() {
 
 <template>
   <div class="review-page">
-    <TopToolbar>
+    <TopToolbar :save-status="saveStatus" @save="handleSaveDesign">
       <template #title>Review Design</template>
     </TopToolbar>
 
