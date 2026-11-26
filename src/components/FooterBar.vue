@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, Share2 } from "lucide-vue-next";
 
 const router = useRouter();
 
-defineProps<{
+const props = defineProps<{
   backLabel: string;
   backRoute: string;
   forwardLabel: string;
@@ -18,7 +18,15 @@ defineProps<{
 
 const emit = defineEmits<{
   (e: "share"): void;
+  (e: "forward"): void;
 }>();
+
+function handleForward() {
+  emit("forward");
+  if (props.forwardRoute && props.forwardRoute !== router.currentRoute.value.path) {
+    router.push(props.forwardRoute);
+  }
+}
 
 function formatPrice(price: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -55,7 +63,7 @@ function formatPrice(price: number): string {
         Share Design
       </button>
 
-      <button class="footer-nav-btn forward" @click="router.push(forwardRoute)">
+      <button class="footer-nav-btn forward" @click="handleForward">
         <span>{{ forwardLabel }}</span>
         <ChevronRight :size="16" />
       </button>

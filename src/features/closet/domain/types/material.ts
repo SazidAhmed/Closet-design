@@ -33,6 +33,26 @@ export type ClosetMaterials = {
   finishId: string
   backingId: string
   handleStyleId: string
+  [key: string]: any
+}
+
+/** Full Room / Closet materials structure matching Dia-Website */
+export type RoomMaterials = {
+  box_materials: any | null
+  box_material_colors: any | null
+  door_types: any | null
+  door_finish_materials: any | null
+  glass_or_mirror: any | null
+  glass_mirror_type: any | null
+  door_finish_material_colors: any | null
+  grains: any | null
+  drawer_types: any | null
+  drawer_materials: any | null
+  // Backward compatibility keys
+  finishId?: string
+  backingId?: string
+  handleStyleId?: string
+  [key: string]: any
 }
 
 /** Architectural door option selections. */
@@ -50,6 +70,31 @@ export function createDefaultClosetMaterials(): ClosetMaterials {
     finishId: 'miami-linen',
     backingId: 'backing-white',
     handleStyleId: 'handle-none',
+    box_materials: null,
+    box_material_colors: null,
+    door_types: null,
+    door_finish_materials: null,
+    glass_or_mirror: null,
+    glass_mirror_type: null,
+    door_finish_material_colors: null,
+    grains: null,
+    drawer_types: null,
+    drawer_materials: null,
+  }
+}
+
+export function createDefaultRoomMaterials(): RoomMaterials {
+  return {
+    box_materials: null,
+    box_material_colors: null,
+    door_types: null,
+    door_finish_materials: null,
+    glass_or_mirror: null,
+    glass_mirror_type: null,
+    door_finish_material_colors: null,
+    grains: null,
+    drawer_types: null,
+    drawer_materials: null,
   }
 }
 

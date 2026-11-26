@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted } from "vue";
 import { useHistoryStore } from "./stores/useHistoryStore";
 import { useAppStore } from "./stores/useAppStore";
+import Toaster from "@/components/ui/sonner/Sonner.vue";
 
 const history = useHistoryStore();
 const appStore = useAppStore();
@@ -56,5 +57,6 @@ onUnmounted(() => {
 
 <template>
   <RouterView />
+  <Toaster position="top-right" richColors />
 </template>
 

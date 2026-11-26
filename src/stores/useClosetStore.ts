@@ -38,6 +38,11 @@ type ClosetStoreState = ClosetStateV2 & {
   catalogCategories: ClosetCatalogCategory[]
   /** Custom parts from the database */
   customParts: any[]
+  /** Room components (materials, finishes, door types, grains, colors, drawers) */
+  roomComponents: any | null
+  /** Whether room components are being loaded */
+  roomComponentsLoading: boolean
+  _roomComponentsPromise: Promise<any> | null
   /** Whether catalog data is currently being fetched from the API. */
   catalogsLoading: boolean
   /** Promise tracking the ongoing API request for catalogs. */
@@ -56,6 +61,7 @@ function loadPersistedClosetData(): {
   currentClosetId: string | null
   currentClosetName: string
   towers: Tower[]
+  materials?: any
 } {
   if (typeof localStorage === 'undefined') {
     return { closets: [], currentClosetId: null, currentClosetName: '', towers: [] }
@@ -68,16 +74,20 @@ function loadPersistedClosetData(): {
       const currentClosetId = parsed.currentClosetId ?? null
       const currentClosetName = parsed.currentClosetName ?? ''
       let towers: Tower[] = Array.isArray(parsed.towers) ? parsed.towers : []
+      let materials: any = parsed.materials || undefined
 
-      if (towers.length === 0 && currentClosetId && closets.length > 0) {
+      if (currentClosetId && closets.length > 0) {
         const found = closets.find((c) => c.id === currentClosetId)
         const foundShelves = found?.shelves || found?.towers
-        if (Array.isArray(foundShelves) && foundShelves.length > 0) {
+        if (towers.length === 0 && Array.isArray(foundShelves) && foundShelves.length > 0) {
           towers = foundShelves
+        }
+        if (!materials && found?.materials) {
+          materials = found.materials
         }
       }
 
-      return { closets, currentClosetId, currentClosetName, towers }
+      return { closets, currentClosetId, currentClosetName, towers, materials }
     }
 
     const histRaw = localStorage.getItem('closet-design-save')
@@ -89,16 +99,20 @@ function loadPersistedClosetData(): {
         const currentClosetId = parsedCloset.currentClosetId ?? null
         const currentClosetName = parsedCloset.currentClosetName ?? ''
         let towers: Tower[] = Array.isArray(parsedCloset.towers) ? parsedCloset.towers : []
+        let materials: any = parsedCloset.materials || undefined
 
-        if (towers.length === 0 && currentClosetId && closets.length > 0) {
+        if (currentClosetId && closets.length > 0) {
           const found = closets.find((c) => c.id === currentClosetId)
           const foundShelves = found?.shelves || found?.towers
-          if (Array.isArray(foundShelves) && foundShelves.length > 0) {
+          if (towers.length === 0 && Array.isArray(foundShelves) && foundShelves.length > 0) {
             towers = foundShelves
+          }
+          if (!materials && found?.materials) {
+            materials = found.materials
           }
         }
 
-        return { closets, currentClosetId, currentClosetName, towers }
+        return { closets, currentClosetId, currentClosetName, towers, materials }
       }
     }
   } catch (e) {
@@ -116,6 +130,7 @@ export const useClosetStore = defineStore('closet', {
     const initialId = persisted.currentClosetId ?? null
     const initialName = persisted.currentClosetName ?? ''
     const initialTowers = persisted.towers.length > 0 ? persisted.towers : defaultState.towers
+    const initialMaterials = persisted.materials ? { ...defaultState.materials, ...persisted.materials } : defaultState.materials
 
     return {
       ...defaultState,
@@ -123,6 +138,10 @@ export const useClosetStore = defineStore('closet', {
       currentClosetId: initialId,
       currentClosetName: initialName,
       towers: initialTowers,
+      materials: initialMaterials,
+      roomComponents: null,
+      roomComponentsLoading: false,
+      _roomComponentsPromise: null,
       catalogCategories: [],
       customParts: [],
       catalogsLoading: false,
@@ -272,6 +291,56 @@ export const useClosetStore = defineStore('closet', {
       } catch (err) {
         console.warn('[useClosetStore] loadCustomParts error:', err)
       }
+    },
+
+    async loadRoomComponents(forceRefresh = false) {
+      const CACHE_KEY = 'closet-room-components-cache-v1'
+
+      if (this.roomComponents && !forceRefresh) {
+        return this.roomComponents
+      }
+
+      if (!forceRefresh) {
+        try {
+          const cachedRaw = localStorage.getItem(CACHE_KEY)
+          if (cachedRaw) {
+            const parsed = JSON.parse(cachedRaw)
+            if (parsed && typeof parsed === 'object') {
+              this.roomComponents = parsed
+              return parsed
+            }
+          }
+        } catch (e) {
+          console.warn('[useClosetStore] Failed to read roomComponents cache:', e)
+        }
+      }
+
+      if (this._roomComponentsPromise) {
+        return this._roomComponentsPromise
+      }
+
+      this.roomComponentsLoading = true
+      this._roomComponentsPromise = (async () => {
+        try {
+          const { default: ClosetService } = await import('../services/ClosetService')
+          const data = await ClosetService.getRoomComponents()
+          if (data && typeof data === 'object') {
+            this.roomComponents = data
+            try {
+              localStorage.setItem(CACHE_KEY, JSON.stringify(data))
+            } catch (e) {}
+          }
+          return data
+        } catch (err) {
+          console.warn('[useClosetStore] loadRoomComponents error:', err)
+          return null
+        } finally {
+          this.roomComponentsLoading = false
+          this._roomComponentsPromise = null
+        }
+      })()
+
+      return this._roomComponentsPromise
     },
 
     // ── Closet type ───────────────────────────────────────────────────────
@@ -797,8 +866,20 @@ export const useClosetStore = defineStore('closet', {
     },
 
     // ── Materials ─────────────────────────────────────────────────────────
-    setMaterials(partial: Partial<ClosetMaterials>) {
+    setMaterials(partial: Partial<ClosetMaterials> | any) {
+      if (!this.materials) {
+        this.materials = {} as any
+      }
       Object.assign(this.materials, partial)
+      this.syncCurrentCloset()
+    },
+
+    updateMaterial(key: string, value: any) {
+      if (!this.materials) {
+        this.materials = {} as any
+      }
+      this.materials[key] = value
+      this.syncCurrentCloset()
     },
 
     setDoorOptions(partial: Partial<ArchitecturalDoorOptions>) {
@@ -937,10 +1018,13 @@ export const useClosetStore = defineStore('closet', {
             }
           })
 
+          const firstIdx = matchingIndices.length > 0 ? matchingIndices[0] : undefined;
+          const fallbackCreatedAt = firstIdx !== undefined && this.closets[firstIdx] ? this.closets[firstIdx].createdAt : new Date().toISOString();
+
           const updatedRecord: ClosetRecord = {
             id: saved.id,
             name: saved.name || payload.name,
-            createdAt: saved.created_at || (matchingIndices.length ? this.closets[matchingIndices[0]].createdAt : new Date().toISOString()),
+            createdAt: saved.created_at || fallbackCreatedAt,
             updatedAt: saved.updated_at || new Date().toISOString(),
             shelves: JSON.parse(JSON.stringify(this.towers || [])),
             towers: JSON.parse(JSON.stringify(this.towers || [])),
@@ -949,10 +1033,13 @@ export const useClosetStore = defineStore('closet', {
             materials: this.materials ? { ...this.materials } : undefined,
           }
 
-          if (matchingIndices.length > 0) {
-            this.closets[matchingIndices[0]] = updatedRecord
+          if (firstIdx !== undefined) {
+            this.closets[firstIdx] = updatedRecord
             for (let k = matchingIndices.length - 1; k >= 1; k--) {
-              this.closets.splice(matchingIndices[k], 1)
+              const delIdx = matchingIndices[k]
+              if (delIdx !== undefined) {
+                this.closets.splice(delIdx, 1)
+              }
             }
           } else {
             this.closets.push(updatedRecord)

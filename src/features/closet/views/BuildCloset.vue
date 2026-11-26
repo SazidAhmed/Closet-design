@@ -2444,7 +2444,7 @@ function closeElevationView() {
     <FooterBar
       back-label="Back to Floor Plan"
       back-route="/closet/floorplan"
-      forward-label="Continue to Review"
+      forward-label="Continue to Material Selection"
       forward-route="/closet/review"
       :show-view-toggle="false"
     />

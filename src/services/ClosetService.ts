@@ -96,5 +96,18 @@ export default {
       console.error(`Sync Closets API Error:`, error.response?.data || error.message);
       throw error;
     }
+  },
+
+  /**
+   * Fetch room components (box materials, door types, finishes, colors, grains, drawers) from backend.
+   */
+  async getRoomComponents(): Promise<any> {
+    try {
+      const response = await http.get(`/roomComponents`);
+      return response.data || {};
+    } catch (error: any) {
+      console.error(`Get Room Components API Error:`, error.response?.data || error.message);
+      throw error;
+    }
   }
 };

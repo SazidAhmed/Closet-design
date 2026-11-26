@@ -1,185 +1,179 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
-import TopToolbar from "../../../components/TopToolbar.vue";
-import OpenDesignModal from "../../../components/OpenDesignModal.vue";
-import FooterBar from "../../../components/FooterBar.vue";
-import { useClosetStore } from "../../../stores/useClosetStore";
-import { useRoomStore } from "../../../stores/useRoomStore";
-import { useAppStore } from "../../../stores/useAppStore";
-import { useSaveCloset } from "../../../composables/useSaveCloset";
-import { getMaterial, getHandle } from "../domain/materials/catalog";
-import { Download, Share2, Send } from "lucide-vue-next";
+import { computed, onMounted, ref } from 'vue';
+import TopToolbar from '../../../components/TopToolbar.vue';
+import OpenDesignModal from '../../../components/OpenDesignModal.vue';
+import FooterBar from '../../../components/FooterBar.vue';
+import MaterialSelectionForm from '../components/materials/MaterialSelectionForm.vue';
+import { useClosetStore } from '../../../stores/useClosetStore';
+import { useAppStore } from '../../../stores/useAppStore';
+import { useSaveCloset } from '../../../composables/useSaveCloset';
+import { validateFormCompleteness } from '../../../composables/useMaterialHelpers';
+import { Pencil, Settings } from 'lucide-vue-next';
+import { toast } from 'vue-sonner';
 
 const closet = useClosetStore();
-const roomStore = useRoomStore();
 const appStore = useAppStore();
 const { saveStatus, handleSaveDesign, isOpenModalOpen, openDesignModal, closeDesignModal } = useSaveCloset();
 
-onMounted(() => {
-  appStore.setStep("review");
+const isEditingName = ref(false);
+const editedClosetName = ref('');
+
+const orderId = computed(() => closet.currentClosetId || 'new-order');
+const displayName = computed(() => closet.currentClosetName || 'Closet Order');
+
+const isFormValid = computed(() => {
+  return validateFormCompleteness(closet.materials);
 });
 
-function getFinishLabel(): string {
-  return (
-    getMaterial(closet.materials.finishId)?.label ?? closet.materials.finishId
-  );
+onMounted(async () => {
+  appStore.setStep('review');
+  await closet.loadRoomComponents();
+});
+
+function startRename() {
+  editedClosetName.value = displayName.value;
+  isEditingName.value = true;
 }
 
-function getBackingLabel(): string {
-  return (
-    getMaterial(closet.materials.backingId)?.label ?? closet.materials.backingId
-  );
+function saveRename() {
+  const name = editedClosetName.value.trim();
+  if (!name || name.length < 2) {
+    toast.warning('Closet name must be at least 2 characters long');
+    return;
+  }
+  closet.currentClosetName = name;
+  closet.syncCurrentCloset();
+  isEditingName.value = false;
 }
 
-function getHandleLabel(): string {
-  return (
-    getHandle(closet.materials.handleStyleId)?.label ??
-    closet.materials.handleStyleId
-  );
+function cancelRename() {
+  isEditingName.value = false;
 }
 
-function downloadJSON() {
-  const json = JSON.stringify(closet.exportForBackend, null, 2);
-  const blob = new Blob([json], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "closet-design.json";
-  a.click();
-  URL.revokeObjectURL(url);
+function onMaterialUpdate(key: string, value: any) {
+  closet.updateMaterial(key, value);
+}
+
+async function handleProceedToOrder() {
+  if (!isFormValid.value) {
+    toast.warning('Form Incomplete', {
+      description: 'Please select all required materials before submitting.',
+    });
+    return;
+  }
+
+  try {
+    closet.syncCurrentCloset();
+    await handleSaveDesign();
+    toast.success('Order Saved', {
+      description: 'Material selections and closet configuration saved successfully!',
+    });
+  } catch (err: any) {
+    toast.error('Error saving order', {
+      description: err?.message || 'Please try again',
+    });
+  }
 }
 </script>
 
 <template>
   <div class="review-page">
     <TopToolbar :save-status="saveStatus" @save="handleSaveDesign" @open="openDesignModal">
-      <template #title>Review Design</template>
+      <template #title>Material Selection</template>
     </TopToolbar>
     <OpenDesignModal :open="isOpenModalOpen" @close="closeDesignModal" />
 
     <div class="review-body">
-      <div class="review-content">
-        <h1 class="review-title">Your Closet Design</h1>
-        <p class="review-subtitle">
-          Review your design below. You can go back to make changes or
-          export/share your design.
-        </p>
-
-        <!-- Design Summary -->
-        <div class="summary-grid">
-          <!-- Closet Info -->
-          <div class="summary-card">
-            <h3 class="card-heading">Closet Overview</h3>
-            <div class="info-rows">
-              <div class="info-row">
-                <span>Type</span>
-                <strong>{{ closet.closetType }}</strong>
-              </div>
-              <div class="info-row">
-                <span>Cabinet Size</span>
-                <strong
-                  >{{ closet.cabinet.width }} × {{ closet.cabinet.height }} ×
-                  {{ closet.cabinet.depth }} cm</strong
+      <div class="material-container">
+        <!-- Order Header Card (matches Dia-Website layout) -->
+        <div class="order-header-card">
+          <div class="flex items-center justify-between">
+            <div class="flex-1">
+              <div v-if="!isEditingName" class="flex items-center gap-3">
+                <h1 class="text-3xl font-bold tracking-tight text-white">
+                  {{ displayName }}
+                </h1>
+                <button
+                  type="button"
+                  @click="startRename"
+                  class="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                  title="Rename order"
                 >
+                  <Pencil class="h-4 w-4" />
+                </button>
               </div>
-              <div class="info-row">
-                <span>Towers</span>
-                <strong>{{ closet.towers.length }}</strong>
-              </div>
-              <div class="info-row">
-                <span>Finish</span>
-                <strong>{{ getFinishLabel() }}</strong>
-              </div>
-              <div class="info-row">
-                <span>Backing</span>
-                <strong>{{ getBackingLabel() }}</strong>
-              </div>
-              <div class="info-row">
-                <span>Handle Style</span>
-                <strong>{{ getHandleLabel() }}</strong>
+              <div v-else class="flex items-center gap-2 max-w-md">
+                <input
+                  v-model="editedClosetName"
+                  type="text"
+                  class="flex-1 text-2xl font-semibold bg-slate-900 border-b-2 border-sky-400 text-white px-2 py-1 focus:outline-none rounded-t"
+                  @keyup.enter="saveRename"
+                  @keyup.esc="cancelRename"
+                  autofocus
+                />
+                <button
+                  type="button"
+                  @click="saveRename"
+                  class="px-3 py-1.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold rounded-md text-sm transition-colors"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  @click="cancelRename"
+                  class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md text-sm transition-colors"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           </div>
 
-          <!-- Tower Details -->
-          <div class="summary-card">
-            <h3 class="card-heading">Tower Details</h3>
-            <div
-              v-for="tower in closet.towers"
-              :key="tower.id"
-              class="tower-summary"
-            >
-              <div class="tower-summary-header">
-                <strong>{{ tower.label }}</strong>
-                <span
-                  >{{ Math.round(tower.width) }} ×
-                  {{ Math.round(tower.depth) }} cm</span
-                >
-              </div>
-              <div v-if="tower.catalogId" class="tower-catalog">
-                {{ tower.categoryName }} ({{ tower.categoryCode }}) - Catalog
-                {{ tower.catalogId }}
-              </div>
-              <ul class="accessory-list">
-                <li v-for="(acc, i) in tower.accessories" :key="i">
-                  <span v-if="acc.type === 'shelf_set'"
-                    >{{ acc.count }} shelves</span
-                  >
-                  <span v-else-if="acc.type === 'rod'"
-                    >{{ acc.position }} rod (×{{ acc.count }})</span
-                  >
-                  <span v-else-if="acc.type === 'drawer'"
-                    >{{ acc.count }} drawers</span
-                  >
-                  <span v-else-if="acc.type === 'shoe_shelf'"
-                    >{{ acc.count }} shoe shelves</span
-                  >
-                  <span v-else>{{ acc.type }}</span>
-                </li>
-                <li v-if="tower.accessories.length === 0" class="empty-acc">
-                  No accessories
-                </li>
-              </ul>
-            </div>
+          <div class="flex items-center gap-2 mt-4 text-sm text-slate-400">
+            <Settings class="w-4 h-4 text-slate-500" />
+            <span>Order ID: <strong class="text-slate-300 font-medium">{{ orderId }}</strong></span>
           </div>
 
-          <!-- Room Info -->
-          <div class="summary-card">
-            <h3 class="card-heading">Room</h3>
-            <div class="info-rows">
-              <div class="info-row">
-                <span>Shape</span>
-                <strong>{{ roomStore.shape }}</strong>
-              </div>
-              <div class="info-row">
-                <span>Ceiling Height</span>
-                <strong>{{ roomStore.height }} cm</strong>
-              </div>
-              <div class="info-row">
-                <span>Walls</span>
-                <strong>{{ roomStore.walls.length }}</strong>
-              </div>
-              <div class="info-row">
-                <span>Placed Items</span>
-                <strong>{{ roomStore.items.length }}</strong>
-              </div>
-            </div>
+          <div class="h-px w-full bg-slate-800/80 my-4" />
+
+          <p class="text-sm text-slate-400 flex items-center gap-2">
+            <Settings class="w-4 h-4 text-slate-500" />
+            Configure your order specifications below
+          </p>
+        </div>
+
+        <!-- Room Tab (Active Room / Closet indicator) -->
+        <div class="room-tab-pill">
+          <div class="tab-item active">
+            <span class="truncate">{{ displayName }}</span>
           </div>
         </div>
 
-        <!-- Actions -->
-        <div class="review-actions">
-          <button class="review-btn primary" @click="downloadJSON">
-            <Download :size="18" />
-            Download Design (JSON)
-          </button>
-          <button class="review-btn outline">
-            <Share2 :size="18" />
-            Share Design
-          </button>
-          <button class="review-btn accent">
-            <Send :size="18" />
-            Submit for Quote
+        <!-- Material Selection Form -->
+        <div class="materials-form-wrapper">
+          <div v-if="closet.roomComponentsLoading" class="py-12 text-center text-slate-400">
+            Loading materials catalog...
+          </div>
+          <MaterialSelectionForm
+            v-else
+            :materials="closet.materials"
+            :room-components="closet.roomComponents"
+            @update:material="onMaterialUpdate"
+          />
+        </div>
+
+        <!-- Bottom Proceed Action Button -->
+        <div class="flex justify-center pt-6 pb-12">
+          <button
+            type="button"
+            :class="[
+              'w-full max-w-sm py-3.5 text-base font-semibold tracking-wide transition-all duration-200 shadow-lg rounded-xl',
+              'bg-slate-800/90 hover:bg-slate-700 text-white border border-slate-700/80 hover:border-slate-600',
+              !isFormValid && 'opacity-50 cursor-not-allowed hover:bg-slate-800/90 hover:border-slate-700/80',
+            ]"
+            @click="handleProceedToOrder"
+          >
+            Proceed to Order
           </button>
         </div>
       </div>
@@ -188,9 +182,10 @@ function downloadJSON() {
     <FooterBar
       back-label="Back to Build Closet"
       back-route="/closet/build"
-      forward-label="Start Over"
-      forward-route="/closet/type"
+      forward-label="Proceed to Order"
+      forward-route=""
       :show-view-toggle="false"
+      @forward="handleProceedToOrder"
     />
   </div>
 </template>
@@ -209,181 +204,52 @@ function downloadJSON() {
   overflow-y: auto;
   display: flex;
   justify-content: center;
+  padding: 32px 16px;
 }
 
-.review-content {
-  max-width: 900px;
+.material-container {
+  max-width: 760px;
   width: 100%;
-  padding: 48px 24px;
 }
 
-.review-title {
-  font-size: 32px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  margin: 0 0 8px;
-  background: linear-gradient(135deg, #f1f5f9 0%, #94a3b8 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.order-header-card {
+  padding: 24px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
-.review-subtitle {
-  font-size: 15px;
-  color: #64748b;
-  margin: 0 0 32px;
-}
-
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 20px;
-  margin-bottom: 40px;
-}
-
-.summary-card {
-  padding: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.5);
-  backdrop-filter: blur(8px);
-}
-
-.card-heading {
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #64748b;
-  margin: 0 0 16px;
-}
-
-.info-rows {
+.room-tab-pill {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  width: 100%;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 4px;
+  margin-bottom: 20px;
 }
 
-.info-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  font-size: 13px;
-}
-
-.info-row span {
-  color: #94a3b8;
-}
-
-.info-row strong {
-  color: #e2e8f0;
-  font-weight: 600;
-}
-
-.tower-summary {
-  padding: 10px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-.tower-summary:last-child {
-  border-bottom: none;
-}
-
-.tower-summary-header {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-  margin-bottom: 6px;
-}
-
-.tower-summary-header span {
-  color: #64748b;
-  font-size: 12px;
-}
-
-.tower-catalog {
-  color: #fbbf24;
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 6px;
-}
-
-.accessory-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.accessory-list li {
-  font-size: 12px;
-  color: #94a3b8;
-  padding-left: 12px;
-  position: relative;
-}
-
-.accessory-list li::before {
-  content: "•";
-  position: absolute;
-  left: 0;
-  color: #475569;
-}
-
-.empty-acc {
-  font-style: italic;
-  color: #475569 !important;
-}
-
-.review-actions {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.review-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 24px;
-  border-radius: 10px;
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 8px 16px;
+  border-radius: 6px;
   font-size: 14px;
+  font-weight: 500;
+  color: #94a3b8;
+  transition: all 0.2s ease;
+}
+
+.tab-item.active {
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
   font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: 1px solid transparent;
+  border: 1px solid rgba(56, 189, 248, 0.25);
 }
 
-.review-btn.primary {
-  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-  color: #0f172a;
-  border-color: transparent;
-}
-
-.review-btn.primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 20px rgba(251, 191, 36, 0.25);
-}
-
-.review-btn.outline {
-  background: transparent;
-  border-color: rgba(255, 255, 255, 0.12);
-  color: #e2e8f0;
-}
-
-.review-btn.outline:hover {
-  border-color: rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.review-btn.accent {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: #ffffff;
-}
-
-.review-btn.accent:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.25);
+.materials-form-wrapper {
+  margin-bottom: 24px;
 }
 </style>
